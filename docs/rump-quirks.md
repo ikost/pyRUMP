@@ -387,6 +387,22 @@ total yield for a 200e15 at/cm² Si absorber, and grows from there.
 
 ---
 
+## 18. `.RBS` data records use the generic type, not the explicit ones
+
+The format defines five data-record types: `0011h` generic plus `0012h`-`0015h`
+naming compression modes 0-3 explicitly. `read_data_records` (rbs_rdwr.c:774)
+maps the generic form onto whichever mode the preceding init record declared.
+
+**Every shipped fixture uses `0011h`.** A reader that implements only the
+explicit types parses the whole file happily — headers, calibration, geometry,
+identifier all correct — and returns a spectrum of zeros, because no data record
+ever matches. There is no error and nothing looks wrong until you check the sum.
+
+**pyRUMP:** handles both, and `test_generic_data_record_uses_the_declared_compression`
+asserts the counts are non-zero rather than trusting the parse.
+
+---
+
 ## Notes on driving the engine from outside
 
 `creatr.c`'s output stage is a **function pointer**, `SimFillSpectrum` (sample.h),

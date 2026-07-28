@@ -11,8 +11,9 @@ importable library.
 > **Status: the forward model is complete.** pyRUMP simulates RBS spectra
 > matching the original to ~3e-6 in total counts and ~1e-5 of peak per channel,
 > with straggling, detector resolution, depth profiles, absorber layers, surface
-> roughness, pile-up and multiple scattering. Still to come: file I/O and
-> fitting. See [Milestones](#milestones).
+> roughness, pile-up and multiple scattering, and reads/writes RUMP's native
+> `.RBS` binary files bit-identically. Still to come: fitting and the CLI.
+> See [Milestones](#milestones).
 
 ## Design
 
@@ -74,6 +75,7 @@ pytest -m oracle    # comparison against the C
 | With straggling and detector resolution | **3e-6** total, **1e-5** of peak | float32 brick edges |
 | Depth profiles, all 11 evaluable forms | **2.6e-5** brick heights | float32 coefficients |
 | Absorber, fuzz, multiple scattering | **3e-6** total, **4e-5** of peak | float32 brick edges |
+| `.RBS` files read vs RUMP's own reader | **bit-identical** | — |
 
 The oracle is the `float` build. RUMP cannot be built in double precision — its
 table readers use `scanf("%f")` against `REAL` fields, so `-DREAL_IS_DOUBLE`
@@ -95,8 +97,8 @@ and the tolerances above are set by that floor rather than by choice.
 | M8 | Detector convolution | done |
 | M9 | Depth profiles (13 EQUATION forms) | done |
 | M10 | Absorber, pile-up, fuzz, multiple scattering | done |
-| M11 | File I/O (`.RBS`, ASCII, `.adt`/R33) | next |
-| M12 | Fitting (PERT) | |
+| M11 | File I/O (`.RBS` binary, ASCII) | done |
+| M12 | Fitting (PERT) | next |
 | M13 | CLI, plotting, `.lcm` subset | |
 
 ## Licensing
