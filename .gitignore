@@ -1,0 +1,24 @@
+# The legacy RUMP 2.0 C distribution is NOT redistributable (non-commercial licence,
+# "all rights reserved"). It is kept locally as a validation oracle only.
+# Point PYRUMP_C_REFERENCE at it; oracle tests skip cleanly when absent.
+C-code/
+
+# Papers are third-party copyrighted PDFs
+papers/
+
+__pycache__/
+*.py[cod]
+*.so
+*.dylib
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.coverage
+htmlcov/
+.DS_Store
+
+# oracle build artifacts
+tests/oracle/build/

@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyrump"
+version = "0.1.0.dev0"
+description = "Rutherford backscattering spectrometry simulation and analysis, reimplemented in Python"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = [
+    "numpy>=1.26",
+    "scipy>=1.11",
+]
+
+[project.optional-dependencies]
+plot = ["matplotlib>=3.8"]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov",
+    "pexpect>=4.9",
+    "cffi>=1.16",
+    "matplotlib>=3.8",
+]
+
+[project.scripts]
+pyrump = "pyrump.cli.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+pyrump = ["data/*.json", "data/*.npz"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "oracle: requires the legacy C reference tree (PYRUMP_C_REFERENCE)",
+    "slow: full reference-spectrum matrix",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
