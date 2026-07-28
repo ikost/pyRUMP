@@ -254,11 +254,18 @@ int OracleSetBeam(double e0_MeV, int zbeam, double mbeam, int cbeam,
  * `capture_only` swaps the fill routine for our recorder. With it disabled the
  * real SimAnlyz runs and the resulting spectrum can be read with OracleSpectrum.
  */
+/* 0 = none, 1 = SimNewPileup (Custer), 2 = SimOldPileup (DOS-era). */
+static int probe_pileup_mode = 0;
+
+int OracleSetPileup(int mode) { probe_pileup_mode = mode; return 1; }
+
 int OracleSimulate(int capture_only) {
 	brick_count = 0;
 	brick_overflow = 0;
 	SimFillSpectrum = capture_only ? CaptureBrick : SimAnlyz;
-	SimPileup = NULL;
+	SimPileup = (probe_pileup_mode == 1) ? SimNewPileup
+	          : (probe_pileup_mode == 2) ? SimOldPileup
+	          : NULL;
 	if (SimDefaultSample == NULL || RbsBuffers == NULL) return 0;
 	return SimCreateDetails(SimDefaultSample, -1, -1) != NULL;
 }

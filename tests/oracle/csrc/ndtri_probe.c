@@ -58,8 +58,19 @@ TMPREAL NDTRI(TMPREAL p) {
 	static double r25[] = {0.0004295823574, 9.4136771678e-005, -0.00019633197782, 7.2794900177e-005, -1.2725426308e-005,
 								  -2.1193301912e-006, 3.0003340843e-006, -1.6890972433e-006, 9.0911607484e-007, -4.5248e-007, 1.1065e-007};
             
+	/* CAREFUL: gvcalc.c:4764 declares this with ten elements, but the call
+	 * below is poly_e(..., taylor, 10) and poly_e starts at numer[iorder] --
+	 * so RUMP reads taylor[10], one past the end. In RUMP's own build the
+	 * adjacent object happens to be ctay[0] (~6e-9), whose contribution at
+	 * x^10 is negligible, so the bug is invisible there. Under a different
+	 * layout it reads garbage: this probe returned +/-0.15 across the whole
+	 * central region before the padding below was added.
+	 *
+	 * The eleventh element is set to 0.0, which is what the Taylor series
+	 * actually calls for -- there is no tenth-order term. */
 	static double taylor[] = {-4.5935005102e-010, 0.16666665975, 0.058333524176, 0.025197330986, 0.012041674594,
-									   0.0060996947887, 0.0032662097955, 0.0014721469231, 0.0017529695707, -0.00033785703859};
+									   0.0060996947887, 0.0032662097955, 0.0014721469231, 0.0017529695707, -0.00033785703859,
+									   0.0};
 	static double ctay[] = {6.4439238424e-009, -2.6928790649e-007, 3.7038273173e-006, -2.339886523e-005, 6.9000506134e-005, -2.0661086273e-005, 2.1380683449e-006};
 	TMPREAL t;
 

@@ -295,6 +295,48 @@ A pre-1997 `COMPATIBLE` mode averaged densities directly; pyRUMP implements only
 
 ---
 
+## 16. `poly_e` reads one element past its array — and `-O2` makes it fatal
+
+`poly_e(x, numer, iorder)` (gvcalc.c:4914) does
+
+```c
+numer += iorder;  tmp = *numer;
+while (iorder--) tmp = tmp*x + *(--numer);
+```
+
+i.e. it touches `numer[0 .. iorder]` — **iorder+1** values. `NDTRI` calls it as
+`poly_e(t*t, taylor, 10)` against a 10-element `taylor[]`, so it reads one past
+the end.
+
+At `-O0` the adjacent static happens to be tiny and Horner folds it to nothing,
+so the bug is invisible. At `-O2` the compiler exploits the undefined behaviour
+and `NDTRI` returns ±0.15 for **every** argument in roughly (0.15, 0.85) —
+correct in the tails, badly wrong in the middle.
+
+**The shipped RUMP passes no optimisation flag at all** (`makeosx.h`: `GOPTS`
+has no `-O`, `CCOPT` is empty), so it runs the benign version. Anyone rebuilding
+RUMP with optimisation enabled would silently corrupt every FUZZ profile.
+
+**pyRUMP:** `tests/oracle/build_oracle.py` compiles `ndtri_probe.c` at `-O0`
+specifically, with a test (`test_ndtri_matches_the_c`) that fails loudly if that
+is ever lost.
+
+---
+
+## 17. The inbound march starts at `fsurf`, skipping the absorber
+
+`SimPrecal` seeds `samm->layer[samm->fsurf].ehit = ee` with the **full** beam
+energy (creatr.c:1530) and marches from there. Absorber layers are between the
+sample and the detector, so the incoming beam never crosses them — only the
+outgoing particle does, via `SimFlyout`.
+
+Marching through them on the way in double-counts their stopping and shifts
+every edge. The absorber is also not tilted with the sample: `SimFlyout` forces
+normal incidence through it (creatr.c:1971), since a detector window does not
+rotate when the sample does.
+
+---
+
 ## Notes on driving the engine from outside
 
 `creatr.c`'s output stage is a **function pointer**, `SimFillSpectrum` (sample.h),

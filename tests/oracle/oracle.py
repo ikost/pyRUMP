@@ -75,6 +75,7 @@ int    OracleSetLayerEquation(int layer_index, int eqn_index,
 int    OracleEquationSublayers(int eqn_index);
 int    OracleSetAbsorber(int n_layers);
 int    OracleSetLayerFuzz(int layer_index, double amount, int steps);
+int    OracleSetPileup(int mode);
 int    OracleSimulate(int capture_only);
 int    OracleBrickCount(void);
 int    OracleBrickOverflow(void);
@@ -458,6 +459,11 @@ class Oracle:
         """Attach lateral thickness roughness to a layer."""
         if not self._lib.OracleSetLayerFuzz(layer_index, amount, steps):
             raise RuntimeError("OracleSetLayerFuzz rejected the layer")
+
+    def set_pileup(self, mode: str | None) -> None:
+        """Select the pile-up model: None, "new" (Custer) or "old" (DOS-era)."""
+        index = {None: 0, "new": 1, "old": 2}[mode]
+        self._lib.OracleSetPileup(index)
 
     def simulate_bricks(self) -> np.ndarray:
         """Run the engine and capture every brick it emits.

@@ -51,6 +51,19 @@ RUMP_SOURCES = [
 #: behind the STOP_SQRT refit (stopping.c:536).
 #: Per-source extra compiler flags, for the few files that need them.
 EXTRA_FLAGS = {
+    # NDTRI must be built unoptimised, and this is not a preference.
+    #
+    # poly_e (gvcalc.c:4914) evaluates numer[0..iorder] -- iorder+1 values --
+    # but NDTRI calls it as poly_e(t*t, taylor, 10) against a 10-element array,
+    # so it reads one past the end. At -O0 the adjacent static happens to be
+    # tiny and Horner renders it negligible, so the bug is invisible; at -O2 the
+    # compiler exploits the undefined behaviour and NDTRI returns +/-0.15 for
+    # every argument in (0.15, 0.85).
+    #
+    # The shipped RUMP passes no -O flag at all (makeosx.h: GOPTS has no
+    # optimisation, CCOPT is empty), so it runs the benign version. Matching
+    # that is what makes this oracle faithful.
+    "ndtri_probe.c": ["-O0"],
     # gvcalc.c ships its own srand48/drand48 for the expression language's
     # random(), which clash with the macOS SDK declarations. Rename them out of
     # the way; nothing here calls them.
@@ -192,9 +205,11 @@ def build(root: Path, out_dir: Path, *, double: bool) -> Path:
         CSRC / "oracle_api.c",
     ):
         obj = work / (src.stem + ".o")
+        extra = list(EXTRA_FLAGS.get(src.name, []))
         # stragf_probe.c #includes anlyz.c outright, to reach its file-statics,
         # so it needs the rump source directory on the include path.
-        extra = [f"-I{root / 'rump'}"] if src.name == "stragf_probe.c" else []
+        if src.name == "stragf_probe.c":
+            extra.append(f"-I{root / 'rump'}")
         subprocess.run([*common, *extra, "-c", str(src), "-o", str(obj)], check=True)
         objects.append(obj)
 
