@@ -403,6 +403,36 @@ asserts the counts are non-zero rather than trusting the parse.
 
 ---
 
+## 19. `MASSES:` and `ZEDS:` are ignored, and the shipped files disagree anyway
+
+Both are `Q_IGNORE` in RUMP's header table (reswork.c:131-132); nuclide
+identities come from `REACTION:` alone. That is just as well, because the
+shipped files use incompatible conventions:
+
+```
+boron.adt    MASSES: 11 4 4 11                    <- target first
+car_pp.adt   MASSES: 1.0078, 12, 1.0078, 12.0     <- projectile first, commas
+```
+
+A reader that trusts `MASSES:` gets boron as Z=4, m=11 — plausible-looking and
+wrong. Parse `REACTION:` and ignore the rest.
+
+Related: `QVALUE:` is often a comma-separated list (`0.00, 0.00, 0.00, ...`).
+The C reads it with `atof()`, which consumes only the leading number.
+
+---
+
+## 20. RUMP cannot read its own bundled R33 example
+
+`data/R33.Format` declares `Units: mb`. RUMP's accepted set is exactly
+`b/sr`, `mb/sr`, `rtr`, `rr`, `relative` (reswork.c:325-334), so the file is
+rejected outright.
+
+It is a *format exemplar* from SigmaCalc, not a loadable table. pyRUMP refuses
+it identically — matching the refusal is fidelity, not a gap.
+
+---
+
 ## Notes on driving the engine from outside
 
 `creatr.c`'s output stage is a **function pointer**, `SimFillSpectrum` (sample.h),
