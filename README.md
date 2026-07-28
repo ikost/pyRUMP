@@ -8,11 +8,11 @@ The original is ~22k lines of unmaintained C from the late 1980s, with a 1996-er
 HTML manual and no active support. pyRUMP reproduces its physics as a tested,
 importable library.
 
-> **Status: the forward model is complete.** pyRUMP simulates RBS spectra —
-> including straggling and detector resolution — that match the original to
-> ~3e-6 in total counts and ~1e-5 of peak per channel — with straggling,
-> detector resolution, depth profiles, absorber layers, surface roughness and
-> pile-up. Still to come: file I/O and fitting. See [Milestones](#milestones).
+> **Status: the forward model is complete.** pyRUMP simulates RBS spectra
+> matching the original to ~3e-6 in total counts and ~1e-5 of peak per channel,
+> with straggling, detector resolution, depth profiles, absorber layers, surface
+> roughness, pile-up and multiple scattering. Still to come: file I/O and
+> fitting. See [Milestones](#milestones).
 
 ## Design
 
