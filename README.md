@@ -107,14 +107,22 @@ included and *not* redistributed: its licence permits modification but forbids
 commercial exploitation, which is incompatible with an open-source distribution.
 It is used here only as a local validation oracle.
 
-RUMP and Genplot are trademarks of Computer Graphic Service, Ltd. pyRUMP is not
-affiliated with, endorsed by, or derived from the RUMP 2.0 source distribution.
+RUMP and Genplot were trademarks of Computer Graphic Service, Ltd. CGS ceased
+operating as a business in June 2012 and `genplot.com` no longer resolves; the
+authors stated at the time that GENPLOT and RUMP remain free to download and
+use. That removes the trademark concern, but **not** copyright in the original
+source, which remains with its authors — hence the C tree is still not
+redistributed here.
+
+pyRUMP is not affiliated with, endorsed by, or derived from the RUMP 2.0 source
+distribution.
 
 Data tables (`atom4.dat`, `pscoef.dat`, `newstop.kal`, `density.tab`, `*.adt`)
-are read from the legacy tree during development only. They carry their own
-provenance — `pscoef.dat` in particular is the ZBL/TRIM `SCOEF` table — and will
-be regenerated from primary sources (CIAAW/NIST, published ZBL tables, IBANDL)
-before any public release.
+are read from the legacy tree during development only, and are not
+redistributed. Their provenance is third-party and independent of CGS —
+`pscoef.dat` is the ZBL/TRIM `SCOEF` table, the `*.adt` files are IBANDL
+evaluations — so they will be regenerated from primary sources (CIAAW/NIST,
+published ZBL tables, IBANDL) before any public release. See `NOTICE`.
 
 ## References
 

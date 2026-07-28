@@ -175,11 +175,21 @@ specified in `html/RUMP/rbs_inf.htm`), M12 fitting, M13 CLI.
 
 ---
 
-## Outstanding non-code items
+## Licensing position (settled 2026-07-28)
 
-1. **Trademark + `pscoef.dat` provenance.** "RUMP" is a CGS trademark and
-   `pscoef.dat` is the ZBL/TRIM SCOEF table with no licence notice. Scheduled
-   at M0, still not done; raised with the user at M5, M7 and M8. Contact:
-   `support@genplot.com` / `mot1@cornell.edu`.
-2. **No version control.** Not a git repo. Deliberately not initialised — the
-   user's call — but ~7,900 lines now sit unversioned.
+**CGS ceased operating as a business in June 2012** (Cornell conflict-of-interest
+policy), stating that GENPLOT and RUMP remain free to download and use.
+`genplot.com` no longer resolves. Established from web search summaries; the
+primary page could not be fetched directly.
+
+Consequences:
+
+* **Trademark: no longer a concern.** `pyRUMP` is fine.
+* **Copyright: unchanged.** A dissolved company does not extinguish the authors'
+  copyright, so the C tree is still not redistributed and `.gitignore` still
+  excludes it.
+* **`pscoef.dat`: unchanged, and independent of CGS.** It is the ZBL/TRIM SCOEF
+  table (Ziegler/Pergamon). Regenerate from published tables before release, as
+  recorded in `NOTICE`.
+
+Under git since 2026-07-28; `LICENSE` (MIT) and `NOTICE` are in place.
