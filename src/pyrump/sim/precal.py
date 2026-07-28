@@ -105,12 +105,19 @@ def march_inbound(
     straggle_scale: float = 0.0,
     z_beam: int = 2,
     e_scale: float = 1.0,
+    first_slab: int = 0,
 ) -> InboundPath:
     """March the beam inward, recording energy and straggling per interface.
 
     This is inherently sequential -- each slab's loss depends on the energy left
     by the previous one -- so it stays a Python loop. It is O(n_slab) and run
     once per simulation, unlike the outward paths.
+
+    ``first_slab`` is ``fsurf``: the march **starts there at the full beam
+    energy** (creatr.c:1530). Absorber slabs sit between the sample and the
+    detector, so the incoming beam never crosses them -- only the outgoing
+    particle does. Marching through them on the way in would double-count their
+    stopping and shift every edge.
     """
     n_slab = slab_coefficients.shape[0]
     energy = np.zeros(n_slab + 1, dtype=np.float64)
@@ -123,11 +130,11 @@ def march_inbound(
     z_weights = np.asarray(element_z, dtype=np.float64)
     running_z = 0.0
 
-    energy[0] = e0_keV
+    energy[first_slab] = e0_keV
     current = e0_keV
-    reached = 0
+    reached = first_slab
 
-    for index in range(n_slab):
+    for index in range(first_slab, n_slab):
         if current < cutoff_keV:
             break
 

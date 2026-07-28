@@ -323,3 +323,21 @@ int OracleEquationSublayers(int eqn_index) {
 	if (eqn_index < 0 || eqn_index >= N_PROBE_EQNS) return -1;
 	return probe_eqns[eqn_index].rcmd_sublayers;
 }
+
+/* --------------------------------------------------- absorber / fuzz --- */
+
+/* Mark the first `n` layers as absorber (dead layer / window). */
+int OracleSetAbsorber(int n_layers) {
+	if (n_layers < 0 || n_layers > 64) return 0;
+	probe_sample.absorber_layers = n_layers;
+	probe_sample.fres_only_absorber = 0;
+	return 1;
+}
+
+/* Attach lateral thickness roughness to a layer. */
+int OracleSetLayerFuzz(int layer_index, double amount, int steps) {
+	if (layer_index < 0 || layer_index >= 64) return 0;
+	probe_layers[layer_index].fuzzd = (REAL) amount;
+	probe_layers[layer_index].fuzzs = steps;
+	return 1;
+}

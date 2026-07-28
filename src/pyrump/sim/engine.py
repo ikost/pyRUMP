@@ -12,7 +12,7 @@ milestones; :func:`simulate_bricks` stops at the point the C calls
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 import numpy as np
 
@@ -26,10 +26,14 @@ from ..physics.xsec.rutherford import setup_scatter
 from ..stopping.bragg import bragg_coefficients
 from ..stopping.registry import StoppingRegistry
 from ..stopping.table import StoppingTable
+from .absorber import first_sample_slab
 from .bricks import Bricks
 from .convolve import convolve_detector
 from .fill.straggled import fill_straggled
 from .fill.trapezoid import fill_trapezoid
+from .fuzz import replica_thicknesses
+from .multiscatter import add_multiple_scattering
+from .pileup import new_pileup
 from .ideal import simulate_isotope, straggle_geometry_factor
 from .precal import march_inbound
 from .slabs import DEFAULT_MAXPATH, build_uniform_grid
@@ -69,6 +73,18 @@ class UniformSample:
 
     densities: list[float] | None = None
     """Per-layer matrix density in 1e23 at/cm^3. Computed if omitted."""
+
+    absorber_layers: int = 0
+    """Leading layers that are absorber (dead layer / window), not sample."""
+
+    multiple: float = 0.0
+    """Ad-hoc multiple-scattering strength. No physical basis; 0 disables."""
+
+    fuzz_amounts: list[float] | None = None
+    """Per-layer thickness roughness, in the layer's own units."""
+
+    fuzz_steps: list[int] | None = None
+    """Per-layer replica count. Every fuzzed layer multiplies the total."""
 
     tags: dict = field(default_factory=dict)
 
@@ -137,6 +153,7 @@ def simulate_bricks(
     )
     coefficients = bragg_coefficients(table, grid.composition, grid.element_z)
     cutoff_keV = table.cutoff * 1000.0
+    first_slab = first_sample_slab(grid.layer_index, sample.absorber_layers)
 
     inbound = march_inbound(
         table,
@@ -148,6 +165,7 @@ def simulate_bricks(
         cutoff_keV=cutoff_keV,
         straggle_scale=sample.straggle,
         z_beam=beam.z,
+        first_slab=first_slab,
     )
 
     blocks: list[np.ndarray] = []
@@ -190,6 +208,7 @@ def simulate_bricks(
                 sec_out=geometry.sec_out,
                 cutoff_keV=cutoff_keV,
                 straggle_geometry=geometry_factor,
+                first_slab=first_slab,
             )
             if len(block):
                 blocks.append(block.data)
@@ -218,22 +237,60 @@ def simulate(
     """
     measurement = measurement or Measurement()
 
-    bricks = simulate_bricks(
-        sample, beam, geometry, registry, periodic_table, screening=screening
-    )
+    # Stage order follows SimCreateDetails (creatr.c:307-345) exactly, and it
+    # matters: resolution is convolved before normalisation, pile-up needs real
+    # counts so it comes after, and the multiple-scattering tail is last.
+    counts = np.zeros(calibration.npt, dtype=np.float64)
 
-    # SimAnlyz (anlyz.c:207) picks the fill routine per brick on whether either
-    # straggling width is non-zero. With straggling the trapezoid is abandoned
-    # in favour of two Gaussian-broadened triangles.
-    if bricks.has_straggling:
-        counts = fill_straggled(bricks, calibration)
-    else:
-        counts = fill_trapezoid(bricks, calibration)
+    for thicknesses, amplitude in _fuzz_replicas(sample):
+        replica = sample if thicknesses is None else replace(
+            sample, thicknesses=list(thicknesses)
+        )
+        bricks = simulate_bricks(
+            replica, beam, geometry, registry, periodic_table, screening=screening
+        )
+        if len(bricks) == 0:
+            continue
+        # SimAnlyz (anlyz.c:207) picks the fill routine per brick on whether
+        # either straggling width is non-zero; with straggling the trapezoid is
+        # abandoned for two Gaussian-broadened triangles.
+        fill = fill_straggled if bricks.has_straggling else fill_trapezoid
+        counts += amplitude * fill(bricks, calibration)
 
-    # Detector resolution is applied to the assembled spectrum, before the
-    # yield normalisation (creatr.c:318 then :321).
     counts = convolve_detector(
         counts, calibration, measurement.fwhm_keV, mode=convolve_edge
     )
     counts *= yield_normalisation(measurement)
+
+    if measurement.tau_us > 0 and measurement.current_nA > 0:
+        counts = new_pileup(
+            counts,
+            tau_us=measurement.tau_us,
+            current_nA=measurement.current_nA,
+            charge_uC=measurement.charge_uC,
+        )[: calibration.npt]
+
+    if sample.multiple:
+        counts = add_multiple_scattering(
+            counts,
+            strength=sample.multiple,
+            charge_uC=measurement.charge_uC,
+            omega_msr=measurement.omega_msr,
+        )
+
     return Spectrum(counts=counts, calibration=calibration)
+
+
+def _fuzz_replicas(sample: UniformSample):
+    """Yield ``(thicknesses, amplitude)`` for each fuzz replica.
+
+    Without fuzzing this is a single unperturbed pass, so the common path costs
+    nothing.
+    """
+    if not sample.fuzz_steps or not any(s > 1 for s in sample.fuzz_steps):
+        yield None, 1.0
+        return
+    amounts = sample.fuzz_amounts or [0.0] * len(sample.thicknesses)
+    yield from replica_thicknesses(
+        np.asarray(sample.thicknesses, dtype=np.float64), amounts, sample.fuzz_steps
+    )

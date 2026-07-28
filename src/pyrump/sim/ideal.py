@@ -50,6 +50,7 @@ def simulate_isotope(
     sec_out: float,
     cutoff_keV: float,
     straggle_geometry: float | None = None,
+    first_slab: int = 0,
 ) -> Bricks:
     """Produce one brick per slab for a single target isotope.
 
@@ -71,7 +72,9 @@ def simulate_isotope(
     e_front = h_front = 0.0
     ratde = 1.0
 
-    for slab in range(n_slab):
+    # Absorber slabs sit in front of the sample: traversed on the way out by
+    # flyout, but never scattered from (creatr.c:1033).
+    for slab in range(first_slab, n_slab):
         if slab >= inbound.reached:
             break
         if slab_element_density[slab] <= 0:
@@ -92,7 +95,7 @@ def simulate_isotope(
                 kinematic * energy_in,
                 sec_out=sec_out,
                 cutoff_keV=cutoff_keV,
-                first_surface=0,
+                first_surface=first_slab,
             )
             if e_front <= cutoff_keV:
                 break
@@ -125,7 +128,7 @@ def simulate_isotope(
             kinematic * energy_out,
             sec_out=sec_out,
             cutoff_keV=cutoff_keV,
-            first_surface=0,
+            first_surface=first_slab,
         )
         if e_back < cutoff_keV:
             break

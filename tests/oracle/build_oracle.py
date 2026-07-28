@@ -49,6 +49,14 @@ RUMP_SOURCES = [
 #: Real implementations pulled in rather than stubbed, because the port must
 #: reproduce them exactly: FitPolynomial is the weighted least-squares fitter
 #: behind the STOP_SQRT refit (stopping.c:536).
+#: Per-source extra compiler flags, for the few files that need them.
+EXTRA_FLAGS = {
+    # gvcalc.c ships its own srand48/drand48 for the expression language's
+    # random(), which clash with the macOS SDK declarations. Rename them out of
+    # the way; nothing here calls them.
+    "gvcalc.c": ["-Dsrand48=rump_srand48", "-Ddrand48=rump_drand48"],
+}
+
 SUPPORT_SOURCES = [
     "genplot/gptfit.c",
     "sys/sys_2.c",
@@ -172,10 +180,17 @@ def build(root: Path, out_dir: Path, *, double: bool) -> Path:
     for rel in RUMP_SOURCES + SUPPORT_SOURCES:
         src = root / rel
         obj = work / (Path(rel).stem + ".o")
-        subprocess.run([*common, "-c", str(src), "-o", str(obj)], check=True)
+        extra = EXTRA_FLAGS.get(src.name, [])
+        subprocess.run([*common, *extra, "-c", str(src), "-o", str(obj)], check=True)
         objects.append(obj)
 
-    for src in (CSRC / "stubs.c", CSRC / "stragf_probe.c", CSRC / "sim_probe.c", CSRC / "oracle_api.c"):
+    for src in (
+        CSRC / "stubs.c",
+        CSRC / "ndtri_probe.c",
+        CSRC / "stragf_probe.c",
+        CSRC / "sim_probe.c",
+        CSRC / "oracle_api.c",
+    ):
         obj = work / (src.stem + ".o")
         # stragf_probe.c #includes anlyz.c outright, to reach its file-statics,
         # so it needs the rump source directory on the include path.

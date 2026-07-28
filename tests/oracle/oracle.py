@@ -73,6 +73,8 @@ int    OracleSetLayerEquation(int layer_index, int eqn_index,
                               const double *params, int n_param,
                               const double *species, int n_element);
 int    OracleEquationSublayers(int eqn_index);
+int    OracleSetAbsorber(int n_layers);
+int    OracleSetLayerFuzz(int layer_index, double amount, int steps);
 int    OracleSimulate(int capture_only);
 int    OracleBrickCount(void);
 int    OracleBrickOverflow(void);
@@ -80,6 +82,7 @@ void   OracleBricks(double *out, int n);
 int    OracleSpectrum(double *out, int n);
 
 double OracleStragf(double x, double sig);
+double OracleNdtri(double p);
 
 void   OracleResetStoppingTables(void);
 
@@ -446,6 +449,16 @@ class Oracle:
         """The equation's recommended sublayer count, which overrides maxpath."""
         return self._lib.OracleEquationSublayers(self.EQUATIONS.index(equation.lower()))
 
+    def set_absorber(self, n_layers: int) -> None:
+        """Mark the first n layers as absorber rather than sample."""
+        if not self._lib.OracleSetAbsorber(n_layers):
+            raise RuntimeError("OracleSetAbsorber rejected the layer count")
+
+    def set_layer_fuzz(self, layer_index: int, amount: float, steps: int) -> None:
+        """Attach lateral thickness roughness to a layer."""
+        if not self._lib.OracleSetLayerFuzz(layer_index, amount, steps):
+            raise RuntimeError("OracleSetLayerFuzz rejected the layer")
+
     def simulate_bricks(self) -> np.ndarray:
         """Run the engine and capture every brick it emits.
 
@@ -482,6 +495,11 @@ class Oracle:
         """
         values = np.atleast_1d(np.asarray(x, dtype=np.float64))
         return np.array([self._lib.OracleStragf(float(v), sig) for v in values])
+
+    def ndtri(self, p) -> np.ndarray:
+        """RUMP's inverse normal CDF, used to place FUZZ replicas."""
+        values = np.atleast_1d(np.asarray(p, dtype=np.float64))
+        return np.array([self._lib.OracleNdtri(float(v)) for v in values])
 
     def reset_stopping_tables(self) -> None:
         """Flush the C's session cache of fitted stopping tables.

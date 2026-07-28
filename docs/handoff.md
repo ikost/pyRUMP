@@ -3,8 +3,9 @@
 Written to let a cold session resume without re-deriving anything. Read this
 plus [rump-quirks.md](rump-quirks.md) and you have the context.
 
-**Status:** M0–M8 complete. The forward model works end to end. 282 tests pass
-in ~50 s. ~7,900 lines across `src/` and `tests/`.
+**Status:** M0–M9 complete. The forward model works end to end, including
+depth-dependent composition profiles. 315 tests pass in ~50 s. Under git since
+2026-07-28.
 
 ---
 
@@ -58,6 +59,14 @@ Do not re-litigate these.
    the prefix `recal` works when driving the binary.
 
 Full catalogue with citations: [rump-quirks.md](rump-quirks.md), 15 entries.
+
+10. **`hfront` is recomputed every slab**, only `efront`/`ratde` carry over.
+    Invisible with uniform composition; shifts the spectrum by one slab with a
+    depth profile.
+
+11. **Layer density is an inverse-density average** ("hard ball packing"), and
+    it sets the depth scale of every profile equation. The 0.4997 constant in
+    the C is a *fallback*, not silicon's actual 0.49777.
 
 ---
 
@@ -146,32 +155,27 @@ test, never the code:
 
 ---
 
-## Next: M9 — depth profiles
+## Next: M10 — absorber, foil, pileup, fuzz
 
-15 `EQUATION` forms replacing uniform layer composition with a depth-dependent
-one. Documented in `C-code/html/RUMP/sim.htm`; implemented around
-`creatr.c:705-900` (`FillSimStructure`'s equation switch).
+* **Absorber layers** (`sample->absorber_layers`, `samm->fsurf`) sit in front of
+  the sample: traversed on the exit path only, and forced to normal incidence
+  (`creatr.c:1971` — they are not tilted with the sample).
+* **Fuzz** — lateral thickness non-uniformity. N Gaussian-weighted
+  re-simulations via `ndtri` quantiles (`creatr.c:665-686`), summed with weight
+  `samm->ampl`. Best implemented as a batched leading axis, not N reruns.
+* **Pileup** — `SimNewPileup` (`creatr.c:1331`, Custer thesis) needs `tau` and
+  `current`; plus a legacy `SimOldPileup`.
+* **Multiple scattering** — an ad-hoc exponential tail with no physical basis
+  (`creatr.c:337-345`). Mark `experimental`.
+* **Stopper foil** — `stopfoil.c` is a pure lookup table and **no data file
+  ships**; the format is documented only inside `#ifdef TESTING`. Probably
+  document as unsupported rather than implement.
 
-Mixing rule, and it is not obvious:
+`sim_probe.c` will need absorber/fuzz/pileup fields on `OracleSetSample` to
+validate these.
 
-```
-composition(x) = f(x)*species_norm + (1 - f(x))*matrix_norm
-```
-
-with **both** matrix and species normalised to 1 first.
-
-Forms: `NONE CONSTANT LINEAR GAUSSIAN IMPLANT EDGEWORTH ERFC ERROR EXPONENTIAL
-SEMI-INFINITE THINFILM BURIEDTHINFILM THICKFILM THICFILM TIMEDEPENDENT USEREQN`.
-
-`sim.htm` carries an author disclaimer on THICKFILM — *"this equation makes no
-sense to me right now but this is how it is currently implemented… Someone
-should justify/verify it someday."* Reproduce it as written.
-
-`OracleSetSample` in `sim_probe.c` currently builds uniform layers only; it will
-need an `eqn` field and parameters to validate M9 against the C.
-
-Then: M10 absorber/foil/pileup/fuzz, M11 file I/O (`.RBS` binary is fully
-specified in `html/RUMP/rbs_inf.htm`), M12 fitting, M13 CLI.
+Then: M11 file I/O (`.RBS` binary is fully specified in `html/RUMP/rbs_inf.htm`),
+M12 fitting, M13 CLI.
 
 ---
 
