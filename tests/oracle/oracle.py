@@ -85,6 +85,9 @@ int    OracleSpectrum(double *out, int n);
 double OracleStragf(double x, double sig);
 double OracleNdtri(double p);
 
+int    OracleChiPoisson(const double *data, const double *theory, const int *valid,
+                        int n, int nvars, double *out_residuals, double *out_reduced);
+
 void   OracleResetStoppingTables(void);
 
 int    OracleNumElements(void);
@@ -506,6 +509,26 @@ class Oracle:
         """RUMP's inverse normal CDF, used to place FUZZ replicas."""
         values = np.atleast_1d(np.asarray(p, dtype=np.float64))
         return np.array([self._lib.OracleNdtri(float(v)) for v in values])
+
+    def chi_poisson(self, data, theory, valid=None, n_parameters: int = 0):
+        """RUMP's Poisson objective: ``(residuals, reduced_chi2, n_invalid)``."""
+        d = np.ascontiguousarray(data, dtype=np.float64)
+        t = np.ascontiguousarray(theory, dtype=np.float64)
+        residuals = np.empty(d.size, dtype=np.float64)
+        reduced = self._ffi.new("double *")
+        if valid is None:
+            vptr = self._ffi.NULL
+        else:
+            v = np.ascontiguousarray(np.asarray(valid, dtype=bool), dtype=np.int32)
+            vptr = self._ffi.cast("const int *", v.ctypes.data)
+        n_invalid = self._lib.OracleChiPoisson(
+            self._ffi.cast("const double *", d.ctypes.data),
+            self._ffi.cast("const double *", t.ctypes.data),
+            vptr, d.size, n_parameters,
+            self._ffi.cast("double *", residuals.ctypes.data),
+            reduced,
+        )
+        return residuals, reduced[0], n_invalid
 
     def reset_stopping_tables(self) -> None:
         """Flush the C's session cache of fitted stopping tables.

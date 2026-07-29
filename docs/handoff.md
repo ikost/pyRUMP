@@ -3,8 +3,8 @@
 Written to let a cold session resume without re-deriving anything. Read this
 plus [rump-quirks.md](rump-quirks.md) and you have the context.
 
-**Status:** M0–M11 complete — the entire forward model, native `.RBS`/ASCII I/O,
-and `.adt`/R33 cross-section tables. 442 tests pass in ~70 s. Under git;
+**Status:** M0–M12 complete — the forward model, file I/O, and fitting. Only
+the CLI/plotting layer (M13) remains. 474 tests pass in ~73 s. Under git;
 `LICENSE` (MIT) and `NOTICE` in place.
 
 ---
@@ -63,6 +63,11 @@ Do not re-litigate these. Full catalogue with citations:
 14. **`.RBS` data records use the generic type `0011h`**, not the explicit
     `0012h`-`0015h`. Handling only the explicit ones parses every header
     correctly and returns a spectrum of zeros, silently.
+15. **Poisson likelihood discards channels where the model predicts zero.**
+    They contribute neither chi-square nor gradient. If the only channels that
+    discriminate between two models are ones the *current* model says are
+    empty, the fit cannot move — the manual warns about this and `fit()` now
+    raises a `RuntimeWarning` reporting the count.
 
 ---
 
@@ -80,6 +85,7 @@ src/pyrump/
               fill/{trapezoid,straggled}, convolve,
               absorber, fuzz, pileup, multiscatter
   io/         rbs (native binary), ascii, adt (.adt / R33 / DSIR cross-sections)
+  fit/        objective (Poisson chi2), windows, parameters, lm
 tests/
   oracle/     build_oracle.py, oracle.py (cffi), driver.py (pty), csrc/*.c
   unit/       one file per milestone
@@ -146,6 +152,7 @@ Two traps in the host state (`sim_probe.c`):
 | Full spectrum, per channel | 1e-5 of peak |
 | Absorber / fuzz / pile-up / multiple scattering | 3e-6 total, 4e-5 of peak |
 | `.RBS` files vs RUMP's own reader | bit-identical, both directions |
+| Poisson objective vs `EvalChiPoisson` | 1e-4 residuals, 1e-5 reduced chi2 |
 
 Everything is capped by float32 storage in the C. Tolerances are argued from
 that floor, not chosen for convenience.
@@ -175,50 +182,33 @@ Established by repeated failure — five times a "bug" was a bad test, not code:
 
 ---
 
-## Next: M12 — fitting (PERT)
+## Next: M13 — CLI, plotting, `.lcm` subset
 
-Sources: `rump/pert.c` (parameter management, windows) and
-`genplot/curfit.c:557-614` (the objective).
+The last milestone, and the only one that is not physics.
 
-**Objective — Poisson maximum likelihood**, Baker & Cousins, NIM 221 (1984) 437:
+**CLI** (`pyrump.cli`): `simulate`, `fit`, `convert`, `plot`. Entry point is
+already declared in `pyproject.toml` (`pyrump = "pyrump.cli.__main__:main"`) but
+the module is a stub.
+
+**Plotting** (`pyrump.plot`): matplotlib helpers — spectrum overlay with
+residuals, depth profiles. Deliberately *not* a port of genplot; the user chose
+matplotlib.
+
+**`.lcm` subset** (`pyrump.script`): the sample-definition commands only. Keep
+it to roughly the 30 commands `data/Fixed/ITO.lcm` exercises:
 
 ```
-chi2 = 2 * sum_i [ t_i - n_i + n_i * ln(n_i / t_i) ]
+Sim Reset / Layer N / Thick <v> <unit> / Composition <el> <f> ... /
+Sublayer / Sthickness / Equation / Species / Fuzzy / Next / Maxpth / Foil
 ```
 
-`curfit.c` forms a *signed* per-channel residual so LM can use it directly, and
-switches to a series expansion for `0.9 < t/n < 1.1` to avoid catastrophic
-cancellation (max error 3.6e-6). **Copy that formulation** — it is genuinely
-good numerics, not an artefact.
+Explicitly **out of scope**: the full `gvparse` expression language, interactive
+graphics, hardcopy drivers. Those are ~5000 lines of pure UI and the Python API
+is the primary interface.
 
-Edge cases the C handles: `n == 0` gives `chi = sqrt(2t)`; `t <= 0` is counted
-as invalid and contributes zero, with a "Poisson statistics invalid!" warning.
-The reported `chisqr$` is the **reduced** chi-square (divided by dof).
-
-**Windows.** Up to 10 error windows (`pert.h:41`, the manual documents only
-one), plus a normalisation window that varies `CORR` to equalise total counts.
-Varying `CORR` and setting a normalisation window are mutually exclusive
-(`pert.c:1163`).
-
-**Fittable parameters** (`pert.h:1-7`, `pert.c:156-168`): MEV, THETA, PHI, PSI,
-FWHM, TAU, KEV/CH, KEV(0), CURRENT, CORRECTION; per-layer THICKNESS,
-COMPOSITION, SPECIES, EQUATION parameters; STRAGGLE, MULTIPLE_SCATTER, FUZZ.
-
-**Optimiser.** RUMP ships two: `THOMPSON` (default) is Levenberg-Marquardt
-(`genplot/curfit.c`, Bevington CURFIT lineage, `flamda` 0.001), and `DOOLITTLE`
-is the 1986 paper's Hessian/hyperellipsoid method (`genplot/locmin.c`). Use
-scipy for LM; the paper's method is optional.
-
-Numerics: `EpsCrit = 1e-3`, `MaxIterations = 10`, numerical derivatives at a
-1% parameter step (`pert.c:96-98`).
-
-> **Test the chi-square surface, never the optimiser trajectory.** scipy's LM
-> and Bevington's CURFIT reach the same minimum by different paths, so
-> comparing iterates is meaningless. Evaluate chi2 at the C's *converged*
-> parameter vector and compare that.
-
-Then: M13 CLI, matplotlib plotting, `.lcm` subset. (`.adt`/R33 cross-section
-tables are already done — `src/pyrump/io/adt.py`.)
+Note `SimWriteSample` (sim2.c:2070) is the writer, so a `.lcm` round-trip is a
+natural acceptance test. Watch for the misspelled `recalculculate` (quirk 13) if
+driving the real binary for comparison.
 
 ---
 

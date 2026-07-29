@@ -72,6 +72,7 @@ EXTRA_FLAGS = {
 
 SUPPORT_SOURCES = [
     "genplot/gptfit.c",
+    "genplot/curfit.c",   # EvalChiPoisson: the fitting objective
     "sys/sys_2.c",
     # Reachable from FitPolynomial, so the real implementations are required --
     # the generated ui_stubs.c aborts if one of these is called.
@@ -200,6 +201,7 @@ def build(root: Path, out_dir: Path, *, double: bool) -> Path:
     for src in (
         CSRC / "stubs.c",
         CSRC / "ndtri_probe.c",
+        CSRC / "chi_probe.c",
         CSRC / "stragf_probe.c",
         CSRC / "sim_probe.c",
         CSRC / "oracle_api.c",
