@@ -13,6 +13,14 @@ importable library.
 > same Poisson objective, reads and writes RUMP's native `.RBS` and `.lcm` files
 > byte-identically, and ships a CLI. 503 tests.
 
+## Try it
+
+```bash
+python main.py                 # runnable demo of everything
+python main.py --list          # the individual demos
+python main.py identify        # just one
+```
+
 ## Documentation
 
 - **[docs/usage.md](docs/usage.md)** — command reference, Python API, and worked
