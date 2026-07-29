@@ -3,8 +3,9 @@
 Written to let a cold session resume without re-deriving anything. Read this
 plus [rump-quirks.md](rump-quirks.md) and you have the context.
 
-**Status:** M0–M10 complete — the entire forward model. 382 tests pass in ~50 s.
-Under git; `LICENSE` (MIT) and `NOTICE` in place.
+**Status:** M0–M11 complete — the entire forward model, plus native file I/O.
+407 tests pass in ~70 s. 83 files, ~11,800 lines. Under git; `LICENSE` (MIT) and
+`NOTICE` in place.
 
 ---
 
@@ -57,6 +58,9 @@ Do not re-litigate these. Full catalogue with citations:
     RUMP's own build, catastrophic when transplanted. pyRUMP uses scipy.
 13. **The SIM command is misspelled** `recalculculate` in the C's table; only
     the prefix `recal` works when driving the binary.
+14. **`.RBS` data records use the generic type `0011h`**, not the explicit
+    `0012h`-`0015h`. Handling only the explicit ones parses every header
+    correctly and returns a spectrum of zeros, silently.
 
 ---
 
@@ -73,6 +77,7 @@ src/pyrump/
   sim/        slabs, precal, ideal, outbound, bricks, engine,
               fill/{trapezoid,straggled}, convolve,
               absorber, fuzz, pileup, multiscatter
+  io/         rbs (native binary), ascii
 tests/
   oracle/     build_oracle.py, oracle.py (cffi), driver.py (pty), csrc/*.c
   unit/       one file per milestone
@@ -136,6 +141,7 @@ Two traps in the host state (`sim_probe.c`):
 | Full spectrum, total counts | 3e-6 |
 | Full spectrum, per channel | 1e-5 of peak |
 | Absorber / fuzz / pile-up / multiple scattering | 3e-6 total, 4e-5 of peak |
+| `.RBS` files vs RUMP's own reader | bit-identical, both directions |
 
 Everything is capped by float32 storage in the C. Tolerances are argued from
 that floor, not chosen for convenience.
@@ -165,34 +171,51 @@ Established by repeated failure — five times a "bug" was a bad test, not code:
 
 ---
 
-## Next: M11 — file I/O
+## Next: M12 — fitting (PERT)
 
-**`.RBS` binary** is fully specified in `C-code/html/RUMP/rbs_inf.htm`, and the
-spec explicitly permits reimplementation. Reader/writer: `rump/rbs_rdwr.c`.
+Sources: `rump/pert.c` (parameter management, windows) and
+`genplot/curfit.c:557-614` (the objective).
 
-* 32-bit words, **big-endian on disk**
-* record = `[length][type][data...][checksum]`, 3–1027 words; **all words in a
-  record sum to 0 mod 2^32**
-* first record must be type `0000h`; program id `10211210h` = RUMP
-* types: `0000h` program, `0001h/0002h` comments, `0010h` field initiator,
-  `0020h` array initiator, `0011h` data, `0101h` id, `0102h` livetime,
-  `0103h` date, `0110h` correction, `0111h` accelerator, `0112h` MCA,
-  `0120h` RBS geometry, `0121h` FRES geometry
-* four compression modes: unpacked real, unpacked int, differential int,
-  differential + zero-run. Differential: first element 4-byte absolute, then
-  1-byte deltas, escape `80h` → 2-byte, escape `8000h` → 4-byte absolute
-* geometry codes `0` Cornell, `1` IBM, `-1` general; **`Phi` is the supplement**
-  of the scattering angle
+**Objective — Poisson maximum likelihood**, Baker & Cousins, NIM 221 (1984) 437:
 
-Acceptance: the three `C-code/rump/data/Fixed/*.rbs` fixtures round-trip
-byte-identically, and all four compression modes decode. The C's writer can
-generate fixtures for modes the shipped files do not cover.
+```
+chi2 = 2 * sum_i [ t_i - n_i + n_i * ln(n_i / t_i) ]
+```
 
-Also in M11: ASCII 1col/2col/`.xls` (`rdwr.c`), and `.adt`/R33 cross-section
-tables in three dialects (`reswork.c:194`).
+`curfit.c` forms a *signed* per-channel residual so LM can use it directly, and
+switches to a series expansion for `0.9 < t/n < 1.1` to avoid catastrophic
+cancellation (max error 3.6e-6). **Copy that formulation** — it is genuinely
+good numerics, not an artefact.
 
-Then: M12 fitting (Baker-Cousins Poisson χ², error + normalisation windows, LM
-via scipy — test the χ² surface, never the optimiser trajectory), M13 CLI.
+Edge cases the C handles: `n == 0` gives `chi = sqrt(2t)`; `t <= 0` is counted
+as invalid and contributes zero, with a "Poisson statistics invalid!" warning.
+The reported `chisqr$` is the **reduced** chi-square (divided by dof).
+
+**Windows.** Up to 10 error windows (`pert.h:41`, the manual documents only
+one), plus a normalisation window that varies `CORR` to equalise total counts.
+Varying `CORR` and setting a normalisation window are mutually exclusive
+(`pert.c:1163`).
+
+**Fittable parameters** (`pert.h:1-7`, `pert.c:156-168`): MEV, THETA, PHI, PSI,
+FWHM, TAU, KEV/CH, KEV(0), CURRENT, CORRECTION; per-layer THICKNESS,
+COMPOSITION, SPECIES, EQUATION parameters; STRAGGLE, MULTIPLE_SCATTER, FUZZ.
+
+**Optimiser.** RUMP ships two: `THOMPSON` (default) is Levenberg-Marquardt
+(`genplot/curfit.c`, Bevington CURFIT lineage, `flamda` 0.001), and `DOOLITTLE`
+is the 1986 paper's Hessian/hyperellipsoid method (`genplot/locmin.c`). Use
+scipy for LM; the paper's method is optional.
+
+Numerics: `EpsCrit = 1e-3`, `MaxIterations = 10`, numerical derivatives at a
+1% parameter step (`pert.c:96-98`).
+
+> **Test the chi-square surface, never the optimiser trajectory.** scipy's LM
+> and Bevington's CURFIT reach the same minimum by different paths, so
+> comparing iterates is meaningless. Evaluate chi2 at the C's *converged*
+> parameter vector and compare that.
+
+Then: M13 CLI, matplotlib plotting, `.lcm` subset. Optional: `.adt`/R33
+cross-section tables (`reswork.c:194`, three dialects), needed only for
+non-Rutherford work.
 
 ---
 
