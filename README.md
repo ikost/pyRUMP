@@ -8,12 +8,10 @@ The original is ~22k lines of unmaintained C from the late 1980s, with a 1996-er
 HTML manual and no active support. pyRUMP reproduces its physics as a tested,
 importable library.
 
-> **Status: the forward model is complete.** pyRUMP simulates RBS spectra
-> matching the original to ~3e-6 in total counts and ~1e-5 of peak per channel,
-> with straggling, detector resolution, depth profiles, absorber layers, surface
-> roughness, pile-up and multiple scattering, and reads/writes RUMP's native
-> `.RBS` binary files bit-identically. Still to come: fitting and the CLI.
-> See [Milestones](#milestones).
+> **Status: complete.** All thirteen milestones are done. pyRUMP simulates RBS
+> spectra matching the original to ~3e-6 in total counts, fits them with the
+> same Poisson objective, reads and writes RUMP's native `.RBS` and `.lcm` files
+> byte-identically, and ships a CLI. 503 tests.
 
 ## Design
 
@@ -34,6 +32,31 @@ pip install -e ".[dev,plot]"
 ```
 
 Python 3.11+, numpy, scipy.
+
+## Use
+
+```python
+from pyrump.atomic.tables import PeriodicTable
+from pyrump.sim.engine import Beam, UniformSample, simulate
+from pyrump.model.geometry import Geometry
+from pyrump.model.spectrum import Calibration
+
+spectrum = simulate(
+    UniformSample([1000.0], [14], [[1.0]]),   # 1000e15 at/cm^2 of silicon
+    Beam(e0_MeV=2.0, z=2, mass=4.0026),       # 2 MeV alphas
+    Geometry(theta=0.0, phi=10.0),            # phi is 180 - scattering angle
+    registry, periodic_table, Calibration(kevch=5.0, npt=1024),
+)
+```
+
+or from the shell:
+
+```bash
+pyrump simulate sample.lcm --energy 2.0 --beam 4He -o out.rbs
+pyrump fit sample.lcm measured.rbs --vary thickness:0 --window 190 226
+pyrump plot measured.rbs --compare out.rbs -o comparison.png
+pyrump convert measured.rbs measured.dat
+```
 
 ## Validation
 
@@ -76,6 +99,8 @@ pytest -m oracle    # comparison against the C
 | Depth profiles, all 11 evaluable forms | **2.6e-5** brick heights | float32 coefficients |
 | Absorber, fuzz, multiple scattering | **3e-6** total, **4e-5** of peak | float32 brick edges |
 | `.RBS` files read vs RUMP's own reader | **bit-identical** | — |
+| Poisson objective vs `EvalChiPoisson` | **1e-5** reduced chi2 | float32 in the C |
+| `.lcm` round-trip vs RUMP's own writer | **byte-identical** | — |
 
 The oracle is the `float` build. RUMP cannot be built in double precision — its
 table readers use `scanf("%f")` against `REAL` fields, so `-DREAL_IS_DOUBLE`
@@ -98,8 +123,8 @@ and the tolerances above are set by that floor rather than by choice.
 | M9 | Depth profiles (13 EQUATION forms) | done |
 | M10 | Absorber, pile-up, fuzz, multiple scattering | done |
 | M11 | File I/O (`.RBS` binary, ASCII) | done |
-| M12 | Fitting (PERT) | next |
-| M13 | CLI, plotting, `.lcm` subset | |
+| M12 | Fitting (PERT) | done |
+| M13 | CLI, plotting, `.lcm` subset | done |
 
 ## Licensing
 

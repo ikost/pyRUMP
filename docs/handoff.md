@@ -3,9 +3,9 @@
 Written to let a cold session resume without re-deriving anything. Read this
 plus [rump-quirks.md](rump-quirks.md) and you have the context.
 
-**Status:** M0–M12 complete — the forward model, file I/O, and fitting. Only
-the CLI/plotting layer (M13) remains. 474 tests pass in ~73 s. Under git;
-`LICENSE` (MIT) and `NOTICE` in place.
+**Status: complete.** All thirteen milestones done — forward model, file I/O,
+fitting, CLI. 503 tests pass in ~73 s. Under git; `LICENSE` (MIT) and `NOTICE`
+in place.
 
 ---
 
@@ -86,6 +86,9 @@ src/pyrump/
               absorber, fuzz, pileup, multiscatter
   io/         rbs (native binary), ascii, adt (.adt / R33 / DSIR cross-sections)
   fit/        objective (Poisson chi2), windows, parameters, lm
+  script/     lcm (.lcm / .sim sample descriptions)
+  plot/       spectra (matplotlib helpers)
+  cli/        __main__ (simulate / fit / convert / plot)
 tests/
   oracle/     build_oracle.py, oracle.py (cffi), driver.py (pty), csrc/*.c
   unit/       one file per milestone
@@ -182,33 +185,22 @@ Established by repeated failure — five times a "bug" was a bad test, not code:
 
 ---
 
-## Next: M13 — CLI, plotting, `.lcm` subset
+## What is left
 
-The last milestone, and the only one that is not physics.
+Nothing required. Possible extensions, in rough order of usefulness:
 
-**CLI** (`pyrump.cli`): `simulate`, `fit`, `convert`, `plot`. Entry point is
-already declared in `pyproject.toml` (`pyrump = "pyrump.cli.__main__:main"`) but
-the module is a stub.
-
-**Plotting** (`pyrump.plot`): matplotlib helpers — spectrum overlay with
-residuals, depth profiles. Deliberately *not* a port of genplot; the user chose
-matplotlib.
-
-**`.lcm` subset** (`pyrump.script`): the sample-definition commands only. Keep
-it to roughly the 30 commands `data/Fixed/ITO.lcm` exercises:
-
-```
-Sim Reset / Layer N / Thick <v> <unit> / Composition <el> <f> ... /
-Sublayer / Sthickness / Equation / Species / Fuzzy / Next / Maxpth / Foil
-```
-
-Explicitly **out of scope**: the full `gvparse` expression language, interactive
-graphics, hardcopy drivers. Those are ~5000 lines of pure UI and the Python API
-is the primary interface.
-
-Note `SimWriteSample` (sim2.c:2070) is the writer, so a `.lcm` round-trip is a
-natural acceptance test. Watch for the misspelled `recalculculate` (quirk 13) if
-driving the real binary for comparison.
+* **ERD / forward recoil.** `SimCideal`'s `part == 2` branch (creatr.c:1668) is
+  not ported; `setup_recoil` in `physics/xsec/rutherford.py` already exists and
+  is tested, so this is mostly the depth loop plus `fres_only_absorber`.
+* **Resonance sub-layer splitting.** `creatr.c:1854-1893` subdivides a slab
+  wherever the beam crosses a tabulated cross-section knot. The `.adt`/R33
+  readers are done, so only the engine side is missing.
+* **The parabolic brick mode.** The 1985 paper's exact-area algorithm, which the
+  C abandoned (`anlyz.c:496`, `#if 0`). `layer[].qq` is already computed and
+  carried on `Bricks.area`, so the specification and the input are both present.
+* **Regenerate the data tables** from primary sources before any public
+  release — see `NOTICE`. This is the only item with an external deadline.
+* **`SPLINE` / `USEREQN` profiles**, which need an expression evaluator.
 
 ---
 
