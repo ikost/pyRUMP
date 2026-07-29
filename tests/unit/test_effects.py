@@ -30,7 +30,7 @@ from pyrump.sim.absorber import AbsorberSpec, first_sample_slab, sample_depth
 from pyrump.sim.engine import Beam, UniformSample, simulate
 from pyrump.sim.fuzz import fuzz_steps, iteration_count, replica_thicknesses
 from pyrump.sim.multiscatter import add_multiple_scattering
-from pyrump.sim.pileup import new_pileup
+from pyrump.sim.pileup import new_pileup, old_pileup
 from pyrump.stopping.kalbitzer import KalbitzerStopping
 from pyrump.stopping.registry import StoppingRegistry
 from pyrump.stopping.ziegler import ZieglerStopping
@@ -250,6 +250,7 @@ def _compare(oracle, registry, table, sample, measurement, theta=0.0, *, rtol=1e
     ours, ref = mine.counts[:n], theirs[:n]
     assert ours.sum() == pytest.approx(ref.sum(), rel=rtol)
     assert np.max(np.abs(ours - ref)) < rtol * ref.max()
+    return ours, ref
 
 
 def test_ndtri_matches_the_c(oracle):
@@ -336,3 +337,62 @@ def test_fuzz_broadens_an_edge(registry, table):
     )
     assert rough.total() == pytest.approx(sharp.total(), rel=0.02)
     assert np.count_nonzero(rough.counts) > np.count_nonzero(sharp.counts)
+
+
+# --------------------------------------------------------------- guard tests
+#
+# Merged from a parallel M10 test file. These assert that an effect actually
+# changes the spectrum -- without them a comparison can pass because both
+# implementations did nothing.
+
+
+def test_old_pileup_is_available_for_legacy_results():
+    counts = np.zeros(200)
+    counts[50] = 1000.0
+    out = old_pileup(counts, current_nA=100.0)
+    assert out[100] > 0, "counts should appear at twice the energy"
+
+
+def test_pileup_scales_with_rate():
+    counts = np.zeros(400)
+    counts[100:150] = 1000.0
+    low = new_pileup(counts, tau_us=5.0, current_nA=100.0, charge_uC=10.0)
+    high = new_pileup(counts, tau_us=5.0, current_nA=1000.0, charge_uC=10.0)
+    assert high[200:].sum() > low[200:].sum()
+
+
+def test_multiple_scattering_grows_with_strength():
+    counts = np.zeros(200)
+    counts[150] = 1e6
+    weak = add_multiple_scattering(counts, strength=10.0, charge_uC=10.0, omega_msr=1.0)
+    strong = add_multiple_scattering(counts, strength=100.0, charge_uC=10.0, omega_msr=1.0)
+    assert strong[:150].sum() > weak[:150].sum()
+
+
+def test_pileup_actually_changes_the_spectrum(oracle, registry, table):
+    """Guard against the comparison passing because nothing happened."""
+    sample = UniformSample([1000.0], [14], [[1.0]])
+    oracle.set_pileup(None)
+    _, without = _compare(
+        oracle, registry, table, sample,
+        Measurement(omega_msr=1.0, charge_uC=10.0, tau_us=0.0),
+    )
+    oracle.set_pileup("new")
+    _, with_pileup = _compare(
+        oracle, registry, table, sample,
+        Measurement(omega_msr=1.0, charge_uC=10.0, tau_us=5.0, current_nA=100.0),
+    )
+    oracle.set_pileup(None)
+    assert not np.allclose(without, with_pileup)
+
+
+def test_multiple_scattering_actually_changes_the_spectrum(oracle, registry, table):
+    measurement = Measurement(omega_msr=1.0, charge_uC=10.0, tau_us=0.0)
+    _, plain = _compare(
+        oracle, registry, table, UniformSample([1000.0], [14], [[1.0]]), measurement
+    )
+    _, tailed = _compare(
+        oracle, registry, table,
+        UniformSample([1000.0], [14], [[1.0]], multiple=200.0), measurement,
+    )
+    assert tailed.sum() > plain.sum() * 1.05

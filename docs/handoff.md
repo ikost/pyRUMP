@@ -3,9 +3,9 @@
 Written to let a cold session resume without re-deriving anything. Read this
 plus [rump-quirks.md](rump-quirks.md) and you have the context.
 
-**Status:** M0–M11 complete — the entire forward model, plus native file I/O.
-407 tests pass in ~70 s. 83 files, ~11,800 lines. Under git; `LICENSE` (MIT) and
-`NOTICE` in place.
+**Status:** M0–M11 complete — the entire forward model, native `.RBS`/ASCII I/O,
+and `.adt`/R33 cross-section tables. 442 tests pass in ~70 s. Under git;
+`LICENSE` (MIT) and `NOTICE` in place.
 
 ---
 
@@ -23,7 +23,7 @@ by eyeballing a spectrum. Full spectra agree to ~3e-6 in total counts.
 ## Non-obvious things that took real work to find
 
 Do not re-litigate these. Full catalogue with citations:
-[rump-quirks.md](rump-quirks.md), 17 entries.
+[rump-quirks.md](rump-quirks.md), 20 entries.
 
 1. **The engine is `creatr.c`, not `sim2.c`.** `sim2.c` is the SIM command
    interpreter. Natural wrong turn; costs a day.
@@ -54,8 +54,10 @@ Do not re-litigate these. Full catalogue with citations:
 11. **The absorber is not traversed inbound.** It sits between sample and
     detector; `SimPrecal` seeds the march at `fsurf`. Getting this wrong costs
     ~20% of the yield.
-12. **`NDTRI` reads one element past its coefficient array.** Harmless in
-    RUMP's own build, catastrophic when transplanted. pyRUMP uses scipy.
+12. **`poly_e` reads one element past its array, and `-O2` makes it fatal.**
+    Harmless at `-O0`, which is how RUMP ships (no `-O` flag anywhere); at
+    `-O2` the compiler exploits the UB and `NDTRI` returns ±0.15 across the
+    mid-range. `build_oracle.py` pins `-O0` for `ndtri_probe.c`.
 13. **The SIM command is misspelled** `recalculculate` in the C's table; only
     the prefix `recal` works when driving the binary.
 14. **`.RBS` data records use the generic type `0011h`**, not the explicit
@@ -77,7 +79,7 @@ src/pyrump/
   sim/        slabs, precal, ideal, outbound, bricks, engine,
               fill/{trapezoid,straggled}, convolve,
               absorber, fuzz, pileup, multiscatter
-  io/         rbs (native binary), ascii
+  io/         rbs (native binary), ascii, adt (.adt / R33 / DSIR cross-sections)
 tests/
   oracle/     build_oracle.py, oracle.py (cffi), driver.py (pty), csrc/*.c
   unit/       one file per milestone
@@ -122,9 +124,11 @@ Anything genuinely reachable must be linked for real — `reschk`, `ArrayMinMax`
 Two traps in the host state (`sim_probe.c`):
 * `sigtab` defaults to `{-1,-1}`; zero silently selects a manual-override branch
   and returns a cross-section of exactly zero.
-* `gvcalc.c` will not compile under clang (declares `srand48`/`drand48`
-  non-static, then defines them static), so `NDTRI` is extracted verbatim into
-  `ndtri_probe.c` with its array padded — see quirk 16.
+* `gvcalc.c` ships its own `srand48`/`drand48`, which clash with the macOS SDK;
+  the build renames them out of the way. `NDTRI` lives in `ndtri_probe.c` and is
+  compiled at **`-O0`** — see quirk 16. Do not "fix" the out-of-bounds read by
+  padding the array: the point of the probe is to reproduce what RUMP actually
+  computes.
 
 ---
 
@@ -213,9 +217,8 @@ Numerics: `EpsCrit = 1e-3`, `MaxIterations = 10`, numerical derivatives at a
 > comparing iterates is meaningless. Evaluate chi2 at the C's *converged*
 > parameter vector and compare that.
 
-Then: M13 CLI, matplotlib plotting, `.lcm` subset. Optional: `.adt`/R33
-cross-section tables (`reswork.c:194`, three dialects), needed only for
-non-Rutherford work.
+Then: M13 CLI, matplotlib plotting, `.lcm` subset. (`.adt`/R33 cross-section
+tables are already done — `src/pyrump/io/adt.py`.)
 
 ---
 

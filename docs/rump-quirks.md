@@ -330,60 +330,16 @@ energy (creatr.c:1530) and marches from there. Absorber layers are between the
 sample and the detector, so the incoming beam never crosses them — only the
 outgoing particle does, via `SimFlyout`.
 
-Marching through them on the way in double-counts their stopping and shifts
-every edge. The absorber is also not tilted with the sample: `SimFlyout` forces
-normal incidence through it (creatr.c:1971), since a detector window does not
-rotate when the sample does.
-
----
-
-## 16. `NDTRI` reads one element past its coefficient array
-
-`gvcalc.c:4764` declares the Taylor coefficients with **ten** elements:
-
 ```c
-static double taylor[] = { -4.59e-10, 0.1667, 0.0583, ..., -0.000338 };   /* 10 */
-...
-t += t*poly_e(t*t, taylor, 10);
-```
-
-but `poly_e(x, numer, iorder)` starts at `numer[iorder]` and works down, so it
-reads `taylor[10]` — one past the end.
-
-In RUMP's own build the next object in memory is `ctay[0]` (~6e-9), whose
-contribution at x^10 is negligible, so the bug never shows. Under any other
-layout it reads whatever happens to be there: when the function was extracted
-into the oracle it returned a constant ±0.15 across the entire central region
-(|p−0.5| < 0.35), against a true range of ±∞.
-
-`NDTRI` feeds the FUZZ feature (creatr.c:679), so a port that transplanted the
-routine without noticing would get plausible-looking but wrong roughness
-quantiles.
-
-**pyRUMP:** uses `scipy.special.ndtri`. With the array padded to eleven elements
-(the eleventh being 0.0, which is what the series actually calls for), RUMP's
-routine agrees with scipy to **8.4e-10** across p ∈ [1e-6, 0.999] — so the
-substitution is exact within the C's own precision.
-
----
-
-## 17. The absorber is *not* traversed on the way in
-
-`SimPrecal` seeds the inbound march at `samm->fsurf`, not at slab 0:
-
-```c
-samm->layer[samm->fsurf].ehit = ee;                 /* creatr.c:1533 */
+samm->layer[samm->fsurf].ehit = ee;                 /* creatr.c:1530 */
 for (lay=samm->fsurf; lay<samm->num_layers; lay++)  /* creatr.c:1541 */
 ```
 
-Absorber layers sit between the sample and the **detector** — a dead layer or a
-Mylar window — so the beam reaches the sample undegraded and the absorber
-attenuates only the outgoing particle. They are also traversed at normal
-incidence, because a detector window does not tilt when the sample does
-(`creatr.c:1971`).
-
-Marching the beam through the absorber on the way in as well costs ~20% of the
-total yield for a 200e15 at/cm² Si absorber, and grows from there.
+Marching through them on the way in double-counts their stopping and shifts
+every edge — it costs ~20% of the total yield for a 200e15 at/cm² silicon
+absorber, and grows from there. The absorber is also not tilted with the
+sample: `SimFlyout` forces normal incidence through it (creatr.c:1971), since a
+detector window does not rotate when the sample does.
 
 ---
 
