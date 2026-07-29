@@ -187,7 +187,9 @@ Established by repeated failure — five times a "bug" was a bad test, not code:
 
 ## What is left
 
-Nothing required. Possible extensions, in rough order of usefulness:
+User documentation is in `docs/algorithm.md` and `docs/usage.md`.
+
+Nothing else required. Possible extensions, in rough order of usefulness:
 
 * **ERD / forward recoil.** `SimCideal`'s `part == 2` branch (creatr.c:1668) is
   not ported; `setup_recoil` in `physics/xsec/rutherford.py` already exists and

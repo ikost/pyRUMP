@@ -13,6 +13,17 @@ importable library.
 > same Poisson objective, reads and writes RUMP's native `.RBS` and `.lcm` files
 > byte-identically, and ships a CLI. 503 tests.
 
+## Documentation
+
+- **[docs/usage.md](docs/usage.md)** — command reference, Python API, and worked
+  examples: identifying elements from a spectrum, simulating a known structure,
+  fitting a thickness.
+- **[docs/algorithm.md](docs/algorithm.md)** — what the simulation computes and
+  how, what it approximates, and where the shipped code diverges from the
+  published algorithm.
+- **[docs/rump-quirks.md](docs/rump-quirks.md)** — 20 documented defects and
+  surprises in the original C, and what pyRUMP does about each.
+
 ## Design
 
 **Faithful first, corrected by choice.** The default reproduces the shipped C
