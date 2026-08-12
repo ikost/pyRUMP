@@ -16,7 +16,6 @@ composition:
 
 from __future__ import annotations
 
-import os
 import sys
 from pathlib import Path
 
@@ -45,17 +44,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "oracle"))
 import oracle as ora  # noqa: E402
 
 
-def _data_dir() -> Path | None:
-    env = os.environ.get("PYRUMP_C_REFERENCE")
-    roots = [Path(env)] if env else []
-    roots.append(Path(__file__).resolve().parents[2] / "C-code")
-    for root in roots:
-        if (root / "rump" / "data" / "atom4.dat").is_file():
-            return root / "rump" / "data"
-    return None
+from conftest import data_dir
 
-
-DATA = _data_dir()
+DATA = data_dir()
 HEIGHT_RTOL = 1e-4
 
 #: (oracle name, type, parameters) for every supported form.
@@ -230,7 +221,7 @@ def test_none_gives_pure_matrix():
 # ----------------------------------------------------- against the C
 
 pytestmark = pytest.mark.skipif(
-    DATA is None or not ora.available(), reason="legacy tables or oracle unavailable"
+    DATA is None or not ora.available() or ora.data_dir() is None, reason="legacy tables or oracle unavailable"
 )
 
 

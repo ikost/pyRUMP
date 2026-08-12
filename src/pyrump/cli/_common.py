@@ -12,10 +12,14 @@ from pathlib import Path
 
 
 def data_dir(explicit: str | None = None) -> Path:
-    """Locate the legacy data tables.
+    """Locate the data tables.
 
     Searched in order: an explicit path, ``$PYRUMP_DATA``,
-    ``$PYRUMP_C_REFERENCE/rump/data``, then ``./C-code/rump/data``. A directory
+    ``$PYRUMP_C_REFERENCE/rump/data``, ``./C-code/rump/data``, then the tables
+    bundled with the package (``pyrump/data/``) -- the last one is what makes a
+    plain ``pip install pyrump`` work with no configuration; the earlier,
+    legacy-tree candidates take priority so local development against the C
+    oracle sees the same tables the oracle tests compare against. A directory
     counts only if it actually holds ``atom4.dat``.
     """
     candidates = []
@@ -26,6 +30,7 @@ def data_dir(explicit: str | None = None) -> Path:
     if os.environ.get("PYRUMP_C_REFERENCE"):
         candidates.append(Path(os.environ["PYRUMP_C_REFERENCE"]) / "rump" / "data")
     candidates.append(Path.cwd() / "C-code" / "rump" / "data")
+    candidates.append(Path(__file__).resolve().parent.parent / "data")
     for path in candidates:
         if (path / "atom4.dat").is_file():
             return path

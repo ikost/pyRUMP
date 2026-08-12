@@ -1,0 +1,42 @@
+# ===========================================================================
+#                       Compound density table for RUMP
+# ===========================================================================
+# Format is two columns, first for a mnemonic name of the unit, second is
+# the atomic density in 1E23 atoms/cm^3.  If the correct stoichiometry for
+# the compound is specified in SIM thickness, then the thickness can be
+# interpreted as angstroms of the fully dense material.  If you want the
+# thickness interpreted as nm instead of angstroms, enter the densities
+# in units of 1E22 atoms/cm^3.  
+#
+# WARNING: Many of the EQUATION functions depend on being able to convert
+#          thicknesses in user units to cm.  These will only work if user
+#          units are used as angstroms (1E23 scaling on density below).
+#          Despite my dislike for Angstroms, at the moment it is probably
+#          better to stick with the unit for most RBS work.
+#
+# It is however IMPORTANT to understand how this density table is used.  
+# When one of these units is specified as a thickness, the total number
+# of atoms in the layer will be the factor below multiplied by the specified
+# thickness, in units of 1E15 atoms/cm^2.  The actual number of each atom
+# specie is this total atomic number multiplied by the composition fraction.
+#
+# All lines beginning with a # are considered comments.  The file will be
+# updated if new densities are added during running of RUMP (assuming you
+# have write priveleges to the directory).   Comments will always be
+# collected at the head of the file.
+# ===========================================================================
+# Use of any unit other than /cm2 is at the users peril.
+# ===========================================================================
+# Compound semiconductor densities are compliments of Prof. Chris Palmstrom
+# ===========================================================================
+AlP       0.5926
+AlAs      0.4506
+AlSb      0.3418
+GaP       0.494
+GaAs      0.4428
+GaSb      0.3536
+InP       0.3956
+InAs      0.3594
+InSb      0.2942
+SiO2      0.660
+SiNx      1.036

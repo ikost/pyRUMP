@@ -31,7 +31,7 @@ pyrump = "pyrump.cli.__main__:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-pyrump = ["data/*.json", "data/*.npz"]
+pyrump = ["data/*.dat", "data/*.kal", "data/*.tab", "data/SOURCES.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

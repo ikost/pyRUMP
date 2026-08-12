@@ -7,7 +7,6 @@ dispatch path rather than calling handlers directly.
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import numpy as np
@@ -23,17 +22,9 @@ from pyrump.shell.repl import execute_file, execute_line  # noqa: E402
 from pyrump.shell.session import Buffer, BufferSet, PlotState, Session  # noqa: E402
 
 
-def _data_dir() -> Path | None:
-    env = os.environ.get("PYRUMP_C_REFERENCE")
-    roots = [Path(env)] if env else []
-    roots.append(Path(__file__).resolve().parents[2] / "C-code")
-    for root in roots:
-        if (root / "rump" / "data" / "atom4.dat").is_file():
-            return root / "rump" / "data"
-    return None
+from conftest import data_dir
 
-
-DATA = _data_dir()
+DATA = data_dir()
 needs_data = pytest.mark.skipif(DATA is None, reason="legacy data tables unavailable")
 
 

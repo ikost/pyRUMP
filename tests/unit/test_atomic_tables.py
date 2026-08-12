@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import os
-from pathlib import Path
-
 import pytest
 
 from pyrump.atomic.density import STATIC_UNITS, DensityTable
@@ -12,19 +9,9 @@ from pyrump.atomic.tables import PeriodicTable
 from pyrump.io.scoef import ZIEGLER_MAX_Z, parse_pscoef
 from pyrump.model.element import MYLAR_Z
 
+from conftest import data_dir
 
-def _reference_data() -> Path | None:
-    env = os.environ.get("PYRUMP_C_REFERENCE")
-    roots = [Path(env)] if env else []
-    roots.append(Path(__file__).resolve().parents[2] / "C-code")
-    for root in roots:
-        data = root / "rump" / "data"
-        if (data / "atom4.dat").is_file():
-            return data
-    return None
-
-
-DATA = _reference_data()
+DATA = data_dir()
 pytestmark = pytest.mark.skipif(DATA is None, reason="legacy data tables not available")
 
 

@@ -33,9 +33,12 @@ pyRUMP follows the C, and documents the differences in docs/rump-quirks.md.
 Physics data
 ------------
 
-pyRUMP reads data tables during development that originate with third parties.
-These are NOT redistributed with pyRUMP and will be regenerated from primary
-sources before any public release:
+pyRUMP bundles four physics data tables (src/pyrump/data/): stopping powers,
+stopping-power fits, elements and isotopes, and compound densities. These
+originate with the legacy RUMP 2.0 C distribution and have been checked
+against current primary sources; see src/pyrump/data/SOURCES.md for full
+provenance, verification notes, and the one correction made (a data-entry
+error in the GaP density).
 
   Stopping powers (pscoef.dat) -- the ZBL/TRIM SCOEF table:
     J. F. Ziegler, J. P. Biersack, U. Littmark, "The Stopping and Range of
@@ -45,12 +48,15 @@ sources before any public release:
     G. Konac, S. Kalbitzer, Ch. Klatt, D. Niemann, R. Stoll,
     Nucl. Instr. Meth. B136-138 (1998) 159-165.
 
-  Elements and isotopes (atom4.dat) -- to be regenerated from CIAAW atomic
-    weights and NIST isotopic compositions.
+  Elements and isotopes (atom4.dat) -- checked against current CIAAW atomic
+    weights and isotopic-abundance data; see SOURCES.md for the two elements
+    (Mg, Zr) with small CIAAW revisions since this table's origin.
+
+  Compound densities (density.tab) -- checked against literature values.
 
   Non-Rutherford cross-sections (*.adt, R33) -- third-party evaluations
-    distributed via IBANDL (IAEA); to be re-downloaded rather than vendored.
-    A. F. Gurbich, Nucl. Instr. Meth. B136-138 (1998) 60.
+    distributed via IBANDL (IAEA); NOT bundled, re-download rather than
+    vendor if needed. A. F. Gurbich, Nucl. Instr. Meth. B136-138 (1998) 60.
 
 Screening and cross-section formulae follow:
   J. L'Ecuyer et al., Nucl. Instr. Meth. 160 (1979) 337.

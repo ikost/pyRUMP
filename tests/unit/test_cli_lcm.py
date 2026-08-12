@@ -7,7 +7,6 @@ itself wrote (``data/Fixed/ITO.lcm``).
 
 from __future__ import annotations
 
-import os
 import sys
 from pathlib import Path
 
@@ -30,19 +29,15 @@ from pyrump.profiles.equations import EquationType  # noqa: E402
 from pyrump.script.lcm import parse_lcm, read_lcm, to_sample, write_lcm  # noqa: E402
 
 
-def _data_dir() -> Path | None:
-    env = os.environ.get("PYRUMP_C_REFERENCE")
-    roots = [Path(env)] if env else []
-    roots.append(Path(__file__).resolve().parents[2] / "C-code")
-    for root in roots:
-        if (root / "rump" / "data" / "atom4.dat").is_file():
-            return root / "rump" / "data"
-    return None
+from conftest import data_dir
 
-
-DATA = _data_dir()
-ITO = DATA / "Fixed" / "ITO.lcm" if DATA else None
+DATA = data_dir()
+FIXED = DATA / "Fixed" if DATA and (DATA / "Fixed").is_dir() else None
+ITO = FIXED / "ITO.lcm" if FIXED else None
 needs_data = pytest.mark.skipif(DATA is None, reason="legacy data tables unavailable")
+# ITO.lcm and Fixed/*.rbs are legacy RUMP sample files, not bundled with the
+# package -- only present when developing against the local C-code tree.
+needs_fixed = pytest.mark.skipif(FIXED is None, reason="legacy Fixed/ sample files unavailable")
 
 SIMPLE = """\
 Sim Reset
@@ -137,14 +132,14 @@ def test_fuzzy_and_absorber():
     assert script.straggle == 1.5
 
 
-@needs_data
+@needs_fixed
 def test_ito_round_trips_byte_identically():
     """The strongest check: reproduce RUMP's own output exactly."""
     original = ITO.read_text()
     assert write_lcm(parse_lcm(original)) == original
 
 
-@needs_data
+@needs_fixed
 def test_ito_converts_to_a_sample():
     table = PeriodicTable.load(DATA / "atom4.dat", DATA / "pscoef.dat")
     densities = DensityTable.load(DATA / "density.tab")
@@ -264,17 +259,17 @@ def test_cli_simulate_writes_rbs_that_reads_back(tmp_path):
     assert spectrum.zbeam == 2
 
 
-@needs_data
+@needs_fixed
 def test_cli_convert_rbs_to_ascii(tmp_path):
     out = tmp_path / "converted.dat"
-    assert main(["convert", str(DATA / "Fixed" / "2A.rbs"), str(out)]) == 0
+    assert main(["convert", str(FIXED / "2A.rbs"), str(out)]) == 0
     assert len(out.read_text().splitlines()) >= 2048
 
 
-@needs_data
+@needs_fixed
 def test_cli_plot_saves_a_file(tmp_path):
     out = tmp_path / "plot.png"
-    assert main(["plot", str(DATA / "Fixed" / "2A.rbs"), "-o", str(out)]) == 0
+    assert main(["plot", str(FIXED / "2A.rbs"), "-o", str(out)]) == 0
     assert out.stat().st_size > 1000
 
 
@@ -313,14 +308,18 @@ def test_cli_fit_requires_something_to_vary(tmp_path):
         main(["fit", str(sample), str(data)])
 
 
-def test_cli_reports_missing_data_directory(tmp_path, monkeypatch):
+def test_cli_falls_back_to_bundled_data_tables(tmp_path, monkeypatch):
+    """With no env vars and no C-code/ nearby, the CLI still works -- the
+    tables bundled in src/pyrump/data/ are the last-resort fallback, so a
+    plain ``pip install pyrump`` needs no configuration."""
     monkeypatch.delenv("PYRUMP_DATA", raising=False)
     monkeypatch.delenv("PYRUMP_C_REFERENCE", raising=False)
     monkeypatch.chdir(tmp_path)
     sample = tmp_path / "s.lcm"
     sample.write_text(SIMPLE)
-    with pytest.raises(SystemExit, match="Could not find the data tables"):
-        main(["simulate", str(sample)])
+    out = tmp_path / "out.dat"
+    assert main(["simulate", str(sample), "-o", str(out)]) == 0
+    assert out.exists()
 
 
 def test_cli_rejects_an_unknown_subcommand():
