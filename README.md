@@ -8,20 +8,20 @@ The original is ~22k lines of unmaintained C from the late 1980s, with a 1996-er
 HTML manual and no active support. pyRUMP reproduces its physics as a tested,
 importable library.
 
-> **Status: complete.** All thirteen milestones are done, plus the interactive
-> shell. pyRUMP simulates RBS spectra matching the original to ~3e-6 in total
-> counts, fits them with the same Poisson objective, reads and writes RUMP's
-> native `.RBS` and `.lcm` files byte-identically, and offers both a batch CLI
-> and RUMP's interactive command environment. 569 tests.
+> **Status: complete.** All fourteen milestones are done, including the
+> interactive shell. pyRUMP simulates RBS spectra matching the original to
+> ~3e-6 in total counts, fits them with the same Poisson objective, reads and
+> writes RUMP's native `.RBS` and `.lcm` files byte-identically, and offers
+> both a batch CLI and RUMP's interactive command environment. 668 tests.
 
 ## Try it
 
 ```bash
+pip install -e ".[dev,plot]"
 pyrump                         # the interactive shell, from any directory
-python main.py                 # runnable demo of everything
-python main.py --list          # the individual demos
-python main.py identify        # just one
 ```
+
+No further setup needed — the physics data tables ship with the package.
 
 ## Documentation
 
@@ -52,21 +52,37 @@ function-by-function rather than by eyeballing a final spectrum.
 pip install -e ".[dev,plot]"
 ```
 
-Python 3.11+, numpy, scipy.
+Python 3.9+, numpy, scipy.
 
 ## Use
 
 ```python
+from pathlib import Path
+import pyrump
+from pyrump.atomic.density import DensityTable
 from pyrump.atomic.tables import PeriodicTable
-from pyrump.sim.engine import Beam, UniformSample, simulate
+from pyrump.io.kalbitzer import parse_kalbitzer
 from pyrump.model.geometry import Geometry
 from pyrump.model.spectrum import Calibration
+from pyrump.sim.engine import Beam, UniformSample, simulate
+from pyrump.stopping.kalbitzer import KalbitzerStopping
+from pyrump.stopping.registry import StoppingRegistry
+from pyrump.stopping.ziegler import ZieglerStopping
+
+DATA = Path(pyrump.__file__).parent / "data"   # bundled with the package
+table = PeriodicTable.load(DATA / "atom4.dat", DATA / "pscoef.dat")
+registry = StoppingRegistry(
+    table.elements,
+    kalbitzer=KalbitzerStopping(parse_kalbitzer(DATA / "newstop.kal"), table.elements),
+    ziegler=ZieglerStopping(table.elements),
+)
+densities = DensityTable.load(DATA / "density.tab")
 
 spectrum = simulate(
     UniformSample([1000.0], [14], [[1.0]]),   # 1000e15 at/cm^2 of silicon
     Beam(e0_MeV=2.0, z=2, mass=4.0026),       # 2 MeV alphas
     Geometry(theta=0.0, phi=10.0),            # phi is 180 - scattering angle
-    registry, periodic_table, Calibration(kevch=5.0, npt=1024),
+    registry, table, Calibration(kevch=5.0, npt=1024),
 )
 ```
 
@@ -78,6 +94,47 @@ pyrump fit sample.lcm measured.rbs --vary thickness:0 --window 190 226
 pyrump plot measured.rbs --compare out.rbs -o comparison.png
 pyrump convert measured.rbs measured.dat
 ```
+
+Where an element's surface edge lands, at 2 MeV He and 170 degrees:
+
+```python
+from pyrump.physics.kinematics import kinematic_factor
+
+gold = table.by_symbol("Au")
+mass = max(gold.isotopes, key=lambda i: i.fraction).mass
+print(kinematic_factor(4.0026, mass, 170.0) * 2000, "keV")   # surface-edge energy
+```
+
+Recovering a thickness by fitting simulated data against itself:
+
+```python
+from pyrump.fit.lm import fit
+from pyrump.fit.parameters import FitInputs, thickness
+from pyrump.fit.windows import Window, WindowSet
+from pyrump.model.detector import Measurement
+
+measurement = Measurement(omega_msr=1.0, charge_uC=10.0, fwhm_keV=15.0)
+calibration = Calibration(kevch=5.0, npt=1024)
+geometry = Geometry(theta=0.0, phi=10.0)
+
+def run(inputs):
+    return simulate(
+        inputs.sample, inputs.beam, inputs.geometry, registry, table,
+        inputs.calibration, inputs.measurement,
+    ).counts
+
+truth = FitInputs(UniformSample([1200.0], [14], [[1.0]]), Beam(e0_MeV=2.0, z=2, mass=4.0026),
+                   geometry, calibration, measurement)
+guess = FitInputs(UniformSample([900.0], [14], [[1.0]]), Beam(e0_MeV=2.0, z=2, mass=4.0026),
+                   geometry, calibration, measurement)
+
+result = fit(run, run(truth), guess, [thickness(0)], windows=WindowSet(error=[Window(200, 260)]))
+print(result.parameters["thickness[0]"], "recovered, truth was 1200")
+```
+
+For more — identifying elements from a real spectrum, reading/writing
+`.RBS` and `.lcm` files, depth profiles — see
+[docs/usage.md](docs/usage.md), which this is distilled from.
 
 ### The interactive shell
 
@@ -176,6 +233,25 @@ and the tolerances above are set by that floor rather than by choice.
 | M13 | CLI, plotting, `.lcm` subset | done |
 | M14 | Interactive shell: buffers, SIM and PERT levels, macros | done |
 
+**Known limitation**: non-Rutherford (tabulated-resonance) cross sections —
+RUMP's `.adt`/R33 nuclear cross-section tables — have a complete, tested
+reader (`pyrump.io.adt`) but aren't wired into simulation yet; pyRUMP
+currently computes pure Rutherford + L'Ecuyer-screened scattering only. A
+later milestone.
+
+## Contributing
+
+```bash
+pip install -e ".[dev,plot]"
+pytest              # unit tests, no external dependencies
+ruff check .
+```
+
+Oracle-comparison tests (`pytest -m oracle`, and the wider set of tests that
+compare against the legacy C for extra confidence) need the RUMP 2.0 C source,
+which isn't redistributed here — see [Validation](#validation). They skip
+cleanly when it's absent, so it's not needed for everyday development.
+
 ## Licensing
 
 pyRUMP is MIT licensed.
@@ -195,12 +271,14 @@ redistributed here.
 pyRUMP is not affiliated with, endorsed by, or derived from the RUMP 2.0 source
 distribution.
 
-Data tables (`atom4.dat`, `pscoef.dat`, `newstop.kal`, `density.tab`, `*.adt`)
-are read from the legacy tree during development only, and are not
-redistributed. Their provenance is third-party and independent of CGS —
-`pscoef.dat` is the ZBL/TRIM `SCOEF` table, the `*.adt` files are IBANDL
-evaluations — so they will be regenerated from primary sources (CIAAW/NIST,
-published ZBL tables, IBANDL) before any public release. See `NOTICE`.
+Four data tables (`atom4.dat`, `pscoef.dat`, `newstop.kal`, `density.tab`) are
+bundled with pyRUMP (`src/pyrump/data/`). Their provenance is third-party and
+independent of CGS — `pscoef.dat` is the ZBL/TRIM `SCOEF` table, `atom4.dat`
+is elements and isotopes — and has been checked against current CIAAW/NIST
+values and literature; see `src/pyrump/data/SOURCES.md` for full provenance
+and `NOTICE` for citations. Non-Rutherford cross-section tables (`*.adt`) are
+IBANDL evaluations and are **not** bundled — obtain them separately from
+IBANDL if you need that data.
 
 ## References
 

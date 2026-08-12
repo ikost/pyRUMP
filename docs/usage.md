@@ -29,8 +29,15 @@ written from memory.
 pip install -e ".[dev,plot]"
 ```
 
-pyRUMP needs four data tables at runtime — `atom4.dat`, `pscoef.dat`,
-`newstop.kal`, `density.tab`. Point it at them with `--data DIR` or:
+pyRUMP bundles the four data tables it needs at runtime — `atom4.dat`,
+`pscoef.dat`, `newstop.kal`, `density.tab` — so nothing further is needed for
+simulation, fitting, or the interactive shell.
+
+The worked examples below that compare against RUMP's own shipped sample
+spectrum and `.lcm` file (`Fixed/2A.rbs`, `Fixed/ITO.lcm`) do need the legacy
+RUMP distribution, since those files aren't redistributed with pyRUMP (see
+[Licensing](../README.md#licensing)). Point `--data DIR` or `PYRUMP_DATA` at
+it if you have a copy:
 
 ```bash
 export PYRUMP_DATA=/path/to/rump/data
@@ -287,9 +294,12 @@ from pyrump.stopping.kalbitzer import KalbitzerStopping
 from pyrump.stopping.registry import StoppingRegistry
 from pyrump.stopping.ziegler import ZieglerStopping
 
-DATA = "C-code/rump/data"
+from pathlib import Path
+import pyrump
 
-table = PeriodicTable.load(f"{DATA}/atom4.dat", f"{DATA}/pscoef.dat")
+DATA = Path(pyrump.__file__).parent / "data"   # bundled with the package
+
+table = PeriodicTable.load(DATA / "atom4.dat", DATA / "pscoef.dat")
 registry = StoppingRegistry(
     table.elements,
     kalbitzer=KalbitzerStopping(parse_kalbitzer(f"{DATA}/newstop.kal"), table.elements),

@@ -139,88 +139,87 @@ def species_fraction(
         centre = 1.0 - centre
     depth_cm = centre * layer_thickness_cm
 
-    match profile.type:
-        case EquationType.CONSTANT:
-            return np.full(n_sublayers, profile.parameter(0))
+    if profile.type is EquationType.CONSTANT:
+        return np.full(n_sublayers, profile.parameter(0))
 
-        case EquationType.LINEAR:
-            c0 = profile.parameter(0)
-            return c0 + (profile.parameter(1) - c0) * centre
+    elif profile.type is EquationType.LINEAR:
+        c0 = profile.parameter(0)
+        return c0 + (profile.parameter(1) - c0) * centre
 
-        case EquationType.ERFC:
-            c0 = abs(profile.parameter(0))
-            four_dt = math.sqrt(4.0 * profile.parameter(1) * profile.parameter(2))
-            return c0 * erfc(depth_cm / four_dt)
+    elif profile.type is EquationType.ERFC:
+        c0 = abs(profile.parameter(0))
+        four_dt = math.sqrt(4.0 * profile.parameter(1) * profile.parameter(2))
+        return c0 * erfc(depth_cm / four_dt)
 
-        case EquationType.SEMI_INFINITE:
-            c0 = abs(profile.parameter(0)) / 2.0
-            x0 = _resolve_length(profile.parameter(3))
-            four_dt = math.sqrt(4.0 * profile.parameter(1) * profile.parameter(2))
-            return c0 * erfc((depth_cm - x0) / four_dt)
+    elif profile.type is EquationType.SEMI_INFINITE:
+        c0 = abs(profile.parameter(0)) / 2.0
+        x0 = _resolve_length(profile.parameter(3))
+        four_dt = math.sqrt(4.0 * profile.parameter(1) * profile.parameter(2))
+        return c0 * erfc((depth_cm - x0) / four_dt)
 
-        case EquationType.EXPONENTIAL:
-            c0 = abs(profile.parameter(0))
-            d_over_v = profile.parameter(1) / profile.parameter(2)
-            return c0 * np.exp(-depth_cm / d_over_v)
+    elif profile.type is EquationType.EXPONENTIAL:
+        c0 = abs(profile.parameter(0))
+        d_over_v = profile.parameter(1) / profile.parameter(2)
+        return c0 * np.exp(-depth_cm / d_over_v)
 
-        case EquationType.THICKFILM:
-            # NOTE: sim.htm carries the author's own disclaimer on this one --
-            # "this equation makes no sense to me right now but this is how it
-            # is currently implemented". Reproduced verbatim.
-            dt = profile.parameter(2) * profile.parameter(3)
-            sigma = math.sqrt(2.0 * dt)
-            c0 = profile.parameter(0)
-            c1 = profile.parameter(1) - c0
-            x0 = _resolve_length(profile.parameter(4))
-            return c0 + c1 * (
-                2.0 - ndtr((x0 - depth_cm) / sigma) - ndtr((x0 + depth_cm) / sigma)
+    elif profile.type is EquationType.THICKFILM:
+        # NOTE: sim.htm carries the author's own disclaimer on this one --
+        # "this equation makes no sense to me right now but this is how it
+        # is currently implemented". Reproduced verbatim.
+        dt = profile.parameter(2) * profile.parameter(3)
+        sigma = math.sqrt(2.0 * dt)
+        c0 = profile.parameter(0)
+        c1 = profile.parameter(1) - c0
+        x0 = _resolve_length(profile.parameter(4))
+        return c0 + c1 * (
+            2.0 - ndtr((x0 - depth_cm) / sigma) - ndtr((x0 + depth_cm) / sigma)
+        )
+
+    elif profile.type is EquationType.EDGEWORTH:
+        dose = profile.parameter(0) * dose_scale(profile.type, species_density)
+        sigma = profile.parameter(2) * _ANGSTROM_CM
+        c0 = dose / profile.parameter(2) / math.sqrt(2.0 * math.pi)
+        c0 = c0 / matrix_density
+        x0 = profile.parameter(1) * _ANGSTROM_CM
+        k = (depth_cm - x0) / sigma
+        skew, kurtosis = profile.parameter(3), profile.parameter(4)
+        value = (
+            c0
+            * np.exp(-k * k / 2.0)
+            * (
+                1.0
+                + skew / 6.0 * (k * (k * k - 3.0))
+                + kurtosis / 24.0 * ((k * k - 6.0) * k * k + 3.0)
+                + skew * skew / 72.0 * (((k * k - 15.0) * k * k + 45.0) * k * k - 15.0)
             )
+        )
+        value = np.where(np.abs(k) > _K_LIMIT, 0.0, value)
+        return np.maximum(value, 0.0)
 
-        case EquationType.EDGEWORTH:
-            dose = profile.parameter(0) * dose_scale(profile.type, species_density)
-            sigma = profile.parameter(2) * _ANGSTROM_CM
-            c0 = dose / profile.parameter(2) / math.sqrt(2.0 * math.pi)
-            c0 = c0 / matrix_density
-            x0 = profile.parameter(1) * _ANGSTROM_CM
-            k = (depth_cm - x0) / sigma
-            skew, kurtosis = profile.parameter(3), profile.parameter(4)
-            value = (
-                c0
-                * np.exp(-k * k / 2.0)
-                * (
-                    1.0
-                    + skew / 6.0 * (k * (k * k - 3.0))
-                    + kurtosis / 24.0 * ((k * k - 6.0) * k * k + 3.0)
-                    + skew * skew / 72.0 * (((k * k - 15.0) * k * k + 45.0) * k * k - 15.0)
-                )
-            )
-            value = np.where(np.abs(k) > _K_LIMIT, 0.0, value)
-            return np.maximum(value, 0.0)
+    elif profile.type is EquationType.TIMEDEPENDENT:
+        # creatr.c's own comment: "Don't understand this one but keep for
+        # those that do."
+        c0 = profile.parameter(0)
+        x0 = (
+            profile.parameter(3) ** 2
+            * profile.parameter(2)
+            / profile.parameter(1)
+        )
+        sigma = math.sqrt(2.0 * x0)
+        d_over_v = profile.parameter(1) / profile.parameter(3)
+        k = depth_cm / d_over_v
+        return c0 * (
+            np.exp(-k) * ndtr(-(k - x0) / sigma) + ndtr(-(k + x0) / sigma)
+        )
 
-        case EquationType.TIMEDEPENDENT:
-            # creatr.c's own comment: "Don't understand this one but keep for
-            # those that do."
-            c0 = profile.parameter(0)
-            x0 = (
-                profile.parameter(3) ** 2
-                * profile.parameter(2)
-                / profile.parameter(1)
-            )
-            sigma = math.sqrt(2.0 * x0)
-            d_over_v = profile.parameter(1) / profile.parameter(3)
-            k = depth_cm / d_over_v
-            return c0 * (
-                np.exp(-k) * ndtr(-(k - x0) / sigma) + ndtr(-(k + x0) / sigma)
-            )
-
-        case _ if profile.type in INTEGRAL_FORMS:
-            return _integral_form(
-                profile,
-                n_sublayers,
-                layer_thickness_cm,
-                areal_thickness,
-                species_density,
-            )
+    elif profile.type in INTEGRAL_FORMS:
+        return _integral_form(
+            profile,
+            n_sublayers,
+            layer_thickness_cm,
+            areal_thickness,
+            species_density,
+        )
 
     raise ValueError(f"unhandled equation type {profile.type}")
 
