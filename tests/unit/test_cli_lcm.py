@@ -301,7 +301,10 @@ def test_cli_fit_recovers_a_thickness(tmp_path, capsys):
     assert fitted == pytest.approx(1194.0, rel=0.02)
 
 
+@needs_data
 def test_cli_fit_requires_something_to_vary(tmp_path):
+    # Needs the tables: without them _data_dir raises its own SystemExit first,
+    # and this assertion would be checking the wrong error.
     sample = tmp_path / "s.lcm"
     sample.write_text(SIMPLE)
     data = tmp_path / "d.dat"
@@ -320,6 +323,8 @@ def test_cli_reports_missing_data_directory(tmp_path, monkeypatch):
         main(["simulate", str(sample)])
 
 
-def test_cli_requires_a_subcommand():
+def test_cli_rejects_an_unknown_subcommand():
+    # A bare "pyrump" now enters the interactive shell rather than erroring,
+    # so what must still fail is a subcommand that does not exist.
     with pytest.raises(SystemExit):
-        main([])
+        main(["nonsense"])

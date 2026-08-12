@@ -8,14 +8,16 @@ The original is ~22k lines of unmaintained C from the late 1980s, with a 1996-er
 HTML manual and no active support. pyRUMP reproduces its physics as a tested,
 importable library.
 
-> **Status: complete.** All thirteen milestones are done. pyRUMP simulates RBS
-> spectra matching the original to ~3e-6 in total counts, fits them with the
-> same Poisson objective, reads and writes RUMP's native `.RBS` and `.lcm` files
-> byte-identically, and ships a CLI. 503 tests.
+> **Status: complete.** All thirteen milestones are done, plus the interactive
+> shell. pyRUMP simulates RBS spectra matching the original to ~3e-6 in total
+> counts, fits them with the same Poisson objective, reads and writes RUMP's
+> native `.RBS` and `.lcm` files byte-identically, and offers both a batch CLI
+> and RUMP's interactive command environment. 569 tests.
 
 ## Try it
 
 ```bash
+pyrump                         # the interactive shell, from any directory
 python main.py                 # runnable demo of everything
 python main.py --list          # the individual demos
 python main.py identify        # just one
@@ -68,7 +70,7 @@ spectrum = simulate(
 )
 ```
 
-or from the shell:
+or as one-off commands:
 
 ```bash
 pyrump simulate sample.lcm --energy 2.0 --beam 4He -o out.rbs
@@ -76,6 +78,34 @@ pyrump fit sample.lcm measured.rbs --vary thickness:0 --window 190 226
 pyrump plot measured.rbs --compare out.rbs -o comparison.png
 pyrump convert measured.rbs measured.dat
 ```
+
+### The interactive shell
+
+Running `pyrump` bare starts RUMP's own command environment, with the original
+command names and minimum abbreviations, from any directory:
+
+```
+Your wish? cd data              /* cd/ls/pwd, as the original had    */
+Your wish? get 2A.rbs           /* read a spectrum and its metadata  */
+Your wish? plot 1               /* persistent matplotlib window      */
+Your wish? region 100 400       /* adjust it in place                */
+Your wish? sim                  /* edit the sample description       */
+SIM Command: get ITO.lcm
+SIM Command: return
+Your wish? compare              /* data vs simulation, with residuals */
+Your wish? pert                 /* fit it                            */
+PERT Command: window 355 375
+PERT Command: thickness 1
+PERT Command: go
+Your wish? display              /* depth profile                     */
+```
+
+Spectra live in numbered buffers; buffer 0 is the simulation and recomputes
+itself when the sample or the active buffer's parameters change — there is no
+"simulate" command, exactly as in the original. `XEQ` replays a file of commands
+and `SCRIPT` writes one, so an analysis can be checked in and reproduced.
+
+See [docs/usage.md](docs/usage.md#interactive-shell) for the full command set.
 
 ## Validation
 
@@ -144,6 +174,7 @@ and the tolerances above are set by that floor rather than by choice.
 | M11 | File I/O (`.RBS` binary, ASCII) | done |
 | M12 | Fitting (PERT) | done |
 | M13 | CLI, plotting, `.lcm` subset | done |
+| M14 | Interactive shell: buffers, SIM and PERT levels, macros | done |
 
 ## Licensing
 

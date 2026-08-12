@@ -89,22 +89,17 @@ class UniformSample:
     tags: dict = field(default_factory=dict)
 
 
-def simulate_bricks(
+def build_sample_grid(
     sample: UniformSample,
-    beam: Beam,
     geometry: Geometry,
-    registry: StoppingRegistry,
     periodic_table: PeriodicTable,
-    *,
-    screening: bool = True,
-) -> Bricks:
-    """Run the forward model up to the brick stage.
+):
+    """Slice a sample into the slab grid the simulation works on.
 
-    Bricks are emitted one block per target isotope, heaviest first, matching
-    the order the C produces so captures can be compared element-wise.
+    Split out of :func:`simulate_bricks` so that callers wanting only the depth
+    structure -- the shell's ``DISPLAY``, for instance -- get the same grid the
+    simulation uses rather than a second, drifting copy.
     """
-    geometry.validate()
-
     # Layer densities drive the depth scale of every depth-dependent profile, so
     # they are derived the same way the C does (inverse-density averaging over
     # the layer's own composition) rather than being left to the caller.
@@ -131,10 +126,7 @@ def simulate_bricks(
     else:
         species_densities = None
 
-    table = StoppingTable.build(
-        registry, beam.z, beam.mass, beam.e0_MeV, list(sample.element_z)
-    )
-    grid = build_uniform_grid(
+    return build_uniform_grid(
         np.asarray(sample.thicknesses, dtype=np.float64),
         np.asarray(sample.compositions, dtype=np.float64),
         list(sample.element_z),
@@ -151,6 +143,28 @@ def simulate_bricks(
         layer_densities=matrix_densities,
         species_densities=species_densities,
     )
+
+
+def simulate_bricks(
+    sample: UniformSample,
+    beam: Beam,
+    geometry: Geometry,
+    registry: StoppingRegistry,
+    periodic_table: PeriodicTable,
+    *,
+    screening: bool = True,
+) -> Bricks:
+    """Run the forward model up to the brick stage.
+
+    Bricks are emitted one block per target isotope, heaviest first, matching
+    the order the C produces so captures can be compared element-wise.
+    """
+    geometry.validate()
+
+    table = StoppingTable.build(
+        registry, beam.z, beam.mass, beam.e0_MeV, list(sample.element_z)
+    )
+    grid = build_sample_grid(sample, geometry, periodic_table)
     coefficients = bragg_coefficients(table, grid.composition, grid.element_z)
     cutoff_keV = table.cutoff * 1000.0
     first_slab = first_sample_slab(grid.layer_index, sample.absorber_layers)

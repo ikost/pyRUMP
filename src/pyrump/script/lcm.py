@@ -133,55 +133,130 @@ def _element_pairs(tokens: list[str]) -> dict[str, float]:
     return out
 
 
-def parse_lcm(text: str) -> Script:
-    """Parse a ``.lcm`` sample description."""
-    script = Script()
-    current: LcmLayer | None = None
+class SampleEditor:
+    """Applies SIM sample-definition commands one line at a time.
 
-    for raw in text.splitlines():
-        line = raw.split("/*", 1)[0].strip()
+    RUMP's ``.lcm`` files *are* SIM command scripts, replayed through the same
+    interpreter the user types at (see the module docstring), so file parsing
+    and interactive editing share this one implementation. :func:`parse_lcm` is
+    a loop over :meth:`execute`; :mod:`pyrump.shell.commands.sim` drives the
+    same object from the prompt.
+
+    Layer bookkeeping follows sim.htm: there is always one blank layer at the
+    bottom of the structure, and a layer left at zero thickness "disappears
+    automatically if the active layer changes". :meth:`_prune` is that rule, and
+    it is also why a file ending in a bare ``Next`` does not gain an empty layer.
+    """
+
+    __slots__ = ("script", "current")
+
+    def __init__(self, script: Script | None = None):
+        self.script = script if script is not None else Script()
+        #: Index into ``script.layers``; may equal ``len(layers)``, meaning the
+        #: implicit blank layer at the bottom.
+        self.current = 0
+
+    # -- layer pointer ----------------------------------------------------
+
+    @property
+    def layer(self) -> LcmLayer | None:
+        """The layer under the pointer, or None when it is on the blank one."""
+        if 0 <= self.current < len(self.script.layers):
+            return self.script.layers[self.current]
+        return None
+
+    def _writable(self) -> LcmLayer:
+        """The layer under the pointer, materialising the blank one on write."""
+        if self.layer is None:
+            self.script.layers.append(LcmLayer())
+            self.current = len(self.script.layers) - 1
+        return self.script.layers[self.current]
+
+    def _prune(self) -> None:
+        """Drop layers that were never given substance (sim.htm, OPEN)."""
+        kept = [
+            (index, layer)
+            for index, layer in enumerate(self.script.layers)
+            if layer.thickness > 0 or layer.composition
+        ]
+        if len(kept) == len(self.script.layers):
+            return
+        surviving = {index for index, _ in kept}
+        before = sum(1 for index in range(self.current) if index in surviving)
+        self.script.layers = [layer for _, layer in kept]
+        self.current = min(before, len(self.script.layers))
+
+    def select(self, index: int) -> None:
+        """Move the pointer, pruning what the old layer left behind."""
+        self._prune()
+        self.current = max(0, min(index, len(self.script.layers)))
+
+    def next_layer(self) -> None:
+        self.select(self.current + 1)
+
+    def open_layer(self) -> None:
+        """Insert a blank layer above the pointer and select it."""
+        self._prune()
+        index = min(self.current, len(self.script.layers))
+        self.script.layers.insert(index, LcmLayer())
+        self.current = index
+
+    def reset(self) -> None:
+        self.script = Script()
+        self.current = 0
+
+    # -- command application ----------------------------------------------
+
+    def execute(self, line: str) -> None:
+        """Apply one command line. Unknown commands land in ``script.ignored``."""
+        line = line.split("/*", 1)[0].strip()
         if not line or line.startswith("#") or line.startswith("!"):
-            continue
+            return
         tokens = line.split()
         command = tokens[0].lower()
         rest = tokens[1:]
+        script = self.script
 
         if command == "sim" and rest and rest[0].lower().startswith("res"):
-            script = Script()
-            current = None
+            self.reset()
         elif command == "layer":
-            current = LcmLayer()
-            script.layers.append(current)
+            # "Layer n" navigates (sim.htm); with no argument, or past the end,
+            # it lands on the blank layer at the bottom, which writing fills in.
+            self.select(int(float(rest[0])) - 1 if rest else len(script.layers))
+            self._writable()
         elif command == "next":
-            current = LcmLayer()
-            script.layers.append(current)
+            self.next_layer()
+            self._writable()
+        elif command == "open":
+            self.open_layer()
         elif command.startswith("desc"):
             script.description = line.split(None, 1)[1].strip().strip("'\"")
-        elif command.startswith("thick") and current is not None:
-            current.thickness = float(rest[0])
-            current.unit = rest[1] if len(rest) > 1 else "A"
-        elif command.startswith("sublay") and current is not None:
-            current.sublayers = int(float(rest[0]))
-        elif command.startswith("sthick") and current is not None:
-            current.sub_thickness = float(rest[0])
-            current.sub_unit = rest[1] if len(rest) > 1 else "A"
-        elif command.startswith("comp") and current is not None:
-            current.composition = _element_pairs(rest)
-        elif command.startswith("species") and current is not None:
-            current.species = _element_pairs(rest)
-        elif command.startswith("eq") and current is not None:
+        elif command.startswith("thick"):
+            layer = self._writable()
+            layer.thickness = float(rest[0])
+            layer.unit = rest[1] if len(rest) > 1 else "A"
+        elif command.startswith("sublay"):
+            self._writable().sublayers = int(float(rest[0]))
+        elif command.startswith("sthick"):
+            layer = self._writable()
+            layer.sub_thickness = float(rest[0])
+            layer.sub_unit = rest[1] if len(rest) > 1 else "A"
+        elif command.startswith("comp"):
+            self._writable().composition = _element_pairs(rest)
+        elif command.startswith("species"):
+            self._writable().species = _element_pairs(rest)
+        elif command.startswith("eq"):
             name = rest[0].lower()
             if name not in EQUATION_NAMES:
                 raise ValueError(f"unknown equation {rest[0]!r}")
             # Parameters may be followed by a unit token, which we drop --
             # doses are carried in the values themselves.
             values = [float(t) for t in rest[1:] if _is_number(t)]
-            script.layers[-1].profile = Profile(
-                EQUATION_NAMES[name], tuple(values)
-            )
-        elif command.startswith("fuzz") and current is not None:
-            current.fuzz_amount = float(rest[0])
-            current.fuzz_steps = int(float(rest[1])) if len(rest) > 1 else 0
+            self._writable().profile = Profile(EQUATION_NAMES[name], tuple(values))
+        elif command.startswith("fuzz"):
+            layer = self._writable()
+            layer.fuzz_amount = float(rest[0])
+            layer.fuzz_steps = int(float(rest[1])) if len(rest) > 1 else 0
         elif command.startswith("maxp"):
             script.maxpth = float(rest[0])
         elif command.startswith("absorb"):
@@ -195,11 +270,18 @@ def parse_lcm(text: str) -> Script:
         else:
             script.ignored.append(line)
 
-    # A trailing "Next" with nothing after it leaves an empty layer.
-    script.layers = [
-        layer for layer in script.layers if layer.thickness > 0 or layer.composition
-    ]
-    return script
+    def finish(self) -> Script:
+        """Prune the trailing blank layer and hand back the script."""
+        self._prune()
+        return self.script
+
+
+def parse_lcm(text: str) -> Script:
+    """Parse a ``.lcm`` sample description."""
+    editor = SampleEditor()
+    for raw in text.splitlines():
+        editor.execute(raw)
+    return editor.finish()
 
 
 def _is_number(token: str) -> bool:

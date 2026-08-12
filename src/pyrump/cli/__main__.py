@@ -1,68 +1,24 @@
 """Command-line interface.
 
-``pyrump simulate | fit | convert | plot``
+``pyrump [simulate | fit | convert | plot | shell]``
 
-A thin wrapper over the library, not a reimplementation of RUMP's interactive
-shell. Everything here is reachable from Python directly; the CLI exists for
-one-off jobs and for scripting from a shell.
+A thin wrapper over the library. Running ``pyrump`` with no subcommand enters
+the interactive RUMP shell (:mod:`pyrump.shell`); the subcommands here exist for
+one-off jobs and for scripting.
 """
 
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 from pathlib import Path
 
 import numpy as np
 
-
-def _data_dir(explicit: str | None) -> Path:
-    """Locate the legacy data tables."""
-    candidates = []
-    if explicit:
-        candidates.append(Path(explicit))
-    if os.environ.get("PYRUMP_DATA"):
-        candidates.append(Path(os.environ["PYRUMP_DATA"]))
-    if os.environ.get("PYRUMP_C_REFERENCE"):
-        candidates.append(Path(os.environ["PYRUMP_C_REFERENCE"]) / "rump" / "data")
-    candidates.append(Path.cwd() / "C-code" / "rump" / "data")
-    for path in candidates:
-        if (path / "atom4.dat").is_file():
-            return path
-    raise SystemExit(
-        "Could not find the data tables (atom4.dat, pscoef.dat, newstop.kal).\n"
-        "Pass --data DIR, or set PYRUMP_DATA."
-    )
-
-
-def _load(data: Path):
-    """Build the periodic table, stopping registry and compound densities."""
-    from pyrump.atomic.density import DensityTable
-    from pyrump.atomic.tables import PeriodicTable
-    from pyrump.io.kalbitzer import parse_kalbitzer
-    from pyrump.stopping.kalbitzer import KalbitzerStopping
-    from pyrump.stopping.registry import StoppingRegistry
-    from pyrump.stopping.ziegler import ZieglerStopping
-
-    table = PeriodicTable.load(data / "atom4.dat", data / "pscoef.dat")
-    registry = StoppingRegistry(
-        table.elements,
-        kalbitzer=KalbitzerStopping(parse_kalbitzer(data / "newstop.kal"), table.elements),
-        ziegler=ZieglerStopping(table.elements),
-    )
-    densities = DensityTable.load(data / "density.tab")
-    return table, registry, densities
-
-
-def _read_spectrum(path: Path):
-    """Read a spectrum by extension: .rbs binary, otherwise ASCII."""
-    from pyrump.io.ascii import read_ascii
-    from pyrump.io.rbs import read_rbs
-
-    if path.suffix.lower() in (".rbs", ".rump", ".frs", ".fres", ".pixe"):
-        return read_rbs(path)
-    return read_ascii(path)
+from ._common import data_dir as _data_dir
+from ._common import load_tables as _load
+from ._common import read_spectrum as _read_spectrum
+from ._common import resolve_beam
 
 
 def _build(args, table, registry, densities):
@@ -76,12 +32,7 @@ def _build(args, table, registry, densities):
     script = read_lcm(args.sample)
     sample = to_sample(script, table, densities)
 
-    element = table.by_symbol(args.beam) if args.beam.isalpha() else None
-    reference = element or table.parse_ref(args.beam)
-    z = reference.z if element is None else element.z
-    mass = table.real_mass(z, getattr(reference, "mass_number", 0)) if element is None \
-        else element.mass
-
+    z, mass = resolve_beam(table, args.beam)
     beam = Beam(e0_MeV=args.energy, z=z, mass=mass)
     geometry = Geometry(
         theta=args.theta, phi=args.phi, psi=args.psi,
@@ -160,7 +111,7 @@ def command_simulate(args) -> int:
 
 def command_convert(args) -> int:
     from pyrump.io.ascii import write_ascii
-    from pyrump.io.rbs import RbsSpectrum, read_rbs, write_rbs
+    from pyrump.io.rbs import RbsSpectrum, write_rbs
 
     source = _read_spectrum(args.input)
     counts = source.counts
@@ -263,13 +214,46 @@ def command_fit(args) -> int:
     return 0
 
 
+def _shell_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "macro", nargs="?", type=Path,
+        help="command file to XEQ at startup, after the rc file",
+    )
+    parser.add_argument(
+        "--norc", action="store_true", help="skip ~/.pyrumprc"
+    )
+    parser.add_argument(
+        "--batch", action="store_true",
+        help="run the macro and exit instead of dropping to the prompt",
+    )
+
+
+def _shell_defaults(args) -> None:
+    """Fill in shell options for the bare ``pyrump`` invocation."""
+    for name, value in (("macro", None), ("norc", False), ("batch", False)):
+        if not hasattr(args, name):
+            setattr(args, name, value)
+
+
+def command_shell(args) -> int:
+    from pyrump.shell.repl import run_shell
+
+    return run_shell(
+        data=args.data, macro=args.macro, norc=args.norc, batch=args.batch
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="pyrump",
         description="Rutherford backscattering simulation and analysis.",
     )
     parser.add_argument("--data", help="directory holding atom4.dat and friends")
-    sub = parser.add_subparsers(dest="command", required=True)
+    sub = parser.add_subparsers(dest="command")
+
+    shell_parser = sub.add_parser("shell", help="interactive RUMP shell (the default)")
+    _shell_arguments(shell_parser)
+    shell_parser.set_defaults(func=command_shell)
 
     simulate_parser = sub.add_parser("simulate", help="simulate a spectrum")
     _simulation_arguments(simulate_parser)
@@ -303,6 +287,10 @@ def main(argv: list[str] | None = None) -> int:
     plot_parser.set_defaults(func=command_plot)
 
     args = parser.parse_args(argv)
+    if args.command is None:
+        # Bare "pyrump" is the interactive shell -- the way the original was used.
+        _shell_defaults(args)
+        return command_shell(args)
     return args.func(args)
 
 

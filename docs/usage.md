@@ -11,6 +11,7 @@ written from memory.
 ## Contents
 
 - [Setup](#setup)
+- [Interactive shell](#interactive-shell)
 - [Command line](#command-line)
 - [Python API](#python-api)
 - [Worked example: identifying what is in a sample](#worked-example-identifying-what-is-in-a-sample)
@@ -37,10 +38,161 @@ export PYRUMP_DATA=/path/to/rump/data
 
 ---
 
+## Interactive shell
+
+Running `pyrump` with no arguments starts the interactive shell — RUMP's own
+working style, from any directory:
+
+```
+$ pyrump
+pyRUMP interactive shell -- tables from /path/to/rump/data
+Type ? for commands, QUIT to leave.
+Your wish? get 2A.rbs
+Your wish? plot 1
+Your wish? region 100 400
+Your wish? sqrt
+Your wish? sim
+SIM Command: get ITO.lcm
+SIM Command: show
+SIM Command: return
+Your wish? compare
+Your wish? display
+Your wish? quit
+```
+
+Command names and their **minimum abbreviations** follow the original
+(`REGion`, `OVerlay`, `COMPare`), so `reg 100 400` and `region 100 400` are the
+same command. `?` lists everything, with the required characters upper-cased.
+
+Matching is *first-hit in table order*, exactly as `LexCmdl` (lexp2.c:639)
+does — it never reports an ambiguous abbreviation, it takes the first entry that
+fits. `pyrump shell` is the explicit form, and takes `--norc`, `--batch`, and a
+macro file to run at startup.
+
+### Getting around
+
+The shell has RUMP's own filesystem commands (a port of the "General System
+Commands" table at `lexp/system.c:175`), so you can move to your data rather than
+restarting in the right directory:
+
+| Command | Effect |
+| --- | --- |
+| `PWD` / `WHERE` | print the working directory |
+| `CD <dir>` / `CHDIR` | change directory; **no argument goes home** |
+| `PUSHDIR <dir>` / `POPDIR` | change directory remembering the old one, and come back |
+| `LS [pattern]` / `DIRECTORY` | list files; `ls *.rbs` filters |
+| `LL [pattern]` | long listing, with size and date |
+| `TYPE <file>` / `CAT` / `MORE` | show a text file, paged when interactive |
+| `CLS` | clear the screen |
+
+Wildcards are expanded by the command itself, never by an OS shell, so `ls *.rbs`
+behaves the same on Linux, macOS and Windows. Tab completion works on both
+command names and paths.
+
+These are reachable from `SIM` and `PERT` too — as in the original, a command the
+sub-level does not know returns you to the RUMP level and runs there.
+
+There is deliberately **no shell escape** (the original's `!` / `DOS` / `CSH`):
+it would let any `.cmd` macro run arbitrary commands on your machine.
+
+### Buffers
+
+Spectra live in numbered buffers, one of which is ACTIVE and is what most
+commands act on implicitly. Buffer **0 is the simulation**; data starts at 1.
+
+| Command | Effect |
+| --- | --- |
+| `GET <file\|n>` | read a file into a buffer, or point at buffer *n* |
+| `BUFFERS` | list the buffers, marking the active one |
+| `ACTIVE` | print the active buffer's full parameter set |
+| `COPY a b` / `MOVE a b` | copy / exchange |
+| `RELEASE` / `NEWALL` | drop one / all |
+| `WRITE f.rbs` / `WRASCII f.dat` | save the active buffer |
+
+Unlike the original there is no ten-buffer limit and nothing is destroyed to
+make room. Buffer 0 has **no simulate command**: it is recomputed whenever the
+sample or the active buffer's parameters change, which is how RUMP behaved.
+`RECALCULATE` forces it.
+
+### Plotting
+
+The plot is one persistent matplotlib window whose state survives between
+commands. `PLOT` erases and draws, `OVERLAY` adds to it.
+
+`REGION lo hi`, `COUNTS lo hi`, `EXPAND`, `BLOWUP`, `LINEAR`, `SQRT`, `LOG`,
+`NORMALIZE`, `RAW`, `LABELS`, and `ENERGY` change how it is drawn and redraw
+immediately. `PARMS` prints the current settings. `COMPARE` plots the active
+buffer against the simulation with Poisson residuals; `DISPLAY` plots the
+sample's composition against depth.
+
+matplotlib is an optional dependency — install it with `pip install 'pyrump[plot]'`
+or the shell will say so when you first plot.
+
+### SIM and PERT
+
+`SIM` edits the sample description; `PERT` fits it. Both are sub-levels with
+their own prompt, and — as in the original — a command the sub-level does not
+recognise is passed out to the RUMP level, which returns you there automatically.
+`SIM <command>` also works as a one-shot from the top level.
+
+```
+Your wish? sim
+SIM Command: thick 500 A
+SIM Command: composition Si 1 /
+SIM Command: next
+SIM Command: thick 2000 A
+SIM Command: composition Au 1 /
+SIM Command: show
+SIM Command: save mysample.lcm
+SIM Command: return
+```
+
+SIM's sample-definition commands are the *same code* that parses `.lcm` files
+(`SampleEditor` in `pyrump/script/lcm.py`), so what you type and what the file
+holds cannot drift apart. `SIM SAVE` writes RUMP's own format.
+
+PERT selects what may vary and over which channels, then `GO`:
+
+```
+Your wish? pert
+PERT Command: window 355 375      /* compare only here            */
+PERT Command: norm 140 200        /* rescale data to remove dose error */
+PERT Command: thickness 1         /* vary layer 1's thickness     */
+PERT Command: go
+```
+
+```
+  reduced chi-square 1.2849 on 20 dof
+  12 evaluations, Both `ftol` and `xtol` termination conditions are satisfied.
+  data scaled by 0.99441 over the norm window
+  thickness[0]                      299.198  +/- 0.3801   (was 200)
+```
+
+Fitted values are written back into the sample description, so `SIM SHOW` and
+`SIM SAVE` reflect them. Two differences from the original: the data may be in
+any buffer, not just buffer 1, and `MULTI` is the default because the solver is
+a simultaneous least-squares fit (`SINGLE` loops one parameter at a time).
+
+### Macros
+
+`XEQ <file>` runs a file of commands through the same interpreter the prompt
+uses, so an analysis can be checked in as a text file and replayed. `CALL` and
+`EXECUTE` are synonyms.
+
+`SCRIPT <file>` logs what you type into exactly such a file, and `SCRIPT OFF`
+stops. `LOGFILE` and `RECORD` are synonyms. `~/.pyrumprc` is run at startup
+unless you pass `--norc`.
+
+> Note `SCRIPT`/`LOGFILE` need at least four characters, which is how the
+> original kept them clear of `LOG` — the logarithmic yield axis. Typing `log`
+> gets you the axis, `logf` the session log.
+
+---
+
 ## Command line
 
 ```
-pyrump [--data DIR] {simulate,fit,convert,plot} ...
+pyrump [--data DIR] {shell,simulate,fit,convert,plot} ...
 ```
 
 ### `pyrump simulate`
