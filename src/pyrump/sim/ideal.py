@@ -180,6 +180,6 @@ def straggle_geometry_factor(kinematic: float, sec_in: float, sec_out: float) ->
        This is ``sec_in*K + sec_out`` applied *linearly* to the inbound Bohr
        variance. The physically correct combination is
        ``K^2 * sigma_in^2 + sigma_out^2``. Reproduced as-is; see
-       ``docs/rump-quirks.md`` entry 9.
+       README.md, "RUMP quirks and defects found while porting", entry 9.
     """
     return sec_in * kinematic + sec_out

@@ -2,7 +2,7 @@
 
 Locating the legacy data tables and building the periodic table / stopping
 registry / density table is identical for both front ends, and the registry is
-expensive enough that ``docs/usage.md`` warns to build it once and reuse it.
+expensive enough that README.md warns to build it once and reuse it.
 """
 
 from __future__ import annotations

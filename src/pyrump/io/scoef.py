@@ -12,8 +12,8 @@ Lines starting with ``#`` or ``/*`` are comments. The row index must equal Z.
 .. note::
    This table originates from Ziegler, Biersack & Littmark, *The Stopping and Range
    of Ions in Solids* (Pergamon, 1985) and carries no licence notice in the RUMP
-   distribution. See ``NOTICE`` for provenance and the plan to regenerate it from
-   the published tables before release.
+   distribution. See README.md, "Notices and citations", for provenance and the
+   plan to regenerate it from the published tables before release.
 """
 
 from __future__ import annotations

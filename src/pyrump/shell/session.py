@@ -356,7 +356,7 @@ class Session:
     """Everything the interactive shell owns.
 
     The atomic/stopping tables are built once here and reused for every
-    simulation, as ``docs/usage.md`` requires.
+    simulation, as README.md requires.
     """
 
     table: object

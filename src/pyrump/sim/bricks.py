@@ -8,7 +8,8 @@ From the 1985 paper (p. 344):
 
 A brick is a trapezoid in energy space -- front and back edge energies, front and
 back heights -- plus, in the paper's design, an independently computed area. The
-shipped C discards that area (see ``docs/rump-quirks.md``), but pyRUMP carries it
+shipped C discards that area (see README.md, "RUMP quirks and defects found
+while porting"), but pyRUMP carries it
 so the parabolic mode can use it.
 
 Stored as a structured array rather than a list of objects: the fill stage
