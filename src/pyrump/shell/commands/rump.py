@@ -731,24 +731,529 @@ def cmd_energy(session, args: ArgReader) -> None:
     print(f"x axis is {'energy' if session.plot.energy_axis else 'channel'}")
 
 
+def _integral_report(session, result) -> None:
+    label = "Interpolated" if session.integration_interp else "Discrete"
+    print(f"  {label} integration on buffer {session.buffers.active}")
+    print(
+        f"  Region: {result.lo_channel:6.1f} to {result.hi_channel:6.1f}"
+        f"  Gross: {result.gross:11.2f}  Net: {result.net:11.2f}  (#/uC/msr)"
+    )
+
+
 def cmd_integral(session, args: ArgReader) -> None:
-    """Sum counts over a channel range in the active buffer."""
-    low = args.integer("the first channel")
-    high = args.integer("the last channel")
+    """``INTEGRAL lo hi`` -- gross/net counts over a channel range.
+
+    ``RbsThickn``'s ``TH_INT`` (anlytc.c:349-351): reports gross and
+    background-corrected net counts in normalized-yield units, honoring
+    INTSET's rounding mode. Region bounds are plain 0-based channel indices,
+    not RUMP's own ``first``-relative channel numbers.
+    """
+    from ...analysis.integration import integrate_region
+
+    low = args.number("the first channel")
+    high = args.number("the last channel")
     args.done()
     buffer = session.buffers.require_active()
-    counts = buffer.spectrum.counts
-    if not 0 <= low <= high < counts.size:
-        raise CommandError(f"channels {low}-{high} outside 0-{counts.size - 1}")
-    window = counts[low : high + 1]
-    total = float(window.sum())
-    energies = buffer.spectrum.energies
-    print(f"  channels {low}-{high} ({energies[low]:.1f}-{energies[high]:.1f} keV)")
-    if total <= 0:
-        print("  integral 0 counts")
+    try:
+        result = integrate_region(buffer, low, high, interp=session.integration_interp)
+    except ValueError as error:
+        raise CommandError(f"integral: {error}") from None
+    _integral_report(session, result)
+
+
+def cmd_thickness_analysis(session, args: ArgReader) -> None:
+    """``THICKNESS lo hi element`` -- INTEGRAL plus a thickness conversion.
+
+    ``RbsThickn``'s ``TH_THK`` (anlytc.c:353-356): surface-approximation
+    thickness in atoms/cm^2 and Angstroms, plus (if ``INTSET`` is in
+    ESTIMATED or QUERY mode) a second, energy-loss-ratio "compensated" pass.
+    """
+    from ...analysis.integration import integrate_region
+
+    low = args.number("the first channel")
+    high = args.number("the last channel")
+    token = args.token("an element")
+    alpha = args.number("a value for alpha") if session.integration_qmode == 2 else None
+    args.done()
+
+    buffer = session.buffers.require_active()
+    try:
+        result = integrate_region(
+            buffer, low, high, interp=session.integration_interp,
+            registry=session.registry, table=session.table, target_token=token,
+            qmode=session.integration_qmode, alpha_override=alpha,
+        )
+    except (KeyError, ValueError) as error:
+        raise CommandError(f"thickness: {error}") from None
+
+    _integral_report(session, result)
+    t = result.thickness
+    print(f"  {token} surface approximation, density {t.density_g_cc:5.2f} g/cc")
+    print(f"   (Gross) {t.gross_atoms_cm2:11.4e} Atoms/cm**2 ({t.gross_angstrom:7.1f} Angstroms)")
+    print(f"   ( Net ) {t.net_atoms_cm2:11.4e} Atoms/cm**2 ({t.net_angstrom:7.1f} Angstroms)")
+    if t.compensated is not None:
+        c = t.compensated
+        print("  Compensated calculation (Chu et al. page 65)")
+        print(
+            f"   (Gross) {c.gross_atoms_cm2:11.4e} Atoms/cm**2 ({c.gross_angstrom:7.1f} Angstroms)"
+        )
+        print(
+            f"   ( Net ) {c.net_atoms_cm2:11.4e} Atoms/cm**2 ({c.net_angstrom:7.1f} Angstroms)"
+        )
+
+
+def cmd_intset(session, args: ArgReader) -> None:
+    """``INTSET [Round|Interp|Surface|Estimated|Query|?]``.
+
+    The two mode flags ``RbsThickn`` shares across INTEGRAL/THICKNESS
+    (anlytc.c:1513-1541) -- rounding (discrete vs interpolated) and how
+    THICKNESS's compensated pass picks its alpha.
+    """
+    token = args.optional()
+    args.done()
+    choice = (token or "?").strip().lower()
+    if choice.startswith("i"):
+        session.integration_interp = True
+    elif choice.startswith("r"):
+        session.integration_interp = False
+    elif choice.startswith("s"):
+        session.integration_qmode = 0
+    elif choice.startswith("e"):
+        session.integration_qmode = 1
+    elif choice.startswith("q"):
+        session.integration_qmode = 2
+    elif choice == "?":
+        interp, qmode = session.integration_interp, session.integration_qmode
+        print(
+            "  current mode - single letter command - explanation of mode\n"
+            f"  {'*' if not interp else ' '} R - integrals are rounded to nearest channel\n"
+            f"  {'*' if interp else ' '} I - integrals are interpolated between channels\n"
+            f"  {'*' if qmode == 0 else ' '} S - thickness calculation based on surface "
+            "approximation only\n"
+            f"  {'*' if qmode == 1 else ' '} E - compensated thickness calculation with an "
+            "estimated alpha\n"
+            f"  {'*' if qmode == 2 else ' '} Q - compensated thickness calculation with query "
+            "for alpha"
+        )
+    else:
+        raise CommandError(f"intset: unrecognized mode {token!r}; use INTSET ? for help")
+
+
+def cmd_element(session, args: ArgReader) -> None:
+    """``ELEMENT el [el ...]`` -- expected energy/channel of each surface edge.
+
+    ``RbsQueryElement``/``RbsKappa`` per element (anlytc.c:208-254); RUMP's
+    optional cursor-driven height marker is dropped -- headless, this command
+    is purely a report.
+    """
+    from ...analysis.elements import matrix_result
+
+    tokens: list[str] = []
+    while args:
+        tokens.append(args.token())
+    if not tokens:
+        raise CommandError("element: expected one or more element names")
+
+    buffer = session.buffers.require_active()
+    for token in tokens:
+        try:
+            result = matrix_result(buffer, session.table, session.registry, token)
+        except (KeyError, ValueError) as error:
+            raise CommandError(f"element: {error}") from None
+        if result.k == 0.0:
+            print(f"  {result.symbol:2s}  Z={result.z:2d}  Mass={result.mass:7.3f}"
+                  "  scattering event cannot occur")
+            continue
+        print(
+            f"  {result.symbol:2s}  Z={result.z:2d}  Mass={result.mass:7.3f}"
+            f"  K(ion)={result.k:6.4f}  Energy={result.energy_keV:8.1f} eV"
+            f"  Channel={result.channel:8.3f}"
+        )
+
+
+def cmd_matrix(session, args: ArgReader) -> None:
+    """``MATRIX el`` -- expected energy, channel and matrix height.
+
+    ``RbsSigma``/``RbsEpsilon`` combined into a predicted step height
+    (anlytc.c:258-275).
+    """
+    from ...analysis.elements import matrix_result
+
+    token = args.token("an element")
+    args.done()
+    buffer = session.buffers.require_active()
+    try:
+        result = matrix_result(buffer, session.table, session.registry, token)
+    except (KeyError, ValueError) as error:
+        raise CommandError(f"matrix: {error}") from None
+    if result.height is None:
+        raise CommandError(f"matrix: scattering event cannot occur for {result.symbol}")
+    print(
+        f"  {result.symbol} expected at {result.energy_keV:8.1f} eV"
+        f" ({result.channel:6.1f}) and height {result.height:8.3f}"
+    )
+
+
+def cmd_whatisit(session, args: ArgReader) -> None:
+    """``WHATISIT <channel>`` -- identify elements near a channel.
+
+    ``RbsLocate`` (anlytc.c:1398): the best-matching element by predicted
+    surface-edge energy, plus its 2 neighbors on each side by Z.
+    """
+    from ...analysis.elements import locate_candidates
+
+    channel = args.number("a channel number")
+    args.done()
+    buffer = session.buffers.require_active()
+    target_keV = float(buffer.calibration.edge_energy(channel))
+    try:
+        candidates = locate_candidates(buffer, session.table, target_keV)
+    except ValueError as error:
+        raise CommandError(f"whatisit: {error}") from None
+    print(f"  near channel {channel:g} ({target_keV:.1f} keV):")
+    for candidate in candidates:
+        print(
+            f"    {candidate.symbol:2s} (Z={candidate.z:2d})"
+            f"  {candidate.energy_keV:8.1f} eV  channel {candidate.channel:7.2f}"
+        )
+
+
+def cmd_info(session, args: ArgReader) -> None:
+    """``INFO el`` -- density, K, cross section, stopping factors, isotopes.
+
+    ``AN_INFO`` (anlytc.c:290-345), the fullest of the per-element reports.
+    """
+    from ...analysis.elements import matrix_result, resolve_element
+
+    token = args.token("an element")
+    args.done()
+    buffer = session.buffers.require_active()
+    try:
+        element, mass, _ = resolve_element(session.table, token)
+        result = matrix_result(buffer, session.table, session.registry, token)
+    except (KeyError, ValueError) as error:
+        raise CommandError(f"info: {error}") from None
+
+    density_g_cc = element.atomic_density / 6.022e23 * mass
+    print("-----------------------------------------------------")
+    print(
+        f"{element.symbol:2s}  Z: {element.z:2d}  Mass: {mass:6.2f}"
+        f"  Density: {element.atomic_density:11.4e} at/cc ({density_g_cc:5.2f} g/cc)"
+    )
+    print(
+        f"Parameters: Energy {buffer.beam.e0_MeV * 1000.0:8.1f} eV"
+        f"  Theta{buffer.geometry.theta:6.2f}     Phi{buffer.geometry.phi:7.2f}"
+    )
+    c = buffer.calibration
+    print(f"            keV/channel{c.kevch:6.3f}     keV(0){c.kev0:8.3f}")
+    if result.k == 0.0:
+        print("Scattering event cannot occur")
         return
-    centroid = float(np.dot(window, np.arange(low, high + 1)) / total)
-    print(f"  integral {total:.1f} counts, centroid channel {centroid:.2f}")
+    print(
+        f"Surface Scattering:          {result.k:6.4f} at {result.energy_keV:8.1f} eV"
+        f" (Channel: {result.channel:5.1f})"
+    )
+    if result.height is not None:
+        print(f"Matrix scattering height:    {result.height:6.2f} Counts/uC/keV/msr")
+        print(f"Scattering cross section:    {result.cross_section_barns:7.3f} (1E-24 cm2/ster)")
+        # eps in "1e-15 eV-cm2" display units, then to eV/A -- anlytc.c:341-344.
+        eps_display = result.epsilon_eVcm2 * 1e15
+        eps_eVA = eps_display * element.atomic_density * 1e-23
+        print(
+            f"Stopping Factors:            [e] = {eps_display:5.1f} (1E-15 eV-cm2)"
+            f"   [S] = {eps_eVA:5.1f} eV/A"
+        )
+    print()
+    for isotope in element.isotopes:
+        if isotope.mass <= 0:
+            break
+        print(f"  Mass: {isotope.mass:6.2f}  Abundance: {isotope.fraction:7.5f}")
+
+
+def cmd_width_thick(session, args: ArgReader) -> None:
+    """``WIDTH_THICK ch1 ch2 element`` -- thickness from a peak's half-height width.
+
+    The energy-loss-ratio method (Chu et al. p.65), from two half-height
+    channel positions instead of a whole region (anlytc.c:513-552).
+    """
+    from ...analysis.elements import cosines, cross_section_barns, kappa, resolve_element, stopper
+
+    ch1 = args.number("the first half-height channel")
+    ch2 = args.number("the second half-height channel")
+    token = args.token("an element")
+    args.done()
+
+    buffer = session.buffers.require_active()
+    e1_MeV = float(buffer.calibration.edge_energy(ch1)) / 1000.0
+    e2_MeV = float(buffer.calibration.edge_energy(ch2)) / 1000.0
+    width_MeV = abs(e2_MeV - e1_MeV)
+
+    try:
+        element, mass, _ = resolve_element(session.table, token)
+    except (KeyError, ValueError) as error:
+        raise CommandError(f"width_thick: {error}") from None
+
+    z1, m1, e0 = buffer.beam.z, buffer.beam.mass, buffer.beam.e0_MeV
+    angle = buffer.geometry.scattering_angle
+    k = kappa(m1, mass, angle)
+    if k == 0.0:
+        raise CommandError(f"width_thick: scattering event cannot occur for {element.symbol}")
+    cosin, cosout = cosines(buffer.geometry)
+    registry = session.registry
+    alpha = (
+        stopper(registry, z1, m1, element.z, k * e0)
+        / stopper(registry, z1, m1, element.z, e0)
+        * cosin / cosout
+    )
+
+    e_in_mean = e0 - 0.5 * width_MeV / (k + alpha)
+    e_out_mean = k * e0 - 0.5 * width_MeV * alpha / (k + alpha)
+    mean_stopping = (
+        k * stopper(registry, z1, m1, element.z, e_in_mean) / cosin
+        + stopper(registry, z1, m1, element.z, e_out_mean) / cosout
+    )
+    mean_stopping *= 1e15  # "1e-15 eV-cm2" display units, anlytc.c:539
+
+    density = element.atomic_density if element.atomic_density > 0 else 1.0e22
+    stopping_eVA = mean_stopping * density * 1e-23
+
+    width_eV = width_MeV * 1.0e6
+    areal_density = width_eV / mean_stopping * 1e15
+    thickness_A = width_eV / stopping_eVA
+
+    sigma = cross_section_barns(z1, m1, element.z, mass, angle, e0 * 1000.0)
+    # anlytc.c prints mean_stopping under this header -- a mislabel in the
+    # original (it is epsilon, not a cross section); reproduced as-is.
+    print(f"  Scattering cross section: {mean_stopping:7.3f}  (sigma = {sigma:.3f} barns/sr)")
+    print(f"  Width: {width_eV:9.1f} eV")
+    print(f"  Areal density: {areal_density:11.4e} Atoms/cm**2")
+    print(f"  Thickness: {thickness_A:9.1f} Angstroms")
+
+
+def cmd_calibrate(session, args: ArgReader) -> None:
+    """``CALIBRATE ch1 el1 ch2 el2 [energy_eV marker_channel]``.
+
+    Two-point energy calibration (anlytc.c:564-612): two (channel, element)
+    pairs fix the K-vs-channel line; an optional third, precisely-known
+    marker energy also fixes the absolute beam energy.
+    """
+    from ...analysis.elements import kappa, resolve_element
+
+    ch1 = args.number("the first peak's channel")
+    el1 = args.token("the first element")
+    ch2 = args.number("the second peak's channel")
+    el2 = args.token("the second element")
+    marker_energy = args.optional_number()
+    marker_channel = args.number("the marker's channel") if marker_energy is not None else None
+    args.done()
+
+    if abs(ch2 - ch1) < 2:
+        raise CommandError("calibrate: needs two DIFFERENT channel positions")
+
+    buffer = session.buffers.require_active()
+    try:
+        _, mass1, _ = resolve_element(session.table, el1)
+        _, mass2, _ = resolve_element(session.table, el2)
+    except (KeyError, ValueError) as error:
+        raise CommandError(f"calibrate: {error}") from None
+
+    angle = buffer.geometry.scattering_angle
+    kh1 = kappa(buffer.beam.mass, mass1, angle)
+    kh2 = kappa(buffer.beam.mass, mass2, angle)
+    if abs(kh1 - kh2) < 0.001:
+        raise CommandError("calibrate: needs two DIFFERENT elements")
+
+    slope = (kh1 - kh2) / (ch1 - ch2)
+    e0 = buffer.beam.e0_MeV
+    if marker_energy is not None:
+        e0 = 0.001 * marker_energy / (kh2 + slope * (marker_channel - ch2))
+
+    kevch = 1000.0 * slope * e0
+    kev0 = 1000.0 * kh1 * e0 - ch1 * kevch
+
+    buffer.beam.e0_MeV = e0
+    buffer.set_calibration(kevch=kevch, kev0=kev0)
+    session.touch()
+    print(f"  Energy={e0:.4f} MeV    Conversion:{kevch:.4f} keV/ch   {kev0:.4f} keV(0)")
+
+
+def cmd_background(session, args: ArgReader) -> None:
+    """``BACKGROUND lo1 hi1 lo2 hi2 order [-inplace] [-noplot]``.
+
+    ``RbsBackground`` (anlytc.c:1011): weighted polynomial fit of the two
+    flanking regions, subtracted across the whole span including the peak.
+    Defaults to a new, cropped buffer (RUMP's ``.cut`` convention);
+    ``-inplace`` subtracts on the active buffer instead.
+    """
+    from ...analysis.background import fit_background
+
+    i0 = args.integer("the start of the lower flanking region")
+    i1 = args.integer("the end of the lower flanking region")
+    i2 = args.integer("the start of the upper flanking region")
+    i3 = args.integer("the end of the upper flanking region")
+    order = args.integer("the polynomial order")
+    inplace = False
+    noplot = False
+    while args:
+        flag = args.token().lower()
+        if flag == "-inplace":
+            inplace = True
+        elif flag == "-noplot":
+            noplot = True
+        else:
+            raise CommandError(f"background: unrecognized option {flag!r}")
+
+    buffer = session.buffers.require_active()
+    try:
+        fit = fit_background(buffer.spectrum.counts, i0, i1, i2, i3, order)
+    except ValueError as error:
+        raise CommandError(f"background: {error}") from None
+
+    if inplace:
+        buffer.spectrum.counts[i0 : i3 + 1] = fit.stripped
+        session.touch()
+        index = session.buffers.active
+        print(f"  background subtracted in place on buffer {index}")
+    else:
+        new_calibration = Calibration(
+            kevch=buffer.calibration.kevch,
+            kev0=buffer.calibration.kev0,
+            first=buffer.calibration.first + i0,
+            npt=fit.stripped.size,
+        )
+        new_buffer = Buffer(
+            spectrum=Spectrum(counts=fit.stripped.copy(), calibration=new_calibration),
+            beam=buffer.beam, geometry=buffer.geometry, measurement=buffer.measurement,
+            name=(Path(buffer.name).stem + ".cut") if buffer.name else "background.cut",
+            identifier=buffer.identifier,
+        )
+        index = session.buffers.first_free()
+        session.buffers.set(index, new_buffer)
+        session.buffers.active = index
+        session.touch()
+        print(f"  background subtracted; result in buffer {index} ({fit.stripped.size} channels)")
+
+    if not noplot:
+        plt = plotting.require_matplotlib()
+        if session.figure is not None:
+            plt.close(session.figure)
+        figure, ax = plt.subplots(figsize=(9, 5.5))
+        ax.plot(fit.channels, buffer.spectrum.counts[i0 : i3 + 1], color="0.5", lw=1.0,
+                label="data")
+        ax.plot(fit.channels, fit.fit, lw=1.5, label="fit")
+        ax.plot(fit.channels, fit.stripped, lw=1.0, label="background-subtracted")
+        ax.set_xlabel("Channel")
+        ax.set_ylabel("Counts")
+        ax.legend(frameon=False, fontsize="small")
+        session.figure = figure
+        session.traces = []
+        plotting.show(figure)
+
+
+def cmd_smooth(session, args: ArgReader) -> None:
+    """``SMOOTH [-sv|-conv|-fft] [-range lo hi] [n]``.
+
+    ``RbsSmooth_SV``/``_Conv``/``_FFT`` (anlytc.c:454-509). Defaults to
+    ``-sv`` over the whole buffer; ``n`` sets ``-conv``'s iteration count
+    (default 2), or ``-fft``'s smoothing width (required).
+    """
+    from ...analysis import smoothing
+
+    mode = "sv"
+    low: int | None = None
+    high: int | None = None
+    n_iterations = 2
+    width: float | None = None
+
+    while args:
+        token = args.token()
+        lowered = token.lower()
+        if lowered == "-sv":
+            mode = "sv"
+        elif lowered in ("-conv", "-convolution", "-convolute"):
+            mode = "conv"
+        elif lowered == "-fft":
+            mode = "fft"
+        elif lowered == "-range":
+            low = args.integer("the first channel")
+            high = args.integer("the last channel")
+        else:
+            try:
+                value = float(token)
+            except ValueError:
+                raise CommandError(f"smooth: unrecognized option {token!r}") from None
+            if mode == "fft":
+                width = value
+            else:
+                n_iterations = int(value)
+
+    buffer = session.buffers.require_active()
+    counts = buffer.spectrum.counts
+    if low is None or high is None:
+        low, high = 0, counts.size - 1
+
+    try:
+        if mode == "sv":
+            new_counts = smoothing.smooth_sv(counts, low, high)
+        elif mode == "conv":
+            new_counts, rms_history = smoothing.smooth_conv(
+                counts, low, high, buffer.measurement.fwhm_keV, buffer.calibration.kevch,
+                n_iterations,
+            )
+        else:
+            if width is None:
+                raise CommandError("smooth -fft: needs a smoothing width")
+            new_counts = smoothing.smooth_fft(counts, low, high, width)
+    except ValueError as error:
+        raise CommandError(f"smooth: {error}") from None
+
+    buffer.spectrum.counts = new_counts
+    session.touch()
+    if mode == "conv":
+        print("  RMS: " + " ".join(f"{value:.4f}" for value in rms_history))
+    print(f"  buffer {session.buffers.active} smoothed ({mode}), channels {low}-{high}")
+
+
+def cmd_fft(session, args: ArgReader) -> None:
+    """``FFT lo hi width`` -- same as ``SMOOTH -fft -range lo hi width``
+    (anlytc.c:454-456: the command is literally an alias in the original).
+    """
+    from ...analysis import smoothing
+
+    low = args.integer("the first channel")
+    high = args.integer("the last channel")
+    width = args.number("the smoothing width")
+    args.done()
+    buffer = session.buffers.require_active()
+    try:
+        new_counts = smoothing.smooth_fft(buffer.spectrum.counts, low, high, width)
+    except ValueError as error:
+        raise CommandError(f"fft: {error}") from None
+    buffer.spectrum.counts = new_counts
+    session.touch()
+    print(f"  buffer {session.buffers.active} smoothed (fft), channels {low}-{high}")
+
+
+def cmd_profile(session, args: ArgReader) -> None:
+    """``PROFILE`` -- not implemented, never was.
+
+    ``RbsNewprf`` (null.c): dead code even in the original C, which prints
+    this exact message and does nothing. Reproduced verbatim, the same
+    precedent as THICKFILM's author confession in profiles/equations.py.
+    """
+    args.done()
+    print("OOPS: Didn't think anyone used this routine anymore - sorry not implemented")
+
+
+def cmd_cursor(session, args: ArgReader) -> None:
+    """``CURSOR`` -- not available in this shell.
+
+    RUMP's own behavior with no interactive graphics device (anlytc.c:187):
+    print this message and do nothing. There is no keyboard fallback for
+    CURSOR specifically (unlike every other command in this family).
+    """
+    args.done()
+    print("Cursor not enabled or illegal device")
 
 
 # ---------------------------------------------------------------------------
@@ -828,9 +1333,24 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("DATE", 4, cmd_date, "when the spectrum was measured"),
     ("FILENAME", 4, cmd_filename, "record the buffer's source filename"),
     ("SWALLOW", 7, cmd_swallow, "read the following macro lines as channel data"),
-    # Analysis
+    # Analysis (anlytc.c's own cmlist order; abbreviation lengths from there
+    # too, except DISPLAY -- kept at its already-shipped minlen 3 ("DIS"),
+    # not the C's 4, to avoid changing already-tested behavior)
+    ("CURSOR", 3, cmd_cursor, "graphics cursor (not available in this shell)"),
+    ("ELEMENT", 2, cmd_element, "expected energy/channel of an element's surface peak"),
+    ("MATRIX", 3, cmd_matrix, "expected energy, channel and matrix height"),
+    ("WHATISIT", 4, cmd_whatisit, "identify elements near a channel"),
+    ("INFO", 3, cmd_info, "detailed report on an element"),
     ("INTEGRAL", 3, cmd_integral, "sum counts over a channel range"),
+    ("THICKNESS", 4, cmd_thickness_analysis, "integral plus thickness conversion"),
+    ("BACKGROUND", 4, cmd_background, "fit and subtract a polynomial background"),
+    ("SMOOTH", 3, cmd_smooth, "smooth the active buffer (-sv, -conv, -fft)"),
+    ("WIDTH_THICK", 3, cmd_width_thick, "thickness from a peak's half-height width"),
+    ("PROFILE", 3, cmd_profile, "not implemented -- never was, in the original"),
+    ("INTSET", 6, cmd_intset, "change INTEGRAL/THICKNESS rounding and alpha mode"),
+    ("CALIBRATE", 3, cmd_calibrate, "energy-calibrate from two known peaks"),
     ("DISPLAY", 3, cmd_display, "plot the sample composition against depth"),
+    ("FFT", 3, cmd_fft, "FFT smooth (same as SMOOTH -FFT -RANGE)"),
 ]
 
 for _name, _minlen, _handler, _help in _ENTRIES:

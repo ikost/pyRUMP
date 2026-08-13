@@ -184,14 +184,21 @@ def test_setting_a_parameter_marks_the_simulation_stale(session):
 
 @needs_data
 def test_integral_sums_a_channel_range(session, capsys):
+    """RbsThickn/TH_INT: gross/net in normalized #/uC/msr, not a raw sum."""
     run(session, "integral 0 63")
-    assert "integral 100.0 counts" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "Gross:       10.00" in out
+    assert "Net:        0.00" in out
 
 
 @needs_data
-def test_integral_rejects_channels_outside_the_spectrum(session):
-    with pytest.raises(CommandError, match="outside"):
-        run(session, "integral 0 9999")
+def test_integral_clamps_channels_outside_the_spectrum(session, capsys):
+    """RBSINDEX clamps out-of-range channels rather than rejecting them --
+    matches the C, and INTEGRAL 0 9999 lands on the same result as 0 63."""
+    run(session, "integral 0 9999")
+    out = capsys.readouterr().out
+    assert "Gross:       10.00" in out
+    assert "Net:        0.00" in out
 
 
 @needs_data
@@ -308,3 +315,187 @@ def test_record_writes_a_replayable_macro(session, tmp_path):
     execute_file(fresh, log)
     assert (fresh.plot.low, fresh.plot.high) == (50, 250)
     assert fresh.plot.yscale == "sqrt"
+
+
+# -- Analysis (anlytc.c's command family) ------------------------------------
+
+
+@needs_data
+def test_element_reports_the_surface_edge(session, capsys):
+    run(session, "element Si Au")
+    out = capsys.readouterr().out
+    assert "Si" in out and "Au" in out
+    assert "Channel=" in out
+
+
+@needs_data
+def test_element_rejects_an_unknown_symbol(session):
+    with pytest.raises(CommandError, match="unknown element"):
+        run(session, "element Xx")
+
+
+@needs_data
+def test_matrix_reports_expected_energy_and_height(session, capsys):
+    run(session, "matrix Au")
+    out = capsys.readouterr().out
+    assert "Au expected at" in out
+    assert "height" in out
+
+
+@needs_data
+def test_matrix_rejects_forbidden_kinematics(session):
+    session.buffers.active_buffer.beam.z = 79
+    session.buffers.active_buffer.beam.mass = 196.97
+    with pytest.raises(CommandError, match="cannot occur"):
+        run(session, "matrix Si")
+
+
+@needs_data
+def test_whatisit_finds_candidates_near_a_channel(session, capsys):
+    run(session, "whatisit 20")
+    out = capsys.readouterr().out
+    assert "near channel 20" in out
+
+
+@needs_data
+def test_info_reports_a_full_element_summary(session, capsys):
+    run(session, "info Si")
+    out = capsys.readouterr().out
+    assert "Density:" in out
+    assert "Abundance:" in out
+
+
+@needs_data
+def test_integral_honors_intset_interp_mode(session, capsys):
+    run(session, "intset interp")
+    run(session, "integral 0 63")
+    out = capsys.readouterr().out
+    assert "Interpolated integration" in out
+
+
+@needs_data
+def test_intset_question_mark_prints_the_mode_table(session, capsys):
+    run(session, "intset ?")
+    out = capsys.readouterr().out
+    assert "current mode" in out
+
+
+@needs_data
+def test_intset_rejects_an_unrecognized_mode(session):
+    with pytest.raises(CommandError, match="unrecognized mode"):
+        run(session, "intset bogus")
+
+
+@needs_data
+def test_thickness_reports_atoms_and_angstroms(session, capsys):
+    run(session, "thickness 0 63 Si")
+    out = capsys.readouterr().out
+    assert "Atoms/cm**2" in out
+    assert "Angstroms" in out
+
+
+@needs_data
+def test_thickness_query_mode_needs_an_alpha_argument(session):
+    run(session, "intset query")
+    with pytest.raises(CommandError, match="alpha"):
+        run(session, "thickness 0 63 Si")
+
+
+@needs_data
+def test_background_creates_a_new_cropped_buffer(session, capsys):
+    run(session, "background 0 10 50 63 2 -noplot")
+    out = capsys.readouterr().out
+    assert "result in buffer" in out
+    assert session.buffers.get(2) is not None
+
+
+@needs_data
+def test_background_inplace_modifies_the_active_buffer(session, capsys):
+    active_before = session.buffers.active
+    run(session, "background 0 10 50 63 2 -inplace -noplot")
+    out = capsys.readouterr().out
+    assert "subtracted in place" in out
+    assert session.buffers.active == active_before
+
+
+@needs_data
+def test_smooth_default_mode_preserves_a_flat_spectrum(session):
+    before = session.buffers.active_buffer.spectrum.counts.copy()
+    run(session, "smooth")
+    after = session.buffers.active_buffer.spectrum.counts
+    np.testing.assert_allclose(after, before)
+
+
+@needs_data
+def test_fft_matches_smooth_dash_fft_dash_range(session):
+    run(session, "smooth -fft -range 10 50 4")
+    via_smooth = session.buffers.active_buffer.spectrum.counts.copy()
+    session.buffers.active_buffer.spectrum.counts = np.full(64, 100.0 / 64)
+    run(session, "fft 10 50 4")
+    via_fft = session.buffers.active_buffer.spectrum.counts
+    np.testing.assert_allclose(via_smooth, via_fft)
+
+
+@needs_data
+def test_width_thick_reports_a_thickness(session, capsys):
+    run(session, "width_thick 10 40 Si")
+    out = capsys.readouterr().out
+    assert "Areal density:" in out
+    assert "Thickness:" in out
+
+
+@needs_data
+def test_calibrate_updates_the_active_buffers_calibration(session, capsys):
+    run(session, "calibrate 100 Si 500 Au")
+    out = capsys.readouterr().out
+    assert "Conversion:" in out
+    assert "keV(0)" in out
+
+
+@needs_data
+def test_calibrate_rejects_near_identical_channels(session):
+    with pytest.raises(CommandError, match="DIFFERENT channel"):
+        run(session, "calibrate 100 Si 101 Au")
+
+
+@needs_data
+def test_calibrate_rejects_the_same_element_twice(session):
+    with pytest.raises(CommandError, match="DIFFERENT elements"):
+        run(session, "calibrate 100 Si 500 Si")
+
+
+@needs_data
+def test_profile_prints_the_verbatim_stub_message(session, capsys):
+    before = session.buffers.active_buffer.spectrum.counts.copy()
+    run(session, "profile")
+    out = capsys.readouterr().out
+    assert "not implemented" in out
+    np.testing.assert_array_equal(session.buffers.active_buffer.spectrum.counts, before)
+
+
+@needs_data
+def test_cursor_prints_the_verbatim_stub_message(session, capsys):
+    run(session, "cursor")
+    out = capsys.readouterr().out
+    assert "Cursor not enabled" in out
+
+
+@pytest.mark.parametrize(
+    "abbreviation, expected",
+    [
+        ("cur", "CURSOR"), ("el", "ELEMENT"), ("mat", "MATRIX"), ("what", "WHATISIT"),
+        ("inf", "INFO"), ("int", "INTEGRAL"), ("thic", "THICKNESS"),
+        ("back", "BACKGROUND"), ("smo", "SMOOTH"), ("wid", "WIDTH_THICK"),
+        ("pro", "PROFILE"), ("intset", "INTSET"), ("cal", "CALIBRATE"),
+        ("dis", "DISPLAY"), ("fft", "FFT"),
+    ],
+)
+def test_analysis_command_abbreviations_resolve_correctly(abbreviation, expected):
+    """Table order regression guard -- cheap insurance against a future
+    reordering (like DISPLAY's move to its real cmlist position) silently
+    breaking which command a short abbreviation lands on."""
+    from pyrump.shell.commands.rump import TABLE
+
+    matched = TABLE.match(abbreviation)
+    assert matched is not None
+    assert matched.name == expected

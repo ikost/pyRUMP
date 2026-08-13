@@ -389,6 +389,11 @@ class Session:
     #: PUSHDIR/POPDIR stack of directories to come back to.
     directory_stack: list[Path] = field(default_factory=list)
 
+    #: INTSET's two mode flags, shared by INTEGRAL/THICKNESS (RbsThickn's
+    #: persistent `interp`/`qmode` statics, anlytc.c:1506).
+    integration_interp: bool = False
+    integration_qmode: int = 0
+
     def xeq_frame(self) -> XeqFrame | None:
         """The innermost running macro's line frame, or ``None`` outside XEQ."""
         return self.xeq_stack[-1] if self.xeq_stack else None

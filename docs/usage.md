@@ -135,6 +135,67 @@ sample's composition against depth.
 matplotlib is an optional dependency — install it with `pip install 'pyrump[plot]'`
 or the shell will say so when you first plot.
 
+### Analysis
+
+Element identification, calibration, and quantification, ported from RUMP's
+`anlytc.c` command family. All of these act on the active buffer; region
+arguments are plain 0-based channel indices, matching `INTEGRAL`'s existing
+convention (not RUMP's own `first`-relative channel numbering).
+
+| Command | Effect |
+| --- | --- |
+| `ELEMENT el [el ...]` | expected K, energy and channel of each element's surface edge |
+| `MATRIX el` | expected energy, channel **and matrix height** for one element |
+| `WHATISIT <channel>` | identify the elements whose surface edge is nearest a channel |
+| `INFO el` | full report: density, K, cross section, stopping factors, isotopes |
+| `INTEGRAL lo hi` | gross/net counts over a channel range (background-corrected net) |
+| `THICKNESS lo hi el` | INTEGRAL plus conversion to atoms/cm² and Angstroms |
+| `BACKGROUND lo1 hi1 lo2 hi2 order [-inplace] [-noplot]` | fit and strip a polynomial background |
+| `SMOOTH [-sv\|-conv\|-fft] [-range lo hi] [n]` | smooth the active buffer |
+| `FFT lo hi width` | same as `SMOOTH -fft -range lo hi width` |
+| `WIDTH_THICK ch1 ch2 el` | thickness from a peak's half-height width |
+| `CALIBRATE ch1 el1 ch2 el2 [energy channel]` | set keV/channel and keV(0) from two known peaks |
+| `INTSET [Round\|Interp\|Surface\|Estimated\|Query\|?]` | INTEGRAL/THICKNESS rounding and alpha mode |
+| `CURSOR` | not available in this shell — there is no interactive graphics device |
+| `PROFILE` | not implemented — never was, even in the original |
+
+`SMOOTH -conv`'s characteristic width uses RUMP's own (nonstandard)
+`sigma = (FWHM/2)/sqrt(ln 2)/kevch` — not the usual `FWHM/(2*sqrt(2 ln 2))` —
+reproduced deliberately, not corrected. `SMOOTH`'s default range is the whole
+buffer; `-conv`'s iteration count and `-fft`'s width both come from a trailing
+number, interpreted according to whichever mode is active.
+
+`INTSET` picks two independent modes that both `INTEGRAL` and `THICKNESS`
+honor: whether a region's boundaries are rounded to the nearest channel or
+interpolated between them, and (for `THICKNESS` only) whether its second,
+"compensated" pass uses an estimated alpha or asks you for one. Two-peak
+calibration, then a thickness that uses it:
+
+```
+Your wish? calibrate 226 Si 369 Au
+ Energy=2.0000 MeV    Conversion:4.9896 keV/ch   3.8329 keV(0)
+
+Your wish? intset estimated
+Your wish? thickness 180 220 Si
+ Discrete integration on buffer 1
+ Region:  180.0 to  220.0  Gross:     3498.31  Net:      -47.34  (#/uC/msr)
+ Si surface approximation, density  2.32 g/cc
+  (Gross)  2.2598e+18 Atoms/cm**2 ( 4539.9 Angstroms)
+  ( Net ) -3.0582e+16 Atoms/cm**2 (  -61.4 Angstroms)
+ Compensated calculation (Chu et al. page 65)
+  (Gross)  2.0903e+18 Atoms/cm**2 ( 4199.4 Angstroms)
+  ( Net ) -3.7411e+16 Atoms/cm**2 (  -75.2 Angstroms)
+```
+
+The negative "Net" values above aren't a bug: `180`-`220` sits on a flat part
+of this (simulated, noiseless) spectrum, and the discrete net-background
+correction assumes a sloped continuum either side of the region it's
+integrating — pick regions either side of a real peak, not the middle of a
+plateau, for a meaningful net figure.
+
+Non-Rutherford (tabulated-resonance) cross sections aren't wired into any of
+these — see the README's known-limitations note.
+
 ### SIM and PERT
 
 `SIM` edits the sample description; `PERT` fits it. Both are sub-levels with
