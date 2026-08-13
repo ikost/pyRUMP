@@ -6,88 +6,61 @@ L. R. Doolittle and M. O. Thompson at Cornell.
 
 The original is ~22k lines of unmaintained C from the late 1980s, with a 1996-era
 HTML manual and no active support. pyRUMP reproduces its physics as a tested,
-importable library.
+importable library, with both a batch CLI and RUMP's own interactive shell.
 
 > **Status: complete.** All fourteen milestones are done, including the
 > interactive shell. pyRUMP simulates RBS spectra matching the original to
-> ~3e-6 in total counts, fits them with the same Poisson objective, reads and
-> writes RUMP's native `.RBS` and `.lcm` files byte-identically, and offers
-> both a batch CLI and RUMP's interactive command environment. 668 tests.
+> ~3e-6 in total counts, fits them with the same Poisson objective, and reads
+> and writes RUMP's native `.RBS` and `.lcm` files byte-identically. 668 tests.
 
-## Try it
+## Install
 
 ```bash
 pip install -e ".[dev,plot]"
+```
+
+Python 3.9+, numpy, scipy. The four physics data tables pyRUMP needs at
+runtime ship with the package, so nothing further is needed for simulation,
+fitting, or the interactive shell.
+
+## Contents
+
+- [Quick start](#quick-start)
+- [CLI reference](#cli-reference)
+- [Interactive shell](#interactive-shell)
+- [Python API](#python-api)
+- [Worked examples](#worked-examples)
+- [Sample descriptions (`.lcm`)](#sample-descriptions-lcm)
+- [Depth profiles](#depth-profiles)
+- [Things that will catch you out](#things-that-will-catch-you-out)
+- [Design and validation](#design-and-validation)
+- [How the simulation works](#how-the-simulation-works)
+- [RUMP quirks and defects found while porting](#rump-quirks-and-defects-found-while-porting)
+- [Milestones](#milestones)
+- [Contributing](#contributing)
+- [Licensing and provenance](#licensing-and-provenance)
+- [References](#references)
+
+## Quick start
+
+```bash
 pyrump                         # the interactive shell, from any directory
 ```
 
-No further setup needed — the physics data tables ship with the package.
-
-## Documentation
-
-- **[Using pyRUMP](#using-pyrump)** — command reference, Python API, and worked
-  examples: identifying elements from a spectrum, simulating a known structure,
-  fitting a thickness.
-- **[How the simulation works](#how-the-simulation-works)** — what the simulation
-  computes and how, what it approximates, and where the shipped code diverges
-  from the published algorithm.
-- **[RUMP quirks and defects found while porting](#rump-quirks-and-defects-found-while-porting)**
-  — 20 documented defects and surprises in the original C, and what pyRUMP does
-  about each.
-
-## Design
-
-**Faithful first, corrected by choice.** The default reproduces the shipped C
-bug-for-bug, because that is what every published RUMP result was produced with.
-Known defects — and there are several — are reproduced exactly, with the
-mathematically correct behaviour available behind explicit flags. See
-[RUMP quirks and defects found while porting](#rump-quirks-and-defects-found-while-porting).
-
-**Validated against the original.** The legacy C is compiled into a shared
-library and called directly from the test suite, so each stage is compared
-function-by-function rather than by eyeballing a final spectrum.
-
-## Installation
-
-```bash
-pip install -e ".[dev,plot]"
+```
+Your wish? get 2A.rbs           /* read a spectrum and its metadata  */
+Your wish? sim                  /* edit the sample description       */
+SIM Command: get ITO.lcm
+SIM Command: return
+Your wish? compare              /* data vs simulation, with residuals */
 ```
 
-Python 3.9+, numpy, scipy.
+Buffer 0 is always the simulation and recomputes itself when the sample or
+the active buffer's parameters change — there is no "simulate" command,
+exactly as in the original. See [Interactive shell](#interactive-shell) for
+the full session and command set.
 
-## Use
-
-```python
-from pathlib import Path
-import pyrump
-from pyrump.atomic.density import DensityTable
-from pyrump.atomic.tables import PeriodicTable
-from pyrump.io.kalbitzer import parse_kalbitzer
-from pyrump.model.geometry import Geometry
-from pyrump.model.spectrum import Calibration
-from pyrump.sim.engine import Beam, UniformSample, simulate
-from pyrump.stopping.kalbitzer import KalbitzerStopping
-from pyrump.stopping.registry import StoppingRegistry
-from pyrump.stopping.ziegler import ZieglerStopping
-
-DATA = Path(pyrump.__file__).parent / "data"   # bundled with the package
-table = PeriodicTable.load(DATA / "atom4.dat", DATA / "pscoef.dat")
-registry = StoppingRegistry(
-    table.elements,
-    kalbitzer=KalbitzerStopping(parse_kalbitzer(DATA / "newstop.kal"), table.elements),
-    ziegler=ZieglerStopping(table.elements),
-)
-densities = DensityTable.load(DATA / "density.tab")
-
-spectrum = simulate(
-    UniformSample([1000.0], [14], [[1.0]]),   # 1000e15 at/cm^2 of silicon
-    Beam(e0_MeV=2.0, z=2, mass=4.0026),       # 2 MeV alphas
-    Geometry(theta=0.0, phi=10.0),            # phi is 180 - scattering angle
-    registry, table, Calibration(kevch=5.0, npt=1024),
-)
-```
-
-or as one-off commands:
+Or drive it as one-off batch commands:
 
 ```bash
 pyrump simulate sample.lcm --energy 2.0 --beam 4He -o out.rbs
@@ -96,243 +69,88 @@ pyrump plot measured.rbs --compare out.rbs -o comparison.png
 pyrump convert measured.rbs measured.dat
 ```
 
-Where an element's surface edge lands, at 2 MeV He and 170 degrees:
+See [CLI reference](#cli-reference) for every option, or [Python API](#python-api)
+to call the library directly.
 
-```python
-from pyrump.physics.kinematics import kinematic_factor
-
-gold = table.by_symbol("Au")
-mass = max(gold.isotopes, key=lambda i: i.fraction).mass
-print(kinematic_factor(4.0026, mass, 170.0) * 2000, "keV")   # surface-edge energy
-```
-
-Recovering a thickness by fitting simulated data against itself:
-
-```python
-from pyrump.fit.lm import fit
-from pyrump.fit.parameters import FitInputs, thickness
-from pyrump.fit.windows import Window, WindowSet
-from pyrump.model.detector import Measurement
-
-measurement = Measurement(omega_msr=1.0, charge_uC=10.0, fwhm_keV=15.0)
-calibration = Calibration(kevch=5.0, npt=1024)
-geometry = Geometry(theta=0.0, phi=10.0)
-
-def run(inputs):
-    return simulate(
-        inputs.sample, inputs.beam, inputs.geometry, registry, table,
-        inputs.calibration, inputs.measurement,
-    ).counts
-
-truth = FitInputs(UniformSample([1200.0], [14], [[1.0]]), Beam(e0_MeV=2.0, z=2, mass=4.0026),
-                   geometry, calibration, measurement)
-guess = FitInputs(UniformSample([900.0], [14], [[1.0]]), Beam(e0_MeV=2.0, z=2, mass=4.0026),
-                   geometry, calibration, measurement)
-
-result = fit(run, run(truth), guess, [thickness(0)], windows=WindowSet(error=[Window(200, 260)]))
-print(result.parameters["thickness[0]"], "recovered, truth was 1200")
-```
-
-For more — identifying elements from a real spectrum, reading/writing
-`.RBS` and `.lcm` files, depth profiles — see
-[Using pyRUMP](#using-pyrump), which this is distilled from.
-
-### The interactive shell
-
-Running `pyrump` bare starts RUMP's own command environment, with the original
-command names and minimum abbreviations, from any directory:
+## CLI reference
 
 ```
-Your wish? cd data              /* cd/ls/pwd, as the original had    */
-Your wish? get 2A.rbs           /* read a spectrum and its metadata  */
-Your wish? plot 1               /* persistent matplotlib window      */
-Your wish? region 100 400       /* adjust it in place                */
-Your wish? sim                  /* edit the sample description       */
-SIM Command: get ITO.lcm
-SIM Command: return
-Your wish? compare              /* data vs simulation, with residuals */
-Your wish? pert                 /* fit it                            */
-PERT Command: window 355 375
-PERT Command: thickness 1
-PERT Command: go
-Your wish? display              /* depth profile                     */
+pyrump [--data DIR] {shell,simulate,fit,convert,plot} ...
 ```
 
-Spectra live in numbered buffers; buffer 0 is the simulation and recomputes
-itself when the sample or the active buffer's parameters change — there is no
-"simulate" command, exactly as in the original. `XEQ` replays a file of commands
-and `SCRIPT` writes one, so an analysis can be checked in and reproduced.
+### `pyrump simulate`
 
-See [Using pyRUMP § Interactive shell](#interactive-shell) for the full command set.
-
-## Validation
-
-pyRUMP is tested against the original C at two levels.
-
-**Unit oracle** — the physics translation units (`ziegler.c`, `stopping.c`,
-`sigma.c`, …) are compiled into `libpyrump_oracle` and called via cffi. No TTY,
-no graphics, no buffers. When a number disagrees, this isolates the cause to one
-function.
+Simulate a spectrum from a sample description.
 
 ```bash
-python tests/oracle/build_oracle.py
-pytest -m oracle
+pyrump simulate sample.lcm --energy 2.0 --beam 4He -o out.rbs
 ```
 
-**End-to-end oracle** — the original `rump` binary is driven through a
-pseudo-terminal to produce reference spectra.
-
-Both require the legacy C tree, which is **not redistributed** (see
-[Licensing](#licensing)). Point `PYRUMP_C_REFERENCE` at it, or place it at
-`C-code/`. Tests skip cleanly when it is absent.
-
-```bash
-pytest              # unit tests
-pytest -m oracle    # comparison against the C
-```
-
-### Current agreement
-
-| Quantity | Agreement | Limited by |
+| Option | Default | Meaning |
 |---|---|---|
-| ZBL85 stopping, all 92 targets, H/He/Cu/Au beams, 10 keV–10 MeV | **6.1e-7** rel | float32 tables in the C |
-| Fitted stopping polynomial (what the simulation consumes) | **1.3e-5** rel | float32 coefficient storage |
-| Polynomial evaluation, given identical coefficients | **1.1e-14** rel | float64 round-off |
-| Cross-sections and kinematics | **1e-10** rel | closed forms, nothing to fit |
-| Bricks — 630 across 36 configurations | **5e-7** energies, **6e-6** heights | float32 coefficients |
-| Full spectrum, total counts | **3e-6** rel | float32 coefficients |
-| Full spectrum, per channel | **1e-5** of peak | float32 brick edges |
-| With straggling and detector resolution | **3e-6** total, **1e-5** of peak | float32 brick edges |
-| Depth profiles, all 11 evaluable forms | **2.6e-5** brick heights | float32 coefficients |
-| Absorber, fuzz, multiple scattering | **3e-6** total, **4e-5** of peak | float32 brick edges |
-| `.RBS` files read vs RUMP's own reader | **bit-identical** | — |
-| Poisson objective vs `EvalChiPoisson` | **1e-5** reduced chi2 | float32 in the C |
-| `.lcm` round-trip vs RUMP's own writer | **byte-identical** | — |
+| `--beam` | `4He` | Beam species: `4He`, `1H`, `He`, `28Si`… |
+| `--energy` | `2.0` | Beam energy, MeV |
+| `--theta` | `0.0` | Incidence angle from the sample normal, degrees |
+| `--phi` | `10.0` | **180° minus the scattering angle** (10 → 170°) |
+| `--psi` | `0.0` | Exit angle from the normal (GENERAL geometry only) |
+| `--geometry` | `cornell` | `cornell`, `ibm` or `general` |
+| `--kevch` | `5.0` | keV per channel |
+| `--kev0` | `0.0` | keV at channel zero |
+| `--channels` | `1024` | Number of channels |
+| `--fwhm` | `15.0` | Detector resolution, keV |
+| `--omega` | `1.0` | Detector solid angle, msr |
+| `--charge` | `10.0` | Integrated charge, µC |
+| `--current` | `0.0` | Beam current, nA — enables pile-up with `--tau` |
+| `--tau` | `0.0` | Shaping time, µs |
+| `-o, --output` | stdout | `.rbs` for binary, anything else for ASCII |
+| `--two-column` | off | Write `channel value` instead of one column |
 
-The oracle is the `float` build. RUMP cannot be built in double precision — its
-table readers use `scanf("%f")` against `REAL` fields, so `-DREAL_IS_DOUBLE`
-silently corrupts every table. That caps how tightly any float64 port can agree,
-and the tolerances above are set by that floor rather than by choice.
+Output extension chooses the format. With no `-o`, energy/counts pairs go to
+stdout and a summary to stderr.
 
-## Milestones
+### `pyrump fit`
 
-| | Milestone | Status |
-|---|---|---|
-| M0 | Reference oracle (pty driver + cffi library) | done |
-| M1 | Elements, isotopes, compound densities | done |
-| M2 | Stopping powers: ZBL85, Konac, Mylar, priority chain | done |
-| M3 | STOP_SQRT polynomial refit, Bragg summation, session cache | done |
-| M4 | Kinematics, geometry, cross-sections | done |
-| M5 | Slab march → bricks | done |
-| M6 | Brick → channel fill | done |
-| M7 | Straggling (closed-form erf) | done |
-| M8 | Detector convolution | done |
-| M9 | Depth profiles (13 EQUATION forms) | done |
-| M10 | Absorber, pile-up, fuzz, multiple scattering | done |
-| M11 | File I/O (`.RBS` binary, ASCII) | done |
-| M12 | Fitting (PERT) | done |
-| M13 | CLI, plotting, `.lcm` subset | done |
-| M14 | Interactive shell: buffers, SIM and PERT levels, macros | done |
-
-**Known limitation**: non-Rutherford (tabulated-resonance) cross sections —
-RUMP's `.adt`/R33 nuclear cross-section tables — have a complete, tested
-reader (`pyrump.io.adt`) but aren't wired into simulation yet; pyRUMP
-currently computes pure Rutherford + L'Ecuyer-screened scattering only. A
-later milestone.
-
-## Contributing
+Adjust sample parameters until the simulation matches a measurement.
 
 ```bash
-pip install -e ".[dev,plot]"
-pytest              # unit tests, no external dependencies
-ruff check .
+pyrump fit start.lcm measured.rbs --vary thickness:0 --window 190 226
 ```
 
-Oracle-comparison tests (`pytest -m oracle`, and the wider set of tests that
-compare against the legacy C for extra confidence) need the RUMP 2.0 C source,
-which isn't redistributed here — see [Validation](#validation). They skip
-cleanly when it's absent, so it's not needed for everyday development.
+Takes every `simulate` option, plus:
 
-## Licensing
+| Option | Meaning |
+|---|---|
+| `--vary NAME` | Parameter to fit; repeat for several |
+| `--window LOW HIGH` | Channel range to fit over; repeat for up to 10 |
 
-pyRUMP is MIT licensed.
+`--vary` accepts `thickness:N` for layer *N*, or any of `mev`, `theta`, `phi`,
+`psi`, `fwhm`, `tau`, `current`, `correction`, `kev/ch`, `kev(0)`, `straggle`,
+`multiple_scatter`.
 
-It is an **independent reimplementation**. The RUMP 2.0 C source is *not*
-included and *not* redistributed: its licence permits modification but forbids
-commercial exploitation, which is incompatible with an open-source distribution.
-It is used here only as a local validation oracle.
+**Choose the window deliberately.** It should cover the part of the spectrum
+that constrains what you are fitting, and no more — see
+[Things that will catch you out](#things-that-will-catch-you-out).
 
-RUMP and Genplot were trademarks of Computer Graphic Service, Ltd. CGS ceased
-operating as a business in June 2012 and `genplot.com` no longer resolves; the
-authors stated at the time that GENPLOT and RUMP remain free to download and
-use. That removes the trademark concern, but **not** copyright in the original
-source, which remains with its authors — hence the C tree is still not
-redistributed here.
-
-pyRUMP is not affiliated with, endorsed by, or derived from the RUMP 2.0 source
-distribution.
-
-Four data tables (`atom4.dat`, `pscoef.dat`, `newstop.kal`, `density.tab`) are
-bundled with pyRUMP (`src/pyrump/data/`). Their provenance is third-party and
-independent of CGS — `pscoef.dat` is the ZBL/TRIM `SCOEF` table, `atom4.dat`
-is elements and isotopes — and has been checked against current CIAAW/NIST
-values and literature; see `src/pyrump/data/SOURCES.md` for full provenance
-and [Notices and citations](#notices-and-citations) below. Non-Rutherford
-cross-section tables (`*.adt`) are IBANDL evaluations and are **not** bundled —
-obtain them separately from IBANDL if you need that data.
-
-## References
-
-- L. R. Doolittle, *Algorithms for the rapid simulation of Rutherford
-  backscattering spectra*, Nucl. Instr. Meth. **B9** (1985) 344–351.
-- L. R. Doolittle, *A new approach to Rutherford backscattering analysis*,
-  Nucl. Instr. Meth. **B15** (1986) 227–231.
-- J. F. Ziegler, J. P. Biersack, U. Littmark, *The Stopping and Range of Ions in
-  Solids*, Pergamon (1985).
-- G. Konac, S. Kalbitzer et al., Nucl. Instr. Meth. **B136–138** (1998) 159–165.
-
----
-
-# Using pyRUMP
-
-Command reference, Python API, and worked examples. For what the simulation
-actually computes, see [How the simulation works](#how-the-simulation-works).
-
-Every number in the examples below was produced by running the code, not
-written from memory.
-
-## Contents
-
-- [Setup](#setup)
-- [Interactive shell](#interactive-shell)
-- [Command line](#command-line)
-- [Python API](#python-api)
-- [Worked example: identifying what is in a sample](#worked-example-identifying-what-is-in-a-sample)
-- [Worked example: simulating a known structure](#worked-example-simulating-a-known-structure)
-- [Worked example: fitting a thickness](#worked-example-fitting-a-thickness)
-- [Sample descriptions (`.lcm`)](#sample-descriptions-lcm)
-- [Depth profiles](#depth-profiles)
-- [Things that will catch you out](#things-that-will-catch-you-out)
-
-## Setup
+### `pyrump convert`
 
 ```bash
-pip install -e ".[dev,plot]"
+pyrump convert measured.rbs measured.dat        # binary → ASCII
+pyrump convert spectrum.dat spectrum.txt --two-column
 ```
 
-pyRUMP bundles the four data tables it needs at runtime — `atom4.dat`,
-`pscoef.dat`, `newstop.kal`, `density.tab` — so nothing further is needed for
-simulation, fitting, or the interactive shell.
+Writing `.rbs` requires beam and geometry metadata, so it only works from a
+`.rbs` source — ASCII files do not carry it.
 
-The worked examples below that compare against RUMP's own shipped sample
-spectrum and `.lcm` file (`Fixed/2A.rbs`, `Fixed/ITO.lcm`) do need the legacy
-RUMP distribution, since those files aren't redistributed with pyRUMP (see
-[Licensing](#licensing)). Point `--data DIR` or `PYRUMP_DATA` at
-it if you have a copy:
+### `pyrump plot`
 
 ```bash
-export PYRUMP_DATA=/path/to/rump/data
+pyrump plot measured.rbs                            # interactive window
+pyrump plot measured.rbs -o spectrum.png            # save
+pyrump plot measured.rbs --compare simulated.rbs -o comparison.png
 ```
+
+With `--compare` you get the data, the simulation over it, and a residual panel
+showing the **Poisson residuals the fit minimises** — not `data − model`.
 
 ## Interactive shell
 
@@ -544,91 +362,13 @@ unless you pass `--norc`.
 > original kept them clear of `LOG` — the logarithmic yield axis. Typing `log`
 > gets you the axis, `logf` the session log.
 
-## Command line
-
-```
-pyrump [--data DIR] {shell,simulate,fit,convert,plot} ...
-```
-
-### `pyrump simulate`
-
-Simulate a spectrum from a sample description.
-
-```bash
-pyrump simulate sample.lcm --energy 2.0 --beam 4He -o out.rbs
-```
-
-| Option | Default | Meaning |
-|---|---|---|
-| `--beam` | `4He` | Beam species: `4He`, `1H`, `He`, `28Si`… |
-| `--energy` | `2.0` | Beam energy, MeV |
-| `--theta` | `0.0` | Incidence angle from the sample normal, degrees |
-| `--phi` | `10.0` | **180° minus the scattering angle** (10 → 170°) |
-| `--psi` | `0.0` | Exit angle from the normal (GENERAL geometry only) |
-| `--geometry` | `cornell` | `cornell`, `ibm` or `general` |
-| `--kevch` | `5.0` | keV per channel |
-| `--kev0` | `0.0` | keV at channel zero |
-| `--channels` | `1024` | Number of channels |
-| `--fwhm` | `15.0` | Detector resolution, keV |
-| `--omega` | `1.0` | Detector solid angle, msr |
-| `--charge` | `10.0` | Integrated charge, µC |
-| `--current` | `0.0` | Beam current, nA — enables pile-up with `--tau` |
-| `--tau` | `0.0` | Shaping time, µs |
-| `-o, --output` | stdout | `.rbs` for binary, anything else for ASCII |
-| `--two-column` | off | Write `channel value` instead of one column |
-
-Output extension chooses the format. With no `-o`, energy/counts pairs go to
-stdout and a summary to stderr.
-
-### `pyrump fit`
-
-Adjust sample parameters until the simulation matches a measurement.
-
-```bash
-pyrump fit start.lcm measured.rbs --vary thickness:0 --window 190 226
-```
-
-Takes every `simulate` option, plus:
-
-| Option | Meaning |
-|---|---|
-| `--vary NAME` | Parameter to fit; repeat for several |
-| `--window LOW HIGH` | Channel range to fit over; repeat for up to 10 |
-
-`--vary` accepts `thickness:N` for layer *N*, or any of `mev`, `theta`, `phi`,
-`psi`, `fwhm`, `tau`, `current`, `correction`, `kev/ch`, `kev(0)`, `straggle`,
-`multiple_scatter`.
-
-**Choose the window deliberately.** It should cover the part of the spectrum
-that constrains what you are fitting, and no more — see
-[Things that will catch you out](#things-that-will-catch-you-out).
-
-### `pyrump convert`
-
-```bash
-pyrump convert measured.rbs measured.dat        # binary → ASCII
-pyrump convert spectrum.dat spectrum.txt --two-column
-```
-
-Writing `.rbs` requires beam and geometry metadata, so it only works from a
-`.rbs` source — ASCII files do not carry it.
-
-### `pyrump plot`
-
-```bash
-pyrump plot measured.rbs                            # interactive window
-pyrump plot measured.rbs -o spectrum.png            # save
-pyrump plot measured.rbs --compare simulated.rbs -o comparison.png
-```
-
-With `--compare` you get the data, the simulation over it, and a residual panel
-showing the **Poisson residuals the fit minimises** — not `data − model`.
-
 ## Python API
 
 The CLI is a thin wrapper; the library is the primary interface.
 
 ```python
+from pathlib import Path
+import pyrump
 from pyrump.atomic.density import DensityTable
 from pyrump.atomic.tables import PeriodicTable
 from pyrump.io.kalbitzer import parse_kalbitzer
@@ -639,9 +379,6 @@ from pyrump.sim.engine import Beam, UniformSample, simulate
 from pyrump.stopping.kalbitzer import KalbitzerStopping
 from pyrump.stopping.registry import StoppingRegistry
 from pyrump.stopping.ziegler import ZieglerStopping
-
-from pathlib import Path
-import pyrump
 
 DATA = Path(pyrump.__file__).parent / "data"   # bundled with the package
 
@@ -685,13 +422,22 @@ measured.geometry        # angles, geometry convention
 measured.e0_MeV, measured.zbeam, measured.mbeam
 ```
 
-## Worked example: identifying what is in a sample
+## Worked examples
+
+Every number below was produced by running the code, not written from memory.
+For what the simulation actually computes, see
+[How the simulation works](#how-the-simulation-works).
+
+### Identifying what is in a sample
 
 Given an unknown spectrum, the first question is which elements are present.
 Each element's **surface edge** sits at *K*·*E*₀, so predicted edge positions
 identify the peaks.
 
-Using `2A.rbs`, one of the files shipped with RUMP:
+Using `2A.rbs`, one of the files shipped with RUMP (see
+[Licensing and provenance](#licensing-and-provenance) — it isn't redistributed
+with pyRUMP, so point `PYRUMP_DATA` at your own copy of the legacy `rump/data/`
+tree to reproduce this):
 
 ```python
 import numpy as np
@@ -740,7 +486,7 @@ them independently.
 That composition — In, Sn, O over a C/O/H substrate — is indium tin oxide on a
 polymer, which is exactly what `ITO.lcm` in the same directory describes.
 
-## Worked example: simulating a known structure
+### Simulating a known structure
 
 RUMP ships both the measurement and a matching sample description, so we can
 simulate one against the other:
@@ -773,15 +519,13 @@ Comparing yields in each edge region:
 The **structure is right** — the edges land in the right channels and the
 relative intensities are close — but the absolute yield is **9.2× low**.
 
-That is not a simulation error. Running the same case through the original C
+That is not a simulation error: running the same case through the original C
 gives 381 120 counts, agreeing with pyRUMP to 2.6e-3. Both codes say the same
-thing, so the discrepancy lives in the measurement's normalisation: the actual
-collected charge, solid angle, or detector efficiency differs from the values
-recorded in the file.
-
-**This is the normal situation in RBS**, and it is why RUMP has both a `CORR`
-factor and a normalisation window. Rather than trusting the charge integration,
-you fit the scale:
+thing, so the discrepancy lives in the measurement's normalisation — the
+actual collected charge, solid angle, or detector efficiency differs from the
+values recorded in the file. **This is the normal situation in RBS**, which is
+why RUMP has both a `CORR` factor and a normalisation window. Rather than
+trusting the charge integration, you fit the scale:
 
 ```python
 from pyrump.fit.windows import Window, WindowSet
@@ -796,7 +540,7 @@ The normalisation window forces the total counts over that range to agree by
 scaling the data, before χ² is evaluated — so a charge-integration error stops
 biasing the fitted thicknesses.
 
-## Worked example: fitting a thickness
+### Fitting a thickness
 
 Simulate a 2400 Å silicon layer, then recover it from a 2000 Å starting guess.
 
@@ -812,11 +556,10 @@ reduced chi-square 0.0000 on 36 dof
 ```
 
 2400 Å of silicon is 2400 × 0.4977 = **1194.5** in 10¹⁵ atoms/cm², so the fit
-recovers it to better than 0.1%.
-
-Note that thickness is reported in **areal density**, not Ångström. RBS measures
-atoms per unit area; converting to a physical thickness needs an assumed
-density, which is a separate and often less certain quantity.
+recovers it to better than 0.1%. Note that thickness is reported in **areal
+density**, not Ångström — RBS measures atoms per unit area, and converting to
+a physical thickness needs an assumed density, a separate and often less
+certain quantity.
 
 The same fit from Python, with two parameters:
 
@@ -949,9 +692,64 @@ channels at 3 MeV; fit their ratio, not each independently.
 **Build the stopping registry once.** It refits polynomials per beam energy, so
 recreating it inside a fit loop is slow for no reason.
 
----
+## Design and validation
 
-# How the simulation works
+**Faithful first, corrected by choice.** The default reproduces the shipped C
+bug-for-bug, because that is what every published RUMP result was produced
+with. Known defects — and there are several — are reproduced exactly, with
+the mathematically correct behaviour available behind explicit flags. See
+[RUMP quirks and defects found while porting](#rump-quirks-and-defects-found-while-porting).
+
+**Validated against the original**, at two levels. The legacy C is compiled
+into a shared library and called directly from the test suite, so each stage
+is compared function-by-function rather than by eyeballing a final spectrum.
+
+**Unit oracle** — the physics translation units (`ziegler.c`, `stopping.c`,
+`sigma.c`, …) are compiled into `libpyrump_oracle` and called via cffi. No TTY,
+no graphics, no buffers. When a number disagrees, this isolates the cause to one
+function.
+
+```bash
+python tests/oracle/build_oracle.py
+pytest -m oracle
+```
+
+**End-to-end oracle** — the original `rump` binary is driven through a
+pseudo-terminal to produce reference spectra.
+
+Both require the legacy C tree, which is **not redistributed** (see
+[Licensing and provenance](#licensing-and-provenance)). Point `PYRUMP_C_REFERENCE`
+at it, or place it at `C-code/`. Tests skip cleanly when it is absent.
+
+```bash
+pytest              # unit tests
+pytest -m oracle    # comparison against the C
+```
+
+### Current agreement
+
+| Quantity | Agreement | Limited by |
+|---|---|---|
+| ZBL85 stopping, all 92 targets, H/He/Cu/Au beams, 10 keV–10 MeV | **6.1e-7** rel | float32 tables in the C |
+| Fitted stopping polynomial (what the simulation consumes) | **1.3e-5** rel | float32 coefficient storage |
+| Polynomial evaluation, given identical coefficients | **1.1e-14** rel | float64 round-off |
+| Cross-sections and kinematics | **1e-10** rel | closed forms, nothing to fit |
+| Bricks — 630 across 36 configurations | **5e-7** energies, **6e-6** heights | float32 coefficients |
+| Full spectrum, total counts | **3e-6** rel | float32 coefficients |
+| Full spectrum, per channel | **1e-5** of peak | float32 brick edges |
+| With straggling and detector resolution | **3e-6** total, **1e-5** of peak | float32 brick edges |
+| Depth profiles, all 11 evaluable forms | **2.6e-5** brick heights | float32 coefficients |
+| Absorber, fuzz, multiple scattering | **3e-6** total, **4e-5** of peak | float32 brick edges |
+| `.RBS` files read vs RUMP's own reader | **bit-identical** | — |
+| Poisson objective vs `EvalChiPoisson` | **1e-5** reduced chi2 | float32 in the C |
+| `.lcm` round-trip vs RUMP's own writer | **byte-identical** | — |
+
+The oracle is the `float` build. RUMP cannot be built in double precision — its
+table readers use `scanf("%f")` against `REAL` fields, so `-DREAL_IS_DOUBLE`
+silently corrupts every table. That caps how tightly any float64 port can agree,
+and the tolerances above are set by that floor rather than by choice.
+
+## How the simulation works
 
 A description of the forward model pyRUMP implements — what it computes, in what
 order, and where it approximates. Written for someone who wants to know what the
@@ -959,9 +757,9 @@ numbers mean, not for someone reading the source.
 
 The algorithm originates with L. R. Doolittle's 1985 paper. **pyRUMP follows the
 shipped C, which diverges from that paper in places** — see
-[Divergences from the paper](#divergences-from-the-published-algorithm).
+[Divergences from the published algorithm](#divergences-from-the-published-algorithm).
 
-## The physical problem
+### The physical problem
 
 A beam of light ions (usually 1–3 MeV ⁴He or ¹H) hits a sample. A few
 backscatter from target nuclei and reach a detector at a fixed angle. The
@@ -976,7 +774,7 @@ A spectrum is therefore a depth profile smeared together across all elements
 present. Simulating it forward, and adjusting the sample until the simulation
 matches, is how the depth profile is recovered.
 
-### Kinematics
+#### Kinematics
 
 An elastic collision at scattering angle *φ* leaves the projectile with a
 fixed fraction of its energy, the **kinematic factor**:
@@ -992,7 +790,7 @@ appear.
 > a detector at 170° is entered as `phi = 10`. pyRUMP keeps that convention on
 > `Geometry.phi` and exposes the physical angle as `Geometry.scattering_angle`.
 
-### Cross-section
+#### Cross-section
 
 How often a collision happens is Rutherford scattering, in the lab frame:
 
@@ -1006,7 +804,7 @@ depth as the beam slows.
 A screening correction (L'Ecuyer) reduces this slightly at low energy. RUMP has
 no relativistic correction and does not implement Andersen screening.
 
-## The brick
+### The brick
 
 The central data structure, in the 1985 paper's own words:
 
@@ -1034,7 +832,7 @@ detector's channels and summed. Natural silicon gives three bricks per sublayer
 (²⁸Si, ²⁹Si, ³⁰Si), each with its own kinematic factor, so isotopes appear as
 slightly displaced copies.
 
-### Why sublayers, and how many
+#### Why sublayers, and how many
 
 Thicker sublayers mean fewer bricks and a faster simulation, but a coarser
 approximation. RUMP's step size is **path-length based, not depth based**:
@@ -1051,7 +849,7 @@ puts the energy-loss expansion at 10⁻⁵ fractional error.
 A layer carrying a depth-profile equation ignores `maxpth` and uses a
 per-equation recommended count instead (5 for `Constant`, 30 for `Thinfilm`).
 
-## The pipeline
+### The pipeline
 
 Stage order matters and is not arbitrary.
 
@@ -1080,7 +878,7 @@ Stage order matters and is not arbitrary.
  pile-up  →  multiple scattering
 ```
 
-### 1. Stopping powers — the indirection that matters most
+#### 1. Stopping powers — the indirection that matters most
 
 Energy loss per unit depth, *ε(E)*, comes from one of several models tried in
 priority order:
@@ -1110,7 +908,7 @@ linear additivity weighted by areal density, with no compound correction — whi
 also folds in the thickness, so the coefficients directly give eV through the
 slab.
 
-### 2. Inbound march
+#### 2. Inbound march
 
 The beam energy at each interface is computed once, before any element is
 considered, because the incoming path does not depend on what it eventually
@@ -1130,7 +928,7 @@ higher accuracy per sublayer, so that fewer are needed.
 A **cutoff energy** (3% of the beam energy) ends the march: below it the
 stopping fit is not trustworthy.
 
-### 3. Outbound path — the expensive half
+#### 3. Outbound path — the expensive half
 
 Once scattered, a particle must be walked back out through every overlying
 sublayer. Done for every sublayer and every isotope, this is the O(*N*²) term
@@ -1140,7 +938,7 @@ Two things come out of it: the exit energy, and `ratde` — the accumulated rati
 of stopping powers, which accounts for the scattered beam's energy spread
 changing on the way out.
 
-### 4. Yield
+#### 4. Yield
 
 Per sublayer and isotope:
 
@@ -1151,7 +949,7 @@ where **[ε]** is the stopping cross-section factor of Chu et al.,
 $[\varepsilon] = K\varepsilon(E)\sec\theta_{in} + \varepsilon(KE)\sec\theta_{out}$,
 which converts a depth interval into an energy interval.
 
-### 5. Filling channels
+#### 5. Filling channels
 
 Without straggling, each trapezoid is integrated exactly onto the channels it
 overlaps, including partial channels at both ends.
@@ -1160,7 +958,7 @@ With straggling, the trapezoid is abandoned: it is split into **two triangles**,
 each convolved with a Gaussian of its own width. Straggling is **Bohr only** and
 **off by default** in RUMP.
 
-### 6. Detector resolution
+#### 6. Detector resolution
 
 A Gaussian convolution applied **once to the finished spectrum**, not per
 sublayer — since 1994 the detector width was deliberately removed from the
@@ -1172,7 +970,7 @@ convolution is not count-conserving near the edges. Defensible — a real
 multichannel analyser cannot record counts in channels it does not have — but it
 matters when comparing totals.
 
-### 7. After the spectrum exists
+#### 7. After the spectrum exists
 
 - **Pile-up** — two events arriving within the detector's shaping time recorded
   as one of their combined energy. Needs the beam current and shaping time.
@@ -1182,7 +980,7 @@ matters when comparing totals.
 - **Fuzz** — surface roughness, as several simulations at Gaussian-weighted
   thicknesses. Every roughened layer multiplies the cost.
 
-## What is approximated, and what is absent
+### What is approximated, and what is absent
 
 Worth knowing before trusting a result.
 
@@ -1204,7 +1002,7 @@ The 1985 paper is explicit about most of this:
 > and multiple scattering. They also ignore the effects brought about by a
 > finite size beam spot and detector.
 
-## Divergences from the published algorithm
+### Divergences from the published algorithm
 
 The shipped C is not the program the papers describe.
 
@@ -1235,45 +1033,18 @@ form instead: measured against numerical quadrature, the closed form is exact to
 6e-14 where RUMP's fit carries 1.7e-6. The 1985 justification for the
 approximation was explicitly about 1985 hardware.
 
-## Accuracy
+### Accuracy
 
-pyRUMP is validated against the original C stage by stage. The legacy code is
-compiled into a shared library and called directly from the test suite, so each
-quantity is compared where it is produced rather than only at the end.
+Stage-by-stage agreement with the original C is in
+[Design and validation § Current agreement](#current-agreement) — every figure
+there is limited by float32 storage in the C, not by pyRUMP. For a realistic
+multi-layer sample with micron-thick polymer layers, agreement loosens to
+~3e-3: thousands of sublayers accumulate single-precision differences, and part
+of the beam falls below the stopping cutoff.
 
-| Quantity | Agreement |
-|---|---|
-| ZBL85 stopping, 92 targets × 4 beam species | 6.1e-7 |
-| Fitted stopping polynomial | 1.3e-5 |
-| Cross-sections, kinematics | 1e-10 |
-| Bricks, 630 across 36 configurations | 5e-7 energies, 6e-6 heights |
-| Full spectrum, total counts | 3e-6 |
-| Poisson fitting objective | 1e-5 |
-| `.RBS` files, read and written | bit-identical |
+Full bibliography in [References](#references).
 
-Every one of these is limited by **float32 storage in the C**, not by pyRUMP.
-The tolerances are argued from that floor rather than chosen for convenience.
-
-For a realistic multi-layer sample with micron-thick polymer layers, agreement
-loosens to ~3e-3 — thousands of sublayers accumulate single-precision
-differences, and part of the beam falls below the stopping cutoff.
-
-## References
-
-- L. R. Doolittle, *Algorithms for the rapid simulation of Rutherford
-  backscattering spectra*, Nucl. Instr. Meth. **B9** (1985) 344–351.
-- L. R. Doolittle, *A new approach to Rutherford backscattering analysis*,
-  Nucl. Instr. Meth. **B15** (1986) 227–231.
-- W.-K. Chu, J. W. Mayer, M.-A. Nicolet, *Backscattering Spectrometry*,
-  Academic Press (1978) — the source of the [ε] factor and the kinematics.
-- J. F. Ziegler, J. P. Biersack, U. Littmark, *The Stopping and Range of Ions in
-  Solids*, Pergamon (1985).
-- S. Baker, R. D. Cousins, Nucl. Instr. Meth. **221** (1984) 437 — the fitting
-  objective.
-
----
-
-# RUMP quirks and defects found while porting
+## RUMP quirks and defects found while porting
 
 Running catalogue of behaviour in the legacy C that is surprising, wrong, or
 simply undocumented. Each entry says what pyRUMP does about it.
@@ -1282,7 +1053,7 @@ Default policy (per the project plan): **reproduce faithfully, expose the fix
 behind a flag.** A silent "correction" would make pyRUMP disagree with every
 published RUMP result.
 
-## 1. The papers describe an algorithm the code no longer uses
+### 1. The papers describe an algorithm the code no longer uses
 
 The 1985 NIM-B paper's signature contribution — parabolic brick tops with an
 exact analytic area from the "Rutherford integral" ∫E(a)⁻²da — is **dead code**.
@@ -1295,7 +1066,7 @@ with straggling, two Gaussian-convolved triangles (`SimAnlyz3`, `anlyz.c:244`).
 **pyRUMP:** trapezoid by default; the parabolic form is planned as an opt-in mode,
 for which the dead C is the specification.
 
-## 2. `SQRT_DDS_POWER` uses the wrong coefficient index
+### 2. `SQRT_DDS_POWER` uses the wrong coefficient index
 
 `stopping.h:47-49` computes d²S/dE² as
 
@@ -1319,7 +1090,7 @@ expansion (`creatr.c:1554`) — but it is real and it shifts the depth scale.
 `faithful=False` gives the correct value. Covered by
 `test_second_derivative_reproduces_rump_bug`.
 
-## 3. `-DREAL_IS_DOUBLE` silently corrupts every data table
+### 3. `-DREAL_IS_DOUBLE` silently corrupts every data table
 
 RUMP's table readers hard-code `%f` in their `scanf` formats while writing into
 `REAL` fields (`ziegler.c:100,114`; `atomio.c:162,163,173`). With `REAL` as
@@ -1335,7 +1106,7 @@ tolerances are argued from single-precision reasoning instead.
 `tests/oracle/oracle.py` refuses to load a corrupt build rather than returning
 garbage.
 
-## 4. Stopping tables are cached per (Z, mass) for the whole session
+### 4. Stopping tables are cached per (Z, mass) for the whole session
 
 `RbsStpfind` (`stopping.c:274-279`) reuses an existing fitted table whenever the
 new beam energy merely *fits inside* its window (`2·emin ≤ E ≤ emax`). Simulating
@@ -1352,7 +1123,7 @@ This is stateful behaviour that changes numbers, not an optimisation.
 `e_scale`. The oracle gained `OracleResetStoppingTables()` so tests are
 order-independent.
 
-## 5. The fitted polynomial is only valid inside the beam-dependent window
+### 5. The fitted polynomial is only valid inside the beam-dependent window
 
 `emin = 0.04·E_beam`, `emax = 1.15·E_beam` (`stopping.c:316-319`, STOP_SQRT).
 Beyond `emax` the degree-5 fit diverges from the underlying model within a few
@@ -1363,7 +1134,7 @@ More importantly: **RUMP never evaluates Ziegler or Konac during a simulation.**
 It fits once at startup and evaluates only the polynomial. Any port that calls
 the stopping model directly will disagree with RUMP everywhere.
 
-## 6. Konac/Kalbitzer outranks Ziegler
+### 6. Konac/Kalbitzer outranks Ziegler
 
 The priority chain (`stopping.c:479-515`) tries `newstop.kal` *before* ZBL. For
 H/D/³He/⁴He on carbon or silicon — the most common RBS cases by far — RUMP is not
@@ -1371,7 +1142,7 @@ using Ziegler at all. The two models differ by up to ~10%.
 
 `newstop.kal` is also not mentioned in the 1996 manual.
 
-## 7. `ConvoluteDetector` loses counts at **both** edges
+### 7. `ConvoluteDetector` loses counts at **both** edges
 
 *(Corrected — an earlier version of this entry described only the high-energy
 edge. The behaviour is symmetric.)*
@@ -1401,7 +1172,7 @@ weight that actually lands in range. Note the normalisation must be applied on
 the source side — normalising the output instead rescales *received* weight and
 inflates the edges rather than conserving.
 
-## 8. The SIM `RECALCULATE` command is misspelled in the command table
+### 8. The SIM `RECALCULATE` command is misspelled in the command table
 
 `sim2.c:252` registers `{"recalculculate", 5, SIM_RECALCUL}` — note
 `recalcul**cul**ate`. Typing `recalculate` does **not** match and silently falls
@@ -1410,7 +1181,7 @@ through to the top-level shell. Only the 5-character prefix `recal` works.
 Relevant to anyone driving the legacy binary; `tests/oracle/driver.py` documents
 and uses `recal`.
 
-## 9. Straggling is Bohr-only, off by default, and combined incorrectly
+### 9. Straggling is Bohr-only, off by default, and combined incorrectly
 
 `sample->straggle` defaults to 0 (straggling disabled). When enabled, the inbound
 and outbound path variances are combined *linearly* as
@@ -1418,7 +1189,7 @@ and outbound path variances are combined *linearly* as
 (`creatr.c:1661`), rather than as `K²σ²_in + σ²_out`. No Chu correction exists
 anywhere in the simulation.
 
-## 10. Physics that is absent
+### 10. Physics that is absent
 
 * no channelling
 * no Q≠0 nuclear reactions (`reswork.c:355` rejects them explicitly)
@@ -1427,7 +1198,7 @@ anywhere in the simulation.
 * multiple scattering is an ad-hoc exponential tail with no physical basis
   (`creatr.c:337-345`), described in the C itself as *"Ad-hoc scaling"*
 
-## Dead or broken code to avoid porting
+### Dead or broken code to avoid porting
 
 | Location | Status |
 |---|---|
@@ -1439,7 +1210,7 @@ anywhere in the simulation.
 | `data/*.stp` | unreachable by default: stores `STOP_LINEAR` coefficients while the runtime is `STOP_SQRT` (`stopping.c:139` vs `:276`) |
 | channelling hooks (`sigma_scale`, `dedx_scale`) | declared, never set; the only use is commented out at `creatr.c:1114` |
 
-## 11. `reschk` is compiled out of `reswork.c` but referenced by `creatr.c`
+### 11. `reschk` is compiled out of `reswork.c` but referenced by `creatr.c`
 
 `reswork.c:55` guards the resonance-table index with `#ifdef RESONANCE`, and the
 `#define` lives in `xsect.h` — which `reswork.c` includes *after* some of its own
@@ -1453,7 +1224,7 @@ successful can leave the resonance index pointing at nothing.
 **pyRUMP:** `reswork.c` is linked into the oracle explicitly so the array exists
 and is properly zero-initialised (no resonance tables loaded ⇒ pure Rutherford).
 
-## 12. `SimStragf` rescales its own argument
+### 12. `SimStragf` rescales its own argument
 
 `SimStragf(x, sig)` (anlyz.c:371) computes `newx = x * (1 + 3*sig)` as its first
 real statement (anlyz.c:387). Its `x` is therefore in units of the **broadened**
@@ -1470,7 +1241,7 @@ to its entire range of 0.5 — while looking perfectly plausible in isolation.
 **pyRUMP:** `stragf()` reproduces the C's contract including the rescaling;
 `triangle_gaussian_integral()` is the underlying maths in unscaled coordinates.
 
-## 13. Measured: `SimStragf`'s approximation error
+### 13. Measured: `SimStragf`'s approximation error
 
 The 1985 paper justifies the rational fit on 1985 hardware grounds:
 
@@ -1493,7 +1264,7 @@ avoids transcribing a table of hand-tuned constants.
 This is the one place pyRUMP knowingly departs from bit-faithfulness. The
 resulting spectrum still matches the C to ~3e-5 of peak.
 
-## 14. `hfront` is recomputed per slab; only `efront` and `ratde` carry over
+### 14. `hfront` is recomputed per slab; only `efront` and `ratde` carry over
 
 `SimCideal` guards the front-edge recomputation with `ok` (creatr.c:1791):
 
@@ -1514,7 +1285,7 @@ every slab — so a port can pass every uniform-layer test while getting this
 wrong. It only shows up with a depth profile, where reusing the height shifts
 the entire spectrum by one slab.
 
-## 15. Layer density is an inverse-density average, and it sets the depth scale
+### 15. Layer density is an inverse-density average, and it sets the depth scale
 
 `creatr.c:606-625` averages **cm³/atom**, not atoms/cm³ — the C's own comment
 calls it "the idea of hard ball packing":
@@ -1536,7 +1307,7 @@ The species composition gets its own density, used to convert Angstrom doses
 A pre-1997 `COMPATIBLE` mode averaged densities directly; pyRUMP implements only
 `IMPROVED`, the shipped default.
 
-## 16. `poly_e` reads one element past its array — and `-O2` makes it fatal
+### 16. `poly_e` reads one element past its array — and `-O2` makes it fatal
 
 `poly_e(x, numer, iorder)` (gvcalc.c:4914) does
 
@@ -1562,7 +1333,7 @@ RUMP with optimisation enabled would silently corrupt every FUZZ profile.
 specifically, with a test (`test_ndtri_matches_the_c`) that fails loudly if that
 is ever lost.
 
-## 17. The inbound march starts at `fsurf`, skipping the absorber
+### 17. The inbound march starts at `fsurf`, skipping the absorber
 
 `SimPrecal` seeds `samm->layer[samm->fsurf].ehit = ee` with the **full** beam
 energy (creatr.c:1530) and marches from there. Absorber layers are between the
@@ -1580,7 +1351,7 @@ absorber, and grows from there. The absorber is also not tilted with the
 sample: `SimFlyout` forces normal incidence through it (creatr.c:1971), since a
 detector window does not rotate when the sample does.
 
-## 18. `.RBS` data records use the generic type, not the explicit ones
+### 18. `.RBS` data records use the generic type, not the explicit ones
 
 The format defines five data-record types: `0011h` generic plus `0012h`-`0015h`
 naming compression modes 0-3 explicitly. `read_data_records` (rbs_rdwr.c:774)
@@ -1594,7 +1365,7 @@ ever matches. There is no error and nothing looks wrong until you check the sum.
 **pyRUMP:** handles both, and `test_generic_data_record_uses_the_declared_compression`
 asserts the counts are non-zero rather than trusting the parse.
 
-## 19. `MASSES:` and `ZEDS:` are ignored, and the shipped files disagree anyway
+### 19. `MASSES:` and `ZEDS:` are ignored, and the shipped files disagree anyway
 
 Both are `Q_IGNORE` in RUMP's header table (reswork.c:131-132); nuclide
 identities come from `REACTION:` alone. That is just as well, because the
@@ -1611,7 +1382,7 @@ wrong. Parse `REACTION:` and ignore the rest.
 Related: `QVALUE:` is often a comma-separated list (`0.00, 0.00, 0.00, ...`).
 The C reads it with `atof()`, which consumes only the leading number.
 
-## 20. RUMP cannot read its own bundled R33 example
+### 20. RUMP cannot read its own bundled R33 example
 
 `data/R33.Format` declares `Units: mb`. RUMP's accepted set is exactly
 `b/sr`, `mb/sr`, `rtr`, `rr`, `relative` (reswork.c:325-334), so the file is
@@ -1620,7 +1391,7 @@ rejected outright.
 It is a *format exemplar* from SigmaCalc, not a loadable table. pyRUMP refuses
 it identically — matching the refusal is fidelity, not a gap.
 
-## Notes on driving the engine from outside
+### Notes on driving the engine from outside
 
 `creatr.c`'s output stage is a **function pointer**, `SimFillSpectrum` (sample.h),
 called once per brick. Redirecting it captures the engine's exact intermediate
@@ -1642,73 +1413,97 @@ Captured bricks carry the *scattered particle's* `z`/`mass` (for the stopper-foi
 lookup at `anlyz.c:180`), **not** the target's — target identity is implicit in
 the block ordering, one block per isotope, heaviest first.
 
----
+## Milestones
 
-# Notices and citations
+| | Milestone | Status |
+|---|---|---|
+| M0 | Reference oracle (pty driver + cffi library) | done |
+| M1 | Elements, isotopes, compound densities | done |
+| M2 | Stopping powers: ZBL85, Konac, Mylar, priority chain | done |
+| M3 | STOP_SQRT polynomial refit, Bragg summation, session cache | done |
+| M4 | Kinematics, geometry, cross-sections | done |
+| M5 | Slab march → bricks | done |
+| M6 | Brick → channel fill | done |
+| M7 | Straggling (closed-form erf) | done |
+| M8 | Detector convolution | done |
+| M9 | Depth profiles (13 EQUATION forms) | done |
+| M10 | Absorber, pile-up, fuzz, multiple scattering | done |
+| M11 | File I/O (`.RBS` binary, ASCII) | done |
+| M12 | Fitting (PERT) | done |
+| M13 | CLI, plotting, `.lcm` subset | done |
+| M14 | Interactive shell: buffers, SIM and PERT levels, macros | done |
 
-pyRUMP is an independent Python reimplementation of RUMP, a Rutherford
-backscattering spectrometry simulation and analysis package originally written
-by L. R. Doolittle and M. O. Thompson at Cornell University and distributed by
-Computer Graphic Service, Ltd. (CGS).
+**Known limitation**: non-Rutherford (tabulated-resonance) cross sections —
+RUMP's `.adt`/R33 nuclear cross-section tables — have a complete, tested
+reader (`pyrump.io.adt`) but aren't wired into simulation yet; pyRUMP
+currently computes pure Rutherford + L'Ecuyer-screened scattering only. A
+later milestone.
 
-pyRUMP is not affiliated with, endorsed by, or derived from the RUMP 2.0 source
-distribution. The RUMP 2.0 C source is NOT included in and NOT redistributed
-with pyRUMP; it is used only as a local validation reference during development
-(see `tests/oracle/`). CGS ceased operating as a business in June 2012, but that
-does not affect copyright in the original source, which remains with its
-authors.
+## Contributing
 
-## Algorithms
+```bash
+pip install -e ".[dev,plot]"
+pytest              # unit tests, no external dependencies
+ruff check .
+```
 
-The simulation method derives from work placed in the public domain by its
-author, and from the published literature:
+Oracle-comparison tests (`pytest -m oracle`, and the wider set of tests that
+compare against the legacy C for extra confidence) need the RUMP 2.0 C source,
+which isn't redistributed here — see [Design and validation](#design-and-validation).
+They skip cleanly when it's absent, so it's not needed for everyday development.
 
-L. R. Doolittle, "Algorithms for the rapid simulation of Rutherford
-backscattering spectra", Nucl. Instr. Meth. B9 (1985) 344-351.
+## Licensing and provenance
 
-L. R. Doolittle, "A new approach to Rutherford backscattering analysis",
-Nucl. Instr. Meth. B15 (1986) 227-231.
+pyRUMP is MIT licensed, and an **independent reimplementation**: it is not
+affiliated with, endorsed by, or derived from the RUMP 2.0 source distribution.
 
-Note that RUMP's shipped C diverges from the published algorithm in places;
-pyRUMP follows the C, and documents the differences in
-[How the simulation works](#how-the-simulation-works).
+The RUMP 2.0 C source is *not* included and *not* redistributed — its licence
+permits modification but forbids commercial exploitation, incompatible with an
+open-source distribution — and is used here only as a local validation oracle
+(see [Design and validation](#design-and-validation)).
 
-## Physics data
+RUMP and Genplot were trademarks of Computer Graphic Service, Ltd. (CGS). CGS
+ceased operating as a business in June 2012 and `genplot.com` no longer
+resolves; the authors stated at the time that GENPLOT and RUMP remain free to
+download and use, which removes the trademark concern but **not** copyright in
+the original source, which remains with its authors — hence the C tree is
+still not redistributed here.
 
-pyRUMP bundles four physics data tables (`src/pyrump/data/`): stopping powers,
-stopping-power fits, elements and isotopes, and compound densities. These
-originate with the legacy RUMP 2.0 C distribution and have been checked
-against current primary sources; see `src/pyrump/data/SOURCES.md` for full
-provenance, verification notes, and the one correction made (a data-entry
-error in the GaP density).
+Four data tables are bundled with pyRUMP (`src/pyrump/data/`), independent of
+CGS and checked against current CIAAW/NIST values and literature:
 
-Stopping powers (`pscoef.dat`) — the ZBL/TRIM `SCOEF` table:
-J. F. Ziegler, J. P. Biersack, U. Littmark, "The Stopping and Range of
-Ions in Solids", Pergamon Press (1985).
+- `pscoef.dat` — the ZBL/TRIM `SCOEF` stopping-coefficient table
+- `newstop.kal` — Konac/Kalbitzer stopping-power fits
+- `atom4.dat` — elements and isotopes
+- `density.tab` — compound densities
 
-Stopping-power fits (`newstop.kal`):
-G. Konac, S. Kalbitzer, Ch. Klatt, D. Niemann, R. Stoll,
-Nucl. Instr. Meth. B136-138 (1998) 159-165.
+See `src/pyrump/data/SOURCES.md` for full provenance, verification notes, and
+the one correction made (a data-entry error in the GaP density); citations are
+in [References](#references).
 
-Elements and isotopes (`atom4.dat`) — checked against current CIAAW atomic
-weights and isotopic-abundance data; see `SOURCES.md` for the two elements
-(Mg, Zr) with small CIAAW revisions since this table's origin.
+Non-Rutherford cross-section tables (`*.adt`) are IBANDL evaluations and are
+**not** bundled — obtain them separately from IBANDL if you need that data.
 
-Compound densities (`density.tab`) — checked against literature values.
+## References
 
-Non-Rutherford cross-sections (`*.adt`, R33) — third-party evaluations
-distributed via IBANDL (IAEA); NOT bundled, re-download rather than
-vendor if needed. A. F. Gurbich, Nucl. Instr. Meth. B136-138 (1998) 60.
-
-Screening and cross-section formulae follow:
-J. L'Ecuyer et al., Nucl. Instr. Meth. 160 (1979) 337.
-J. F. Ziegler, Nucl. Instr. Meth. B136-138 (1998) 141.
-V. Quillet, F. Abel, M. Schott, Nucl. Instr. Meth. B83 (1993) 47.
-
-The Poisson maximum-likelihood objective used for fitting follows:
-S. Baker, R. D. Cousins, Nucl. Instr. Meth. 221 (1984) 437.
-
-## Trademarks
-
-RUMP and Genplot were trademarks of Computer Graphic Service, Ltd.
+- L. R. Doolittle, *Algorithms for the rapid simulation of Rutherford
+  backscattering spectra*, Nucl. Instr. Meth. **B9** (1985) 344–351.
+- L. R. Doolittle, *A new approach to Rutherford backscattering analysis*,
+  Nucl. Instr. Meth. **B15** (1986) 227–231.
+- J. F. Ziegler, J. P. Biersack, U. Littmark, *The Stopping and Range of Ions in
+  Solids*, Pergamon (1985) — source of `pscoef.dat`, the ZBL/TRIM SCOEF table.
+- G. Konac, S. Kalbitzer, Ch. Klatt, D. Niemann, R. Stoll, Nucl. Instr. Meth.
+  **B136–138** (1998) 159–165 — source of `newstop.kal`.
+- W.-K. Chu, J. W. Mayer, M.-A. Nicolet, *Backscattering Spectrometry*,
+  Academic Press (1978) — the [ε] stopping cross-section factor and kinematics.
+- S. Baker, R. D. Cousins, Nucl. Instr. Meth. **221** (1984) 437 — the Poisson
+  fitting objective.
+- J. L'Ecuyer et al., Nucl. Instr. Meth. **160** (1979) 337 — screening
+  correction.
+- J. F. Ziegler, Nucl. Instr. Meth. **B136–138** (1998) 141 — screening and
+  cross-section formulae.
+- V. Quillet, F. Abel, M. Schott, Nucl. Instr. Meth. **B83** (1993) 47 —
+  screening and cross-section formulae.
+- A. F. Gurbich, Nucl. Instr. Meth. **B136–138** (1998) 60 — non-Rutherford
+  cross-section evaluations, as distributed via IBANDL.
 </content>

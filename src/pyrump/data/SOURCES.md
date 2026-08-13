@@ -3,7 +3,7 @@
 These four tables are bundled so `pip install pyrump` works with no configuration. They
 originate with the legacy RUMP 2.0 C distribution's `rump/data/` tree, cross-checked against
 current primary/authoritative sources before shipping. See `README.md` at the repo root
-("Notices and citations") for the non-redistributability of the RUMP C source itself,
+("Licensing and provenance") for the non-redistributability of the RUMP C source itself,
 which is unrelated to these tables.
 
 ## `pscoef.dat` — Ziegler/TRIM stopping coefficients
