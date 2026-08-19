@@ -31,15 +31,15 @@ _COLORS = ("0.20", "crimson", "steelblue", "darkgreen", "darkorange", "purple")
 def require_matplotlib():
     """Import pyplot, or explain why the shell cannot plot.
 
-    matplotlib is an optional dependency -- the library and the batch CLI work
-    without it -- but the interactive shell is not much use without a plot.
+    matplotlib ships as a core dependency, but this stays defensive for
+    installs where it was stripped out or failed to build.
     """
     try:
         import matplotlib.pyplot as plt
     except ImportError:  # pragma: no cover - depends on the install
         raise CommandError(
             "plotting needs matplotlib, which is not installed.\n"
-            "Install it with:  pip install 'pyrump[plot]'"
+            "Install it with:  pip install matplotlib"
         ) from None
     return plt
 
