@@ -12,7 +12,7 @@ importable library, with both a batch CLI and RUMP's own interactive shell.
 
 ## Changelog
 
-### 1.0.1 (unreleased)
+### 1.0.1 (2026-08-25)
 
 - `pyrump --version` / `-v` prints the installed version.
 - The interactive shell prints its version in the startup banner.
@@ -25,6 +25,9 @@ importable library, with both a batch CLI and RUMP's own interactive shell.
   SIM and PERT, without leaving that level first. SIM already documented this
   as a synonym in the original RUMP; PERT is a new pyRUMP addition, handy for
   checking fit quality right after `GO`.
+- New `FAITHFUL` shell command and `--faithful on|off` CLI flag: one setting
+  now backs every "reproduce the C bug vs. fix it" decision, persisted
+  through `~/.pyrumprc`.
 
 ### 1.0.0
 
