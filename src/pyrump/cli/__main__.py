@@ -15,6 +15,7 @@ from pathlib import Path
 
 import numpy as np
 
+from .. import __version__
 from ._common import data_dir as _data_dir
 from ._common import load_tables as _load
 from ._common import read_spectrum as _read_spectrum
@@ -247,6 +248,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="pyrump",
         description="Rutherford backscattering simulation and analysis.",
+    )
+    parser.add_argument(
+        "-v", "--version", action="version", version=f"pyrump {__version__}"
     )
     parser.add_argument("--data", help="directory holding atom4.dat and friends")
     sub = parser.add_subparsers(dest="command")

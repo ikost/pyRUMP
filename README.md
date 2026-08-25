@@ -8,6 +8,21 @@ The original is ~22k lines of unmaintained C from the late 1980s, with a 1996-er
 HTML manual and no active support. pyRUMP reproduces its physics as a tested,
 importable library, with both a batch CLI and RUMP's own interactive shell.
 
+## Changelog
+
+### 1.0.1 (unreleased)
+
+- `pyrump --version` / `-v` prints the installed version.
+- The interactive shell prints its version in the startup banner.
+- `QUIT`/`BYE` now ask for confirmation before leaving the interactive shell
+  (skipped for piped input and macros, so scripting is unaffected).
+- In SIM and PERT mode, `QUIT`/`q` now just returns to the RUMP main menu
+  (like `RETURN`) instead of falling through to the exit prompt; the exit
+  confirmation only triggers once you're already back at the main menu.
+
+### 1.0.0
+
+- Initial release.
 
 ## Install
 
@@ -21,6 +36,7 @@ fitting, or the interactive shell.
 
 ## Contents
 
+- [Changelog](#changelog)
 - [Quick start](#quick-start)
 - [Interactive shell](#interactive-shell)
 - [CLI reference](#cli-reference)

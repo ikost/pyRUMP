@@ -8,6 +8,7 @@ session.
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -133,6 +134,12 @@ def cmd_help(session, args: ArgReader) -> None:
 
 
 def cmd_quit(session, args: ArgReader) -> None:
+    # A macro (XEQ) has no one at the keyboard to answer, so only the
+    # interactive prompt asks for confirmation.
+    if session.xeq_depth == 0 and sys.stdin.isatty():
+        answer = input("Really quit pyRUMP? [y/N] ").strip().lower()
+        if answer not in ("y", "yes"):
+            return
     raise Quit()
 
 

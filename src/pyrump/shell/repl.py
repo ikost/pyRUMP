@@ -236,7 +236,9 @@ def run_shell(
 
     enable_ansi()
 
-    print(f"pyRUMP interactive shell -- tables from {session.data}")
+    from .. import __version__
+
+    print(f"pyRUMP {__version__} -- interactive shell -- tables from {session.data}")
     print("Type ? for commands, QUIT to leave.")
 
     stack = ["rump"]

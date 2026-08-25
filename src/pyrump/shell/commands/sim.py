@@ -275,6 +275,7 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("HELP", 2, cmd_help, "list the SIM commands"),
     ("RETURN", 3, cmd_return, "return to the RUMP level"),
     ("ABORT", 5, cmd_abort, "return to the RUMP level"),
+    ("QUIT", 1, cmd_return, "return to the RUMP level (not exit pyRUMP)"),
     # Layer navigation
     ("LAYER", 2, cmd_layer, "move to a layer by number"),
     ("NEXT", 2, cmd_next, "move to the next layer"),

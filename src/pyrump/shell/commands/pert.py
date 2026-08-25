@@ -431,6 +431,7 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("?", 1, cmd_help, "list the PERT commands"),
     ("HELP", 1, cmd_help, "list the PERT commands"),
     ("RETURN", 1, cmd_return, "return to the RUMP level"),
+    ("QUIT", 1, cmd_return, "return to the RUMP level (not exit pyRUMP)"),
     ("GO", 2, cmd_go, "run the search"),
     ("PARMS", 2, cmd_parms, "display the current settings"),
     ("CLEAR", 2, cmd_clear, "forget every selected parameter and window"),
