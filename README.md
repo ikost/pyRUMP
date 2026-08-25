@@ -2,7 +2,9 @@
 
 A clean Python reimplementation of **RUMP**, the Rutherford backscattering
 spectrometry (RBS) simulation and analysis package originally written by
-L. R. Doolittle and M. O. Thompson at Cornell.
+L. R. Doolittle and M. O. Thompson at Cornell. 
+
+This implementations is written using Claude Code.
 
 The original is ~22k lines of unmaintained C from the late 1980s, with a 1996-era
 HTML manual and no active support. pyRUMP reproduces its physics as a tested,
