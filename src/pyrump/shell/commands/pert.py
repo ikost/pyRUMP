@@ -452,6 +452,8 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("FUZZ", 2, cmd_fuzz, "vary the fuzz parameter (not implemented)"),
     ("CORRECTION", 3, _simple("correction"), "vary the normalization correction"),
     ("THETA", 4, _simple("theta"), "vary the sample tilt"),
+    ("OFFSET", 3, _simple("kev(0)"),
+     "vary the calibration energy offset (e.g. a sample-charging shift)"),
     ("COMPARE", 4, cmd_compare, "plot the active buffer against the simulation"),
 ]
 

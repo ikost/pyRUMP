@@ -12,6 +12,14 @@ importable library, with both a batch CLI and RUMP's own interactive shell.
 
 ## Changelog
 
+### 1.0.2 (unreleased)
+
+- PERT gains `OFFSET`, a pyRUMP-only extension (not in the original RUMP) to
+  vary the calibration's energy offset (`kev0`) during a fit -- useful when a
+  sample's conductivity shifts the apparent energy scale via charging. Unlike
+  `CONVERSION`, this varies the offset alone, since the slope (`kev/ch`) is a
+  fixed property of the detector electronics, not something charging affects.
+
 ### 1.0.1 (2026-08-25)
 
 - `pyrump --version` / `-v` prints the installed version.

@@ -177,6 +177,60 @@ def test_go_recovers_the_thickness_and_writes_it_back(session, capsys):
 
 
 @needs_data
+def test_offset_recovers_a_calibration_shift_and_writes_it_back(tmp_path, capsys):
+    """A sample-charging-style energy shift: OFFSET alone should recover kev0.
+
+    Calibration feeds the channel binning inside ``simulate()`` (not just axis
+    labels), so a genuine kev0 mismatch between the buffer's guess and the
+    data that produced it is exactly what a charging shift looks like.
+    """
+    from pyrump.model.spectrum import Spectrum
+
+    true_kev0 = 8.0
+    true_calibration = Calibration(kevch=5.0, kev0=true_kev0, npt=512)
+    geometry = Geometry(theta=0.0, phi=10.0, kind=GeometryKind.CORNELL)
+    measurement = Measurement(omega_msr=1.0, charge_uC=10.0, fwhm_keV=15.0)
+    beam = Beam(e0_MeV=2.0, z=2, mass=4.0026)
+    truth = UniformSample(
+        thicknesses=[TRUTH, 5000.0],
+        element_z=[79, 14],
+        compositions=[[1.0, 0.0], [0.0, 1.0]],
+    )
+
+    session = Session.create(str(DATA))
+    clean = simulate(
+        truth, beam, geometry, session.registry, session.table,
+        true_calibration, measurement,
+    )
+    counts = np.random.default_rng(11).poisson(
+        np.clip(clean.counts, 0, None)
+    ).astype(float)
+
+    # The buffer starts out unshifted -- the wrong calibration for this data.
+    guess_calibration = Calibration(kevch=5.0, kev0=0.0, npt=512)
+    session.buffers.load(
+        Buffer(
+            spectrum=Spectrum(counts=counts, calibration=guess_calibration),
+            beam=beam, geometry=geometry, measurement=measurement, name="au",
+        ),
+        1,
+    )
+    session.buffers.active = 1
+    sample = tmp_path / "au.lcm"
+    sample.write_text(SAMPLE.format(guess=TRUTH))
+    run(session, f"sim get {sample}")
+
+    run(session, "pert", "window 355 375", "norm 140 200", "offset", "go")
+
+    fitted = session.buffers[1].calibration.kev0
+    assert fitted == pytest.approx(true_kev0, abs=1.0)
+    assert fitted != 0.0
+
+    output = capsys.readouterr().out
+    assert "kev(0)" in output
+
+
+@needs_data
 def test_the_fit_leaves_the_simulation_stale_so_compare_redraws(session):
     run(session, "pert", "window 355 375", "norm 140 200", "thick 1", "go")
     assert session.dirty is True
