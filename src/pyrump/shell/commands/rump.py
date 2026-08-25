@@ -1333,6 +1333,8 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("PSI", 3, _numeric("psi", "geometry", "psi", " deg"), "exit angle"),
     ("GEOMETRY", 4, cmd_geometry, "cornell, ibm or general"),
     ("CONVERSION", 4, cmd_conversion, "keV per channel and offset"),
+    ("OFFSET", 3, _numeric("kev0", "calibration", "offset", " keV"),
+     "keV(0) alone, independent of CONVERSION's keV/ch"),
     ("CORRECTION", 3, _numeric("correction", "measurement", "corr"),
      "normalization fudge factor"),
     ("CHARGE", 2, _numeric("charge_uC", "measurement", "charge", " uC"), "beam dose"),

@@ -14,6 +14,10 @@ importable library, with both a batch CLI and RUMP's own interactive shell.
 
 ### 1.0.2 (unreleased)
 
+- New RUMP-level `OFFSET` command: shows or sets the calibration's `kev0`
+  independently of `CONVERSION`, which requires the keV/ch slope every time
+  even if you only want to change the offset. Chains like `CHOFF`/`CONVERSION`
+  do (e.g. `OFFSET 5 FWHM 20`).
 - PERT gains `OFFSET`, a pyRUMP-only extension (not in the original RUMP) to
   vary the calibration's energy offset (`kev0`) during a fit -- useful when a
   sample's conductivity shifts the apparent energy scale via charging. Unlike

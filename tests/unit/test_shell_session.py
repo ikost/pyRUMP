@@ -486,6 +486,29 @@ def test_calibrate_rejects_the_same_element_twice(session):
 
 
 @needs_data
+def test_offset_changes_only_kev0(session, capsys):
+    run(session, "offset 12")
+    calibration = session.buffers[1].calibration
+    assert calibration.kev0 == 12.0
+    assert calibration.kevch == 5.0  # untouched -- CONVERSION's job, not OFFSET's
+    assert "offset = 12" in capsys.readouterr().out
+
+
+@needs_data
+def test_offset_with_no_argument_reports_the_current_value(session, capsys):
+    run(session, "offset")
+    assert "offset = 0" in capsys.readouterr().out
+
+
+@needs_data
+def test_offset_chains_into_a_further_command(session):
+    run(session, "offset 5 fwhm 20")
+    buffer = session.buffers[1]
+    assert buffer.calibration.kev0 == 5.0
+    assert buffer.measurement.fwhm_keV == 20.0
+
+
+@needs_data
 def test_profile_prints_the_verbatim_stub_message(session, capsys):
     before = session.buffers.active_buffer.spectrum.counts.copy()
     run(session, "profile")
