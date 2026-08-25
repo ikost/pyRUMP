@@ -37,6 +37,11 @@ dev = [
     "cffi>=1.16",
 ]
 
+[project.urls]
+Homepage = "https://github.com/ikost/pyRUMP"
+Repository = "https://github.com/ikost/pyRUMP"
+Issues = "https://github.com/ikost/pyRUMP/issues"
+
 [project.scripts]
 pyrump = "pyrump.cli.__main__:main"
 
