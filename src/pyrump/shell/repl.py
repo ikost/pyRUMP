@@ -220,6 +220,7 @@ def run_shell(
     norc: bool = False,
     batch: bool = False,
     plain_prompt: bool = False,
+    faithful: str | None = None,
 ) -> int:
     """Start the interactive shell. Returns a process exit code."""
     from .commands.rump import Quit
@@ -248,6 +249,11 @@ def run_shell(
             execute_file(session, RC_FILE, stack)
         except CommandError as error:
             print(f"{RC_FILE}: {error}", file=sys.stderr)
+
+    # An explicit --faithful overrides whatever ~/.pyrumprc set, for this
+    # invocation only; a FAITHFUL line inside the macro itself still wins.
+    if faithful is not None:
+        session.settings.faithful = faithful == "on"
 
     if macro is not None:
         try:

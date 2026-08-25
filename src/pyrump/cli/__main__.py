@@ -227,11 +227,18 @@ def _shell_arguments(parser: argparse.ArgumentParser) -> None:
         "--batch", action="store_true",
         help="run the macro and exit instead of dropping to the prompt",
     )
+    parser.add_argument(
+        "--faithful", choices=("on", "off"), default=None,
+        help="override the FAITHFUL setting for this run, after ~/.pyrumprc but"
+        " before any macro (which may still set it explicitly)",
+    )
 
 
 def _shell_defaults(args) -> None:
     """Fill in shell options for the bare ``pyrump`` invocation."""
-    for name, value in (("macro", None), ("norc", False), ("batch", False)):
+    for name, value in (
+        ("macro", None), ("norc", False), ("batch", False), ("faithful", None),
+    ):
         if not hasattr(args, name):
             setattr(args, name, value)
 
@@ -240,7 +247,8 @@ def command_shell(args) -> int:
     from pyrump.shell.repl import run_shell
 
     return run_shell(
-        data=args.data, macro=args.macro, norc=args.norc, batch=args.batch
+        data=args.data, macro=args.macro, norc=args.norc, batch=args.batch,
+        faithful=args.faithful,
     )
 
 

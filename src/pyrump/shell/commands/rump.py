@@ -708,6 +708,13 @@ def cmd_labels(session, args: ArgReader) -> None:
     print(f"labels {'on' if session.plot.labels else 'off'}")
 
 
+def cmd_faithful(session, args: ArgReader) -> None:
+    token = args.optional()
+    args.done()
+    session.settings.faithful = token is None or token.lower() not in ("off", "no", "none")
+    print(f"faithful mode is {'on' if session.settings.faithful else 'off'}")
+
+
 def cmd_parms(session, args: ArgReader) -> None:
     args.done()
     print(session.plot.describe())
@@ -1276,6 +1283,8 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("QUIT", 1, cmd_quit, "leave pyRUMP"),
     ("BYE", -2, cmd_quit, "leave pyRUMP"),
     ("DATA", 4, cmd_data, "show or change the atomic data directory"),
+    ("FAITHFUL", 4, cmd_faithful,
+     "toggle faithful (bug-for-bug) vs corrected physics (FAITHFUL OFF to correct)"),
     # Sub-processors
     ("SIM", 3, cmd_sim, "enter the sample-description editor"),
     ("PERT", 3, cmd_pert, "enter the fitting sub-processor"),

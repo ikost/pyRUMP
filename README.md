@@ -444,6 +444,22 @@ unless you pass `--norc`.
 > original kept them clear of `LOG` — the logarithmic yield axis. Typing `log`
 > gets you the axis, `logf` the session log.
 
+`FAITHFUL OFF`/`FAITHFUL ON` toggles the session between the shipped C's
+bug-for-bug behaviour (the default) and the corrected physics available at
+that point in the port — see
+[Design and validation](#design-and-validation). It's a session setting, not
+persisted on its own, so put it in `~/.pyrumprc` for a standing per-user
+default:
+
+```
+$ cat ~/.pyrumprc
+faithful off
+```
+
+`--faithful on`/`--faithful off` overrides that for one invocation, applied
+after `~/.pyrumprc` runs but before any macro passed on the command line —
+the macro can still set `FAITHFUL` itself if it needs to.
+
 ## CLI reference
 
 ```
@@ -861,7 +877,12 @@ recreating it inside a fit loop is slow for no reason.
 **Faithful first, corrected by choice.** The default reproduces the shipped C
 bug-for-bug, because that is what every published RUMP result was produced
 with. Known defects — and there are several — are reproduced exactly, with
-the mathematically correct behaviour available behind explicit flags. See
+the mathematically correct behaviour available behind explicit flags. The
+shell exposes this as a session setting, `session.settings.faithful`,
+toggled with the `FAITHFUL` command and persisted through `~/.pyrumprc` (see
+[Macros](#macros)) rather than a separate branch or fork — corrected and
+faithful behaviour live in the same codebase so they stay comparable against
+the C oracle side by side. See
 [RUMP quirks and defects found while porting](#rump-quirks-and-defects-found-while-porting).
 
 **Validated against the original**, at two levels. The legacy C is compiled
@@ -1216,6 +1237,11 @@ simply undocumented. Each entry says what pyRUMP does about it.
 Default policy (per the project plan): **reproduce faithfully, expose the fix
 behind a flag.** A silent "correction" would make pyRUMP disagree with every
 published RUMP result.
+
+The mechanism for that flag is `session.settings.faithful` (toggled by the
+`FAITHFUL` command, [Macros](#macros)), or a dedicated `Settings` field for a
+correction that needs to be controlled independently. Not every entry below
+is wired to it yet — each entry says whether it is.
 
 ### 1. The papers describe an algorithm the code no longer uses
 

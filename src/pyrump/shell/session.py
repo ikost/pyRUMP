@@ -352,6 +352,18 @@ class PlotState:
 
 
 @dataclass(slots=True)
+class Settings:
+    """Toggles for RUMP's own vs. corrected behaviour.
+
+    One place for every "reproduce the bug vs. fix it" decision to live
+    (README.md, "Faithful first, corrected by choice"), alongside a command
+    that flips it and a ``~/.pyrumprc`` line that persists it.
+    """
+
+    faithful: bool = True
+
+
+@dataclass(slots=True)
 class Session:
     """Everything the interactive shell owns.
 
@@ -366,6 +378,7 @@ class Session:
 
     buffers: BufferSet = field(default_factory=BufferSet)
     plot: PlotState = field(default_factory=PlotState)
+    settings: Settings = field(default_factory=Settings)
 
     #: The SIM sample description.
     script: Script = field(default_factory=Script)

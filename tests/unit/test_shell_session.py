@@ -158,6 +158,27 @@ def test_normalize_and_raw_toggle(session):
 
 
 @needs_data
+def test_faithful_toggle(session):
+    assert session.settings.faithful is True
+    run(session, "faithful off")
+    assert session.settings.faithful is False
+    run(session, "faithful on")
+    assert session.settings.faithful is True
+
+
+@needs_data
+def test_faithful_persists_through_a_pyrumprc_style_macro(session, tmp_path):
+    rc = tmp_path / ".pyrumprc"
+    rc.write_text("faithful off\n")
+    execute_file(session, rc)
+    assert session.settings.faithful is False
+
+    fresh = Session.create(str(DATA))
+    execute_file(fresh, rc)
+    assert fresh.settings.faithful is False
+
+
+@needs_data
 def test_abbreviations_work_through_the_repl(session):
     run(session, "reg 100 400", "sq", "norm")
     assert (session.plot.low, session.plot.high) == (100, 400)
