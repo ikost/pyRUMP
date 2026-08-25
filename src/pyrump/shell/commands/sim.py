@@ -17,7 +17,7 @@ from pathlib import Path
 
 from ...script.lcm import EQUATION_NAMES, SampleEditor, read_lcm, write_lcm
 from ..dispatch import ArgReader, CommandError, CommandTable
-from .rump import Return
+from .rump import Return, cmd_compare
 
 
 def editor_for(session) -> SampleEditor:
@@ -303,6 +303,7 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("SAVE", 2, cmd_save, "write the sample description to a file"),
     ("DENSITY", 2, cmd_density, "list the known thickness units"),
     ("SPLOT", 3, cmd_splot, "overlay the simulation on the plot"),
+    ("COMPARE", 4, cmd_compare, "plot the active buffer against the simulation"),
 ]
 
 for _name, _minlen, _handler, _help in _ENTRIES:

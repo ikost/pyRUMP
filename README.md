@@ -19,6 +19,10 @@ importable library, with both a batch CLI and RUMP's own interactive shell.
 - In SIM and PERT mode, `QUIT`/`q` now just returns to the RUMP main menu
   (like `RETURN`) instead of falling through to the exit prompt; the exit
   confirmation only triggers once you're already back at the main menu.
+- `COMPARE` (data vs. simulation with residuals) is now usable directly from
+  SIM and PERT, without leaving that level first. SIM already documented this
+  as a synonym in the original RUMP; PERT is a new pyRUMP addition, handy for
+  checking fit quality right after `GO`.
 
 ### 1.0.0
 

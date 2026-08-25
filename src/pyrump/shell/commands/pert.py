@@ -31,7 +31,7 @@ from ...fit.parameters import (
 )
 from ...fit.windows import MAX_ERROR_WINDOWS, Window, WindowSet
 from ..dispatch import ArgReader, CommandError, CommandTable
-from .rump import Return
+from .rump import Return, cmd_compare
 
 
 @dataclass(slots=True)
@@ -452,6 +452,7 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("FUZZ", 2, cmd_fuzz, "vary the fuzz parameter (not implemented)"),
     ("CORRECTION", 3, _simple("correction"), "vary the normalization correction"),
     ("THETA", 4, _simple("theta"), "vary the sample tilt"),
+    ("COMPARE", 4, cmd_compare, "plot the active buffer against the simulation"),
 ]
 
 for _name, _minlen, _handler, _help in _ENTRIES:
