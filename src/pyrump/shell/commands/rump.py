@@ -128,9 +128,10 @@ def cmd_help(session, args: ArgReader) -> None:
     args.done()
     from .system import TABLE as SYSTEM_TABLE
 
-    print(TABLE.help_text())
+    faithful = session.settings.faithful
+    print(TABLE.help_text(faithful=faithful))
     print()
-    print(SYSTEM_TABLE.help_text())
+    print(SYSTEM_TABLE.help_text(faithful=faithful))
 
 
 def cmd_quit(session, args: ArgReader) -> None:
@@ -309,7 +310,7 @@ def _chain(session, args: ArgReader) -> None:
     if not args:
         return
     name = args.token()
-    command = TABLE.match(name)
+    command = TABLE.match(name, faithful=session.settings.faithful)
     if command is None:
         raise CommandError(f"unrecognized command: {name}")
     command.handler(session, ArgReader(args.remaining, command=command.name.lower()))
@@ -578,7 +579,11 @@ def cmd_replot(session, args: ArgReader) -> None:
 
 
 def cmd_compare(session, args: ArgReader) -> None:
-    """Plot the active buffer against the simulation, with residuals."""
+    """Plot the active buffer against the simulation, with residuals.
+
+    Original RUMP defines COMPARE as literally ``PLOT NOW ... OV THEORY``
+    (cmds.htm), so it inherits REGION the same way PLOT/OVERLAY do.
+    """
     args.done()
     from ...plot.spectra import plot_comparison
 
@@ -586,12 +591,19 @@ def cmd_compare(session, args: ArgReader) -> None:
     data = session.buffers.require_active()
     theory = session.simulation()
 
+    n_channels = min(data.n_channels, theory.n_channels)
+    try:
+        region = session.plot.region(n_channels)
+    except ValueError as error:
+        raise CommandError(str(error)) from None
+
     if session.figure is not None:
         import matplotlib.pyplot as plt
 
         plt.close(session.figure)
     figure = plot_comparison(
-        data.spectrum, theory.spectrum, energy_axis=session.plot.energy_axis
+        data.spectrum, theory.spectrum,
+        energy_axis=session.plot.energy_axis, region=region,
     )
     session.figure = figure
     session.traces = []
@@ -1333,8 +1345,6 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("PSI", 3, _numeric("psi", "geometry", "psi", " deg"), "exit angle"),
     ("GEOMETRY", 4, cmd_geometry, "cornell, ibm or general"),
     ("CONVERSION", 4, cmd_conversion, "keV per channel and offset"),
-    ("OFFSET", 3, _numeric("kev0", "calibration", "offset", " keV"),
-     "keV(0) alone, independent of CONVERSION's keV/ch"),
     ("CORRECTION", 3, _numeric("correction", "measurement", "corr"),
      "normalization fudge factor"),
     ("CHARGE", 2, _numeric("charge_uC", "measurement", "charge", " uC"), "beam dose"),
@@ -1373,3 +1383,11 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
 
 for _name, _minlen, _handler, _help in _ENTRIES:
     TABLE.add(_name, _minlen, _handler, _help)
+
+# pyRUMP-only additions, with no original-RUMP counterpart -- hidden while
+# FAITHFUL, so a faithful session's command surface matches stock RUMP's.
+TABLE.add(
+    "OFFSET", 3, _numeric("kev0", "calibration", "offset", " keV"),
+    "keV(0) alone, independent of CONVERSION's keV/ch (needs FAITHFUL OFF)",
+    extension=True,
+)

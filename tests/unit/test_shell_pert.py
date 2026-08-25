@@ -220,7 +220,10 @@ def test_offset_recovers_a_calibration_shift_and_writes_it_back(tmp_path, capsys
     sample.write_text(SAMPLE.format(guess=TRUTH))
     run(session, f"sim get {sample}")
 
-    run(session, "pert", "window 355 375", "norm 140 200", "offset", "go")
+    run(
+        session, "faithful off",
+        "pert", "window 355 375", "norm 140 200", "offset", "go",
+    )
 
     fitted = session.buffers[1].calibration.kev0
     assert fitted == pytest.approx(true_kev0, abs=1.0)
@@ -228,6 +231,15 @@ def test_offset_recovers_a_calibration_shift_and_writes_it_back(tmp_path, capsys
 
     output = capsys.readouterr().out
     assert "kev(0)" in output
+
+
+@needs_data
+def test_pert_offset_is_unrecognized_while_faithful(session):
+    """A pyRUMP-only extension: invisible by default, matching stock RUMP,
+    whose own pert.htm has no OFFSET command."""
+    run(session, "pert")
+    with pytest.raises(CommandError, match="unrecognized"):
+        run(session, "offset")
 
 
 @needs_data

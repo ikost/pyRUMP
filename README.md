@@ -23,6 +23,14 @@ importable library, with both a batch CLI and RUMP's own interactive shell.
   sample's conductivity shifts the apparent energy scale via charging. Unlike
   `CONVERSION`, this varies the offset alone, since the slope (`kev/ch`) is a
   fixed property of the detector electronics, not something charging affects.
+- Both `OFFSET` commands are pyRUMP-only additions with no original-RUMP
+  counterpart, so they're invisible (unmatched, unlisted, uncompleted) while
+  `FAITHFUL` is on (the default) -- a faithful session's command surface now
+  matches stock RUMP's exactly, not just its physics. `FAITHFUL OFF` reveals
+  them. See [Design and validation](#design-and-validation) for `FAITHFUL`.
+- `COMPARE` now honors `REGION`, matching the original's own definition of
+  `COMPARE` as `PLOT NOW ... OV THEORY` (`cmds.htm`) -- it was previously
+  always plotting the full spectrum regardless of the current region.
 
 ### 1.0.1 (2026-08-25)
 

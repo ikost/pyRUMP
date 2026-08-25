@@ -100,8 +100,9 @@ def execute_line(session: Session, line: str, stack: list[str]) -> None:
 
     name, rest = tokens[0], tokens[1:]
 
+    faithful = session.settings.faithful
     for depth in range(len(stack) - 1, -1, -1):
-        command = tables_for(stack[depth]).match(name)
+        command = tables_for(stack[depth]).match(name, faithful=faithful)
         if command is None:
             continue
         del stack[depth + 1 :]  # auto-return out of the levels we fell through
@@ -110,7 +111,7 @@ def execute_line(session: Session, line: str, stack: list[str]) -> None:
 
     # The system tier sits below every mode. Reaching it means no RUMP-level
     # table matched, which in the C also means SIM/PERT have been left behind.
-    command = tables_for("system").match(name)
+    command = tables_for("system").match(name, faithful=faithful)
     if command is not None:
         del stack[1:]
         _invoke(session, command, rest, stack)
@@ -171,10 +172,11 @@ def _setup_readline(session, stack: list[str]) -> None:
             # and SIM GET all want.
             options = _path_completions(text)
         else:
-            options = tables_for(stack[-1]).completions(text)
+            faithful = session.settings.faithful
+            options = tables_for(stack[-1]).completions(text, faithful=faithful)
             if stack[-1] != "rump":
-                options += tables_for("rump").completions(text)
-            options += tables_for("system").completions(text)
+                options += tables_for("rump").completions(text, faithful=faithful)
+            options += tables_for("system").completions(text, faithful=faithful)
         return options[state] if state < len(options) else None
 
     readline.set_completer(complete)

@@ -92,6 +92,21 @@ def test_zero_minlen_requires_an_exact_match():
     assert built.match("g") is None
 
 
+def test_extension_is_invisible_by_default():
+    """A pyRUMP-only addition matches only once the caller opts out of
+    ``faithful`` -- the default keeps a faithful session's command surface
+    identical to stock RUMP's."""
+    built = CommandTable("t")
+    built.add("OFFSET", 3, _noop, extension=True)
+    assert built.match("offset") is None
+    assert built.match("offset", faithful=True) is None
+    assert built.match("offset", faithful=False).name == "OFFSET"
+    assert "OFFSET" not in [c.name for c in built.visible()]
+    assert "OFFSET" in [c.name for c in built.visible(faithful=False)]
+    assert built.completions("off") == []
+    assert built.completions("off", faithful=False) == ["offset"]
+
+
 def test_synonyms_are_matched_but_not_listed(table):
     assert table.match("parms").name == "PARMS"
     listed = [command.name for command in table.visible()]

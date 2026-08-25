@@ -53,6 +53,7 @@ def plot_comparison(
     energy_axis: bool = True,
     residuals: bool = True,
     window: np.ndarray | None = None,
+    region: tuple[int, int] | None = None,
     figsize: tuple[float, float] = (9, 6),
 ):
     """Measured data with a simulation over it, and optionally residuals.
@@ -61,12 +62,22 @@ def plot_comparison(
     ``data - model``, so what is plotted is what was optimised. Channels where
     the model predicts zero are omitted: they contribute nothing and plotting
     them as zero would imply agreement.
+
+    ``region`` is an inclusive ``(low, high)`` channel range -- the same
+    concept as :class:`~pyrump.shell.session.PlotState`'s REGION, which
+    ``PLOT``/``OVERLAY`` already honour. ``None`` (the default) plots
+    everything, as before.
     """
     import matplotlib.pyplot as plt
 
     n = min(data.counts.size, simulation.counts.size)
-    observed, expected = data.counts[:n], simulation.counts[:n]
-    x = data.energies[:n] if energy_axis else np.arange(n)
+    low, high = (0, n - 1) if region is None else region
+    high = min(high, n - 1)
+    if high <= low:
+        raise ValueError(f"empty plot region: {low} to {high}")
+    sl = slice(low, high + 1)
+    observed, expected = data.counts[sl], simulation.counts[sl]
+    x = data.energies[sl] if energy_axis else np.arange(low, high + 1)
 
     if residuals:
         figure, (top, bottom) = plt.subplots(
@@ -84,7 +95,7 @@ def plot_comparison(
     top.legend(frameon=False)
 
     if window is not None:
-        mask = np.asarray(window, dtype=bool)[:n]
+        mask = np.asarray(window, dtype=bool)[sl]
         for start, stop in _runs(mask):
             top.axvspan(x[start], x[stop], color="steelblue", alpha=0.10, lw=0)
 

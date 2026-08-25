@@ -298,7 +298,7 @@ def cmd_script(session, args: ArgReader) -> None:
 
 def cmd_help(session, args: ArgReader) -> None:
     args.done()
-    print(TABLE.help_text())
+    print(TABLE.help_text(faithful=session.settings.faithful))
 
 
 TABLE = CommandTable("General System Commands")

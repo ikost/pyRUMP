@@ -221,6 +221,25 @@ def test_plot_comparison_shades_windows():
     assert figure.axes[0].patches  # the axvspan
 
 
+def test_plot_comparison_region_restricts_the_plotted_channels():
+    figure = plot_comparison(_spectrum(), _spectrum(peak=110), region=(60, 100))
+    line = figure.axes[0].lines[0]
+    assert len(line.get_xdata()) == 41  # channels 60..100 inclusive
+
+
+def test_plot_comparison_region_is_clipped_to_the_data_length():
+    figure = plot_comparison(
+        _spectrum(n=200), _spectrum(n=200, peak=110), region=(190, 250)
+    )
+    line = figure.axes[0].lines[0]
+    assert len(line.get_xdata()) == 10  # clipped to the last channel, 199
+
+
+def test_plot_comparison_rejects_an_empty_region():
+    with pytest.raises(ValueError, match="empty plot region"):
+        plot_comparison(_spectrum(), _spectrum(peak=110), region=(100, 100))
+
+
 @needs_data
 def test_plot_depth_profile():
     from pyrump.sim.slabs import build_uniform_grid
