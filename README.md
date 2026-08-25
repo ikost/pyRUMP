@@ -115,6 +115,21 @@ Command names and their **minimum abbreviations** follow the original
 (`REGion`, `OVerlay`, `COMPare`), so `reg 100 400` and `region 100 400` are the
 same command. `?` lists everything, with the required characters upper-cased.
 
+### Session and mode commands
+
+| Command | Effect |
+| --- | --- |
+| `?` / `HELP` | list the commands available at the current level |
+| `SIM` | enter the sample-description editor, its own prompt |
+| `PERT` | enter the fitting sub-processor, its own prompt |
+| `RETURN` | leave `SIM`/`PERT` back to the RUMP level |
+| `DATA [dir]` | print, or reload the atomic tables from, a data directory |
+| `QUIT` / `BYE` | leave pyRUMP (asks to confirm, when run interactively) |
+
+`SIM <command>` also runs one SIM command without leaving the RUMP level, e.g.
+`sim thick 500 A` — handy inside a one-line macro or when you only need to
+tweak one thing.
+
 ### Getting around
 
 The shell has RUMP's own filesystem commands (a port of the "General System
@@ -148,28 +163,97 @@ commands act on implicitly. Buffer **0 is the simulation**; data starts at 1.
 
 | Command | Effect |
 | --- | --- |
-| `GET <file\|n>` | read a file into a buffer, or point at buffer *n* |
+| `GET <file\|n>` | read a file into a buffer, or point at buffer *n* (`READ` reads a file only) |
+| `POINTAT <n>` | point at buffer *n*, by number only |
 | `BUFFERS` | list the buffers, marking the active one |
 | `ACTIVE` | print the active buffer's full parameter set |
+| `EMPTY [n]` | reset buffer *n* (default: active, or the first free one) to blank |
 | `COPY a b` / `MOVE a b` | copy / exchange |
-| `RELEASE` / `NEWALL` | drop one / all |
-| `WRITE f.rbs` / `WRASCII f.dat` | save the active buffer |
+| `RELEASE [n]` / `NEWALL` | drop one buffer (default: active) / drop all |
+| `WRITE f.rbs` / `WRASCII f.dat` | save the active buffer, binary or text |
+| `RECALCULATE` | force buffer 0 (the simulation) to recompute |
 
 Unlike the original there is no ten-buffer limit and nothing is destroyed to
 make room. Buffer 0 has **no simulate command**: it is recomputed whenever the
 sample or the active buffer's parameters change, which is how RUMP behaved.
-`RECALCULATE` forces it.
+
+```
+Your wish? get measured.rbs     /* reads the file into a new buffer   */
+Your wish? get 0                /* point back at the simulation       */
+Your wish? copy 0 2              /* snapshot the simulation into buffer 2 */
+```
+
+### Buffer and spectrum parameters
+
+Each buffer carries its own beam, geometry, calibration and measurement
+metadata. Every one of these **prints the current value with no argument, and
+sets it (echoing the new value) with one** — and chains onto any further
+command left on the line, so `Choff 0 FWHM 15` works in one go, exactly as
+RUMP's own `WRASCII` output writes it back.
+
+| Command | Sets |
+| --- | --- |
+| `BEAM 4He++` | beam species and charge state |
+| `MEV <energy>` | beam energy, MeV |
+| `THETA <deg>` | sample tilt |
+| `PHI <deg>` | 180° minus the scattering angle |
+| `PSI <deg>` | exit angle (GENERAL geometry only) |
+| `GEOMETRY cornell\|ibm\|general` | detector geometry convention |
+| `CONVERSION <keV/ch> [keV(0)]` | energy calibration |
+| `CORRECTION <factor>` | normalization fudge factor |
+| `CHARGE <uC>` | integrated beam dose |
+| `CURRENT <nA>` | average beam current — enables pile-up with `TAU` |
+| `CHOFF <n>` | channel number of the first data point |
+| `FWHM <keV>` | detector resolution |
+| `OMEGA <msr>` | detector solid angle |
+| `TAU <us>` | MCA shaping time |
+| `IDENTIFIER <text>` | free-text spectrum description |
+| `DATE <text>` | when the spectrum was measured |
+| `FILENAME <name>` | recorded source filename |
+
+```
+Your wish? beam 4He++
+  beam Z=2 mass=4.0026 charge state 2
+Your wish? mev 2.0
+  MeV = 2
+Your wish? conversion 5.0 0
+  5 keV/channel, offset 0 keV
+```
+
+`SWALLOW [-twocolumn]`, used inside an `XEQ` macro, reads the macro file's
+following lines straight into the active buffer as channel data (or
+channel/value pairs), stopping at the first blank line — how a RUMP-written
+`.cmd` file reconstructs a spectrum inline.
 
 ### Plotting
 
 The plot is one persistent matplotlib window whose state survives between
-commands. `PLOT` erases and draws, `OVERLAY` adds to it.
+commands.
 
-`REGION lo hi`, `COUNTS lo hi`, `EXPAND`, `BLOWUP`, `LINEAR`, `SQRT`, `LOG`,
-`NORMALIZE`, `RAW`, `LABELS`, and `ENERGY` change how it is drawn and redraw
-immediately. `PARMS` prints the current settings. `COMPARE` plots the active
-buffer against the simulation with Poisson residuals; `DISPLAY` plots the
-sample's composition against depth.
+| Command | Effect |
+| --- | --- |
+| `PLOT [buffer\|file]` | erase and plot a buffer (default: active) or file |
+| `OVERLAY [buffer\|file]` | add another trace to the current plot |
+| `REPLOT` | redraw the current plot, unchanged |
+| `AXIS` | draw empty axes, with no data |
+| `COMPARE` | active buffer vs. the simulation, with Poisson residuals |
+| `DISPLAY` | sample composition vs. depth (from the SIM description) |
+| `REGION lo hi` | channel range shown |
+| `EXPAND lo hi` | narrow the current region and redraw |
+| `COUNTS lo [hi]` | yield range shown |
+| `BLOWUP <max>` | shorthand for `COUNTS 0 <max>` |
+| `LINEAR` / `SQRT` / `LOG` | yield axis scale |
+| `NORMALIZE` / `RAW` | normalized vs. raw yield units |
+| `LABELS [off]` | axis labels on or off |
+| `ENERGY [off]` | x axis in energy (keV) rather than channel |
+| `PARMS` / `PARAMETERS` | print the current plot settings |
+
+```
+Your wish? plot 1               /* erase and plot buffer 1            */
+Your wish? overlay 0            /* add the simulation on top          */
+Your wish? region 100 400
+Your wish? sqrt                 /* redraws immediately, sqrt yield    */
+```
 
 matplotlib installs by default with pyrump.
 
@@ -257,6 +341,43 @@ SIM's sample-definition commands are the *same code* that parses `.lcm` files
 (`SampleEditor` in `pyrump/script/lcm.py`), so what you type and what the file
 holds cannot drift apart. `SIM SAVE` writes RUMP's own format.
 
+#### SIM commands
+
+| Command | Effect |
+| --- | --- |
+| `?` / `HELP` | list the SIM commands |
+| `RETURN` / `ABORT` / `QUIT` | return to the RUMP level |
+| `LAYER <n>` | move to layer *n* |
+| `NEXT` | move to the next layer, opening one if needed |
+| `OPEN` | insert a blank layer above the current one |
+| `RESET` | reset the sample to empty space |
+| `SHOW` | display the sample description |
+| `STATUS` | summarize layers, maxpth, straggle, multiple |
+| `THICKNESS <v> <unit>` | this layer's thickness |
+| `COMPOSITION El n [El n …] /` | this layer's stoichiometry |
+| `SPECIES El n [El n …] /` | the impurity species an `EQUATION` blends toward |
+| `EQUATION <name> <params…>` | depth-profile equation for this layer |
+| `EQLIST` | list the known equation names |
+| `FUZZ <amount> <steps>` | roughen the interface above this layer |
+| `SUBLAYER <n>` | force a sublayer count |
+| `STHICKNESS <v> <unit>` | or set the thickness of each sublayer |
+| `MAXPTH <v>` | default sublayer thickness, 10¹⁵ at/cm² |
+| `STRAGGLE <v>` | Bohr straggling multiplier |
+| `ABSORBER <n>` | first *n* layers are a dead layer/window, not sample |
+| `MULTIPLE <v>` | multiple-scattering amount |
+| `GET <file>` | read a sample description from a `.lcm` file |
+| `SAVE <file>` | write the sample description to a `.lcm` file |
+| `DENSITY [pattern]` | list known thickness units, or matching `density.tab` compounds |
+| `SPLOT` | overlay the simulation on the current plot |
+| `COMPARE` | active buffer vs. the simulation, with residuals |
+
+```
+SIM Command: layer 1
+SIM Command: thick 500 A
+SIM Command: composition Si 1 /
+SIM Command: density ito       /* look up how "ITO" resolves as a Thick unit */
+```
+
 PERT selects what may vary and over which channels, then `GO`:
 
 ```
@@ -278,6 +399,34 @@ Fitted values are written back into the sample description, so `SIM SHOW` and
 `SIM SAVE` reflect them. Two differences from the original: the data may be in
 any buffer, not just buffer 1, and `MULTI` is the default because the solver is
 a simultaneous least-squares fit (`SINGLE` loops one parameter at a time).
+
+#### PERT commands
+
+| Command | Effect |
+| --- | --- |
+| `?` / `HELP` | list the PERT commands |
+| `RETURN` / `QUIT` | return to the RUMP level |
+| `GO` | run the fit |
+| `PARMS` | display the current selection and windows |
+| `CLEAR` | forget every selected parameter and window |
+| `WINDOW lo hi` / `WINDOW clear` | add / clear an error window, in channels (up to 10) |
+| `NORMALIZE lo hi` / `NORMALIZE off` | set / clear the normalisation window |
+| `SINGLE` / `MULTI` | fit one parameter at a time / all together (default) |
+| `VOLUME [off]` | verbose progress messages |
+| `THICKNESS <layer>` | vary a layer's thickness |
+| `COMPOSITION <layer> <El>` | vary one element's composition in a layer |
+| `SPECIES <layer> <El>` | vary the `EQUATION` species composition |
+| `EQUATION <layer> <n>` | vary equation parameter *n* |
+| `MEV` / `FWHM` / `THETA` / `CORRECTION` / `STRAGGLE` | vary that beam, detector or sample parameter |
+| `FUZZ` | not implemented — raises an error |
+| `COMPARE` | active buffer vs. the simulation, with residuals |
+
+```
+PERT Command: window 355 375   /* compare only here                  */
+PERT Command: thickness 1      /* vary layer 1's thickness           */
+PERT Command: mev              /* also vary the beam energy          */
+PERT Command: go
+```
 
 ### Macros
 
