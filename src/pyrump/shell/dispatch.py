@@ -18,11 +18,6 @@ abbreviation lands on.
 The help listing follows ``LexCmdlPrintEx`` (lexp2.c:688), which upper-cases the
 required characters and lower-cases the rest, giving the ``REgion``/``PARMS``
 convention used throughout the manual.
-
-pyRUMP-only additions with no original counterpart mark ``extension=True``
-(:class:`Command`) instead of any of the above -- they're invisible to
-matching, listing and completion while the session is FAITHFUL, so a faithful
-session's command surface is stock RUMP's, not just its physics.
 """
 
 from __future__ import annotations
@@ -54,12 +49,6 @@ class Command:
     minlen: int
     handler: Handler
     help: str = ""
-    extension: bool = False
-    """A pyRUMP-only addition with no original-RUMP counterpart -- invisible
-    (unmatched, unlisted, uncompleted) while the session is FAITHFUL, so a
-    faithful session's command surface matches stock RUMP's exactly, not just
-    its physics. Orthogonal to :attr:`hidden`: a hidden synonym always matches
-    but never lists; an extension doesn't even match until FAITHFUL is off."""
 
     @property
     def hidden(self) -> bool:
@@ -93,50 +82,39 @@ class CommandTable:
     commands: list[Command] = field(default_factory=list)
 
     def add(
-        self, name: str, minlen: int, handler: Handler, help: str = "",
-        extension: bool = False,
+        self, name: str, minlen: int, handler: Handler, help: str = ""
     ) -> None:
-        self.commands.append(Command(name, minlen, handler, help, extension))
+        self.commands.append(Command(name, minlen, handler, help))
 
     def extend(self, entries: Sequence[Command]) -> None:
         self.commands.extend(entries)
 
-    def match(self, token: str, *, faithful: bool = True) -> Command | None:
-        """The first command matching ``token``, or None.
-
-        ``faithful=True`` (the default) skips :attr:`Command.extension`
-        entries entirely, so an unrecognised pyRUMP-only command behaves
-        exactly like stock RUMP's "unrecognized command" rather than working.
-        """
+    def match(self, token: str) -> Command | None:
+        """The first command matching ``token``, or None."""
         token = token.strip()
         if not token:
             return None
         for command in self.commands:
-            if command.extension and faithful:
-                continue
             if command.matches(token):
                 return command
         return None
 
-    def visible(self, *, faithful: bool = True) -> Iterator[Command]:
+    def visible(self) -> Iterator[Command]:
         """Commands that appear in the help listing, in table order."""
-        return (
-            c for c in self.commands
-            if not c.hidden and not (c.extension and faithful)
-        )
+        return (c for c in self.commands if not c.hidden)
 
-    def completions(self, prefix: str, *, faithful: bool = True) -> list[str]:
+    def completions(self, prefix: str) -> list[str]:
         """Command names for tab-completion (visible entries only)."""
         folded = prefix.casefold()
         return [
             c.name.lower()
-            for c in self.visible(faithful=faithful)
+            for c in self.visible()
             if c.name.casefold().startswith(folded)
         ]
 
-    def listing(self, width: int = 80, *, faithful: bool = True) -> str:
+    def listing(self, width: int = 80) -> str:
         """Render the help listing, RUMP-style."""
-        entries = list(self.visible(faithful=faithful))
+        entries = list(self.visible())
         if not entries:
             return self.title
         column = max(len(c.display) for c in entries) + 2
@@ -147,9 +125,9 @@ class CommandTable:
             lines.append("  " + "".join(c.display.ljust(column) for c in row).rstrip())
         return "\n".join(lines)
 
-    def help_text(self, *, faithful: bool = True) -> str:
+    def help_text(self) -> str:
         """One command per line with its description, for ``HELP``."""
-        entries = list(self.visible(faithful=faithful))
+        entries = list(self.visible())
         if not entries:
             return self.title
         column = max(len(c.display) for c in entries)

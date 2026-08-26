@@ -16,7 +16,7 @@ matplotlib = pytest.importorskip("matplotlib")
 matplotlib.use("Agg")
 
 from pyrump.model.spectrum import Calibration, Spectrum  # noqa: E402
-from pyrump.shell.commands.rump import TABLE, Quit  # noqa: E402
+from pyrump.shell.commands.rump import Quit  # noqa: E402
 from pyrump.shell.dispatch import CommandError  # noqa: E402
 from pyrump.shell.repl import execute_file, execute_line  # noqa: E402
 from pyrump.shell.session import Buffer, BufferSet, PlotState, Session  # noqa: E402
@@ -487,7 +487,7 @@ def test_calibrate_rejects_the_same_element_twice(session):
 
 @needs_data
 def test_offset_changes_only_kev0(session, capsys):
-    run(session, "faithful off", "offset 12")
+    run(session, "offset 12")
     calibration = session.buffers[1].calibration
     assert calibration.kev0 == 12.0
     assert calibration.kevch == 5.0  # untouched -- CONVERSION's job, not OFFSET's
@@ -496,30 +496,16 @@ def test_offset_changes_only_kev0(session, capsys):
 
 @needs_data
 def test_offset_with_no_argument_reports_the_current_value(session, capsys):
-    run(session, "faithful off", "offset")
+    run(session, "offset")
     assert "offset = 0" in capsys.readouterr().out
 
 
 @needs_data
 def test_offset_chains_into_a_further_command(session):
-    run(session, "faithful off", "offset 5 fwhm 20")
+    run(session, "offset 5 fwhm 20")
     buffer = session.buffers[1]
     assert buffer.calibration.kev0 == 5.0
     assert buffer.measurement.fwhm_keV == 20.0
-
-
-@needs_data
-def test_offset_is_unrecognized_while_faithful(session):
-    """A pyRUMP-only extension: invisible by default, matching stock RUMP."""
-    with pytest.raises(CommandError, match="unrecognized command"):
-        run(session, "offset 12")
-    assert "OFFSET" not in TABLE.help_text()
-
-
-@needs_data
-def test_offset_appears_once_faithful_is_off(session, capsys):
-    run(session, "faithful off", "?")
-    assert "OFFset" in capsys.readouterr().out
 
 
 @needs_data

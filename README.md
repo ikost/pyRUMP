@@ -12,22 +12,26 @@ importable library, with both a batch CLI and RUMP's own interactive shell.
 
 ## Changelog
 
-### 1.0.2 (unreleased)
+**Versioning note.** `1.0.1` is the last release whose command surface
+matches stock RUMP one-for-one. From `1.1.0` on, pyRUMP may add its own
+commands and conveniences with no original-RUMP counterpart -- each is
+called out below. If you need the original's exact command surface, install
+`pyrump==1.0.1`. This is separate from `FAITHFUL` (see
+[Design and validation](#design-and-validation)), which only controls
+physics correctness (bug-for-bug vs. corrected numerics), not the command
+surface.
+
+### 1.1.0 (unreleased)
 
 - New RUMP-level `OFFSET` command: shows or sets the calibration's `kev0`
   independently of `CONVERSION`, which requires the keV/ch slope every time
   even if you only want to change the offset. Chains like `CHOFF`/`CONVERSION`
   do (e.g. `OFFSET 5 FWHM 20`).
-- PERT gains `OFFSET`, a pyRUMP-only extension (not in the original RUMP) to
+- PERT gains `OFFSET`, a pyRUMP-only addition (not in the original RUMP) to
   vary the calibration's energy offset (`kev0`) during a fit -- useful when a
   sample's conductivity shifts the apparent energy scale via charging. Unlike
   `CONVERSION`, this varies the offset alone, since the slope (`kev/ch`) is a
   fixed property of the detector electronics, not something charging affects.
-- Both `OFFSET` commands are pyRUMP-only additions with no original-RUMP
-  counterpart, so they're invisible (unmatched, unlisted, uncompleted) while
-  `FAITHFUL` is on (the default) -- a faithful session's command surface now
-  matches stock RUMP's exactly, not just its physics. `FAITHFUL OFF` reveals
-  them. See [Design and validation](#design-and-validation) for `FAITHFUL`.
 - `COMPARE` now honors `REGION`, matching the original's own definition of
   `COMPARE` as `PLOT NOW ... OV THEORY` (`cmds.htm`) -- it was previously
   always plotting the full spectrum regardless of the current region.
@@ -905,7 +909,9 @@ shell exposes this as a session setting, `session.settings.faithful`,
 toggled with the `FAITHFUL` command and persisted through `~/.pyrumprc` (see
 [Macros](#macros)) rather than a separate branch or fork — corrected and
 faithful behaviour live in the same codebase so they stay comparable against
-the C oracle side by side. See
+the C oracle side by side. `FAITHFUL` governs physics only — for pyRUMP's own
+command-surface additions beyond stock RUMP, see the
+[Changelog](#changelog)'s versioning note. See
 [RUMP quirks and defects found while porting](#rump-quirks-and-defects-found-while-porting).
 
 **Validated against the original**, at two levels. The legacy C is compiled

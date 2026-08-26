@@ -247,7 +247,7 @@ def cmd_equation_help(session, args: ArgReader) -> None:
 
 def cmd_help(session, args: ArgReader) -> None:
     args.done()
-    print(TABLE.help_text(faithful=session.settings.faithful))
+    print(TABLE.help_text())
 
 
 def cmd_return(session, args: ArgReader) -> None:
@@ -261,7 +261,7 @@ def cmd_abort(session, args: ArgReader) -> None:
 def execute_in_sim(session, args: ArgReader) -> None:
     """Run a one-shot ``SIM <command>`` from the RUMP level."""
     name = args.token("a SIM command")
-    command = TABLE.match(name, faithful=session.settings.faithful)
+    command = TABLE.match(name)
     if command is None:
         raise CommandError(f"unrecognized SIM command: {name}")
     command.handler(session, ArgReader(args.remaining, command=command.name.lower()))

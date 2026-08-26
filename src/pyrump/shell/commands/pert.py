@@ -291,7 +291,7 @@ def cmd_volume(session, args: ArgReader) -> None:
 
 def cmd_help(session, args: ArgReader) -> None:
     args.done()
-    print(TABLE.help_text(faithful=session.settings.faithful))
+    print(TABLE.help_text())
 
 
 def cmd_return(session, args: ArgReader) -> None:
@@ -452,17 +452,10 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("FUZZ", 2, cmd_fuzz, "vary the fuzz parameter (not implemented)"),
     ("CORRECTION", 3, _simple("correction"), "vary the normalization correction"),
     ("THETA", 4, _simple("theta"), "vary the sample tilt"),
+    ("OFFSET", 3, _simple("kev(0)"),
+     "vary the calibration energy offset (e.g. a sample-charging shift)"),
     ("COMPARE", 4, cmd_compare, "plot the active buffer against the simulation"),
 ]
 
 for _name, _minlen, _handler, _help in _ENTRIES:
     TABLE.add(_name, _minlen, _handler, _help)
-
-# A pyRUMP-only addition, with no counterpart in the original's PERT (see
-# pert.htm's own command list) -- hidden while FAITHFUL, so a faithful
-# session's command surface matches stock RUMP's.
-TABLE.add(
-    "OFFSET", 3, _simple("kev(0)"),
-    "vary the calibration energy offset, e.g. a sample-charging shift (needs FAITHFUL OFF)",
-    extension=True,
-)
