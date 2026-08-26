@@ -362,6 +362,18 @@ class Settings:
 
     faithful: bool = True
 
+    #: Beam/geometry/measurement/calibration to fall back on when no real
+    #: buffer is active yet -- lets MEV/THETA/etc. be set from ``~/.pyrumprc``
+    #: before any GET, for exploring SIM alone, and lets a metadata-less
+    #: ASCII load pick up something better than the code's own hardcoded
+    #: defaults. Reuses :class:`Buffer`'s shape; its ``spectrum`` is never
+    #: read -- only the parameter fields are.
+    experiment_defaults: Buffer = field(
+        default_factory=lambda: Buffer(
+            spectrum=Spectrum(counts=np.zeros(1), calibration=Calibration())
+        )
+    )
+
 
 @dataclass(slots=True)
 class Session:
@@ -458,6 +470,10 @@ class Session:
         This is RUMP's design: ``PLOT 0``/``COMPARE`` update the theory spectrum
         when necessary rather than making the user ask (sim.htm, "computational
         routines within RUMP update the theoretical spectrum as required").
+
+        With no buffer active yet, falls back to ``settings.experiment_defaults``
+        instead of erroring -- a pyRUMP addition that lets a sample description
+        be explored on its own, before any ``GET``.
         """
         from ..script.lcm import to_sample
         from ..sim.engine import simulate
@@ -468,7 +484,7 @@ class Session:
 
         if not self.script.layers:
             raise KeyError("no sample described: use SIM to build one")
-        reference = self.buffers.require_active()
+        reference = self.buffers.active_buffer or self.settings.experiment_defaults
 
         sample = to_sample(self.script, self.table, self.densities)
         spectrum = simulate(

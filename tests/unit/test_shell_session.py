@@ -15,6 +15,7 @@ import pytest
 matplotlib = pytest.importorskip("matplotlib")
 matplotlib.use("Agg")
 
+from pyrump.io.ascii import write_ascii  # noqa: E402
 from pyrump.model.spectrum import Calibration, Spectrum  # noqa: E402
 from pyrump.shell.commands.rump import Quit  # noqa: E402
 from pyrump.shell.dispatch import CommandError  # noqa: E402
@@ -176,6 +177,107 @@ def test_faithful_persists_through_a_pyrumprc_style_macro(session, tmp_path):
     fresh = Session.create(str(DATA))
     execute_file(fresh, rc)
     assert fresh.settings.faithful is False
+
+
+_SIM_SAMPLE = (
+    "Sim Reset\nLayer 1\n Thick 500 /cm2\n Composition Si 1 /\nMaxpth 200\n"
+)
+
+
+@needs_data
+def test_mev_sets_the_session_default_with_no_buffer_active():
+    """MEV before any GET can't touch a real buffer, so it sets the
+    session's fallback experiment settings instead of erroring."""
+    fresh = Session.create(str(DATA))
+    assert fresh.buffers.active_buffer is None
+    run(fresh, "mev 3.5")
+    assert fresh.settings.experiment_defaults.beam.e0_MeV == 3.5
+
+
+@needs_data
+def test_sim_only_simulation_uses_the_session_default_energy(tmp_path):
+    """A sample can be explored with PLOT 0 before any GET, using the
+    default MEV set beforehand -- e.g. from ~/.pyrumprc."""
+    fresh = Session.create(str(DATA))
+    sample = tmp_path / "defaults.lcm"
+    sample.write_text(_SIM_SAMPLE)
+    run(fresh, "mev 3.5", f"sim get {sample}")
+
+    buffer = fresh.simulation()
+    assert buffer.beam.e0_MeV == 3.5
+
+
+@needs_data
+def test_defaults_are_dormant_once_a_real_buffer_is_active():
+    """Once real data is loaded, MEV/etc. go back to targeting it, and the
+    session defaults are left untouched -- never a silent override."""
+    fresh = Session.create(str(DATA))
+    run(fresh, "mev 3.5")  # sets the default, no buffer active yet
+
+    fresh.buffers.load(make_buffer(), 1)
+    fresh.buffers.active = 1
+    run(fresh, "mev 7.0")
+
+    assert fresh.buffers[1].beam.e0_MeV == 7.0
+    assert fresh.settings.experiment_defaults.beam.e0_MeV == 3.5
+
+
+@needs_data
+def test_experiment_defaults_persist_through_a_pyrumprc_style_macro(tmp_path):
+    rc = tmp_path / ".pyrumprc"
+    rc.write_text("mev 3.5\ntheta 5\n")
+    fresh = Session.create(str(DATA))
+    execute_file(fresh, rc)
+    assert fresh.settings.experiment_defaults.beam.e0_MeV == 3.5
+    assert fresh.settings.experiment_defaults.geometry.theta == 5.0
+
+
+@needs_data
+def test_ascii_load_picks_up_the_session_defaults(tmp_path):
+    """ASCII carries no metadata of its own, so it should pick up the
+    session's defaults rather than the code's hardcoded ones -- but its
+    real channel count must never be overwritten by the placeholder."""
+    fresh = Session.create(str(DATA))
+    run(fresh, "mev 3.5", "theta 5")
+
+    counts = np.zeros(200)
+    path = tmp_path / "bare.dat"
+    write_ascii(path, counts)
+    run(fresh, f"get {path}")
+
+    buffer = fresh.buffers.require_active()
+    assert buffer.beam.e0_MeV == 3.5
+    assert buffer.geometry.theta == 5.0
+    assert buffer.n_channels == 200  # the real file's count, not the default's
+
+    # A further MEV on this now-active buffer must not alias back into the
+    # session default (Beam is mutable, so this is the real risk).
+    run(fresh, "mev 9.0")
+    assert buffer.beam.e0_MeV == 9.0
+    assert fresh.settings.experiment_defaults.beam.e0_MeV == 3.5
+
+
+@needs_data
+def test_rbs_load_is_unaffected_by_session_defaults(tmp_path):
+    from pyrump.io.rbs import RbsSpectrum, write_rbs
+    from pyrump.model.detector import Measurement
+    from pyrump.model.geometry import Geometry, GeometryKind
+
+    fresh = Session.create(str(DATA))
+    run(fresh, "mev 3.5")
+
+    path = tmp_path / "real.rbs"
+    write_rbs(
+        path,
+        RbsSpectrum(
+            counts=np.zeros(100), calibration=Calibration(npt=100),
+            geometry=Geometry(theta=0.0, phi=10.0, kind=GeometryKind.CORNELL),
+            measurement=Measurement(), e0_MeV=2.5, zbeam=2, mbeam=4.0026,
+        ),
+    )
+    run(fresh, f"get {path}")
+
+    assert fresh.buffers.require_active().beam.e0_MeV == 2.5
 
 
 @needs_data

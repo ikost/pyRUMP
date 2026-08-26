@@ -35,6 +35,14 @@ surface.
 - `COMPARE` now honors `REGION`, matching the original's own definition of
   `COMPARE` as `PLOT NOW ... OV THEORY` (`cmds.htm`) -- it was previously
   always plotting the full spectrum regardless of the current region.
+- `MEV`/`THETA`/`PHI`/`PSI`/`OMEGA`/`CHARGE`/`CURRENT`/`FWHM`/`CORRECTION`/
+  `CHOFF`/`CONVERSION`/`OFFSET`/`GEOMETRY`/`BEAM` now work before any `GET`,
+  setting a session-wide default instead of erroring -- lets a `SIM` sample
+  be explored (`PLOT 0`) with no real data loaded, and lets these defaults
+  be set from `~/.pyrumprc`. The same defaults fill in for a metadata-less
+  ASCII load instead of the code's hardcoded 2.0 MeV; a `.RBS`'s own
+  metadata always wins, and once any real buffer is ACTIVE these commands
+  go back to editing it exactly as before -- see [Macros](#macros).
 
 ### 1.0.1 (2026-08-25)
 
@@ -486,6 +494,27 @@ faithful off
 `--faithful on`/`--faithful off` overrides that for one invocation, applied
 after `~/.pyrumprc` runs but before any macro passed on the command line —
 the macro can still set `FAITHFUL` itself if it needs to.
+
+**Default experiment settings.** `MEV`/`THETA`/`PHI`/`PSI`/`OMEGA`/`CHARGE`/
+`CURRENT`/`FWHM`/`CORRECTION`/`CHOFF`/`CONVERSION`/`OFFSET`/`GEOMETRY`/`BEAM`
+all normally act on the ACTIVE buffer — but before any `GET`, there is no
+active buffer, so they fall back to a session-wide default instead of
+erroring. That makes it possible to explore a `SIM` sample's theoretical
+spectrum (`PLOT 0`) with no real data loaded at all, and it's exactly what
+`~/.pyrumprc` is for:
+
+```
+$ cat ~/.pyrumprc
+mev 3.5
+theta 5
+```
+
+The same defaults also fill in for a freshly-read ASCII spectrum, which
+carries no beam/geometry/detector metadata of its own — so `GET`ting one
+picks up your defaults instead of the code's hardcoded 2.0 MeV. A `.RBS`
+file's own metadata always wins, and once any real buffer becomes ACTIVE,
+these commands go back to editing it, exactly as before — the defaults are
+only a fallback, never a silent override of real data.
 
 ## CLI reference
 

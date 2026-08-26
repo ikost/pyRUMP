@@ -79,7 +79,18 @@ def read_into_buffer(session, path: Path, index: int | None = None) -> int:
     if isinstance(source, RbsSpectrum):
         buffer = Buffer.from_rbs(source, path)
     else:
+        # ASCII carries no metadata of its own, so it picks up the session's
+        # default experiment settings rather than the code's hardcoded ones.
+        from dataclasses import replace
+
         buffer = Buffer.from_ascii(source, path)
+        defaults = session.settings.experiment_defaults
+        buffer.beam = replace(defaults.beam)  # Beam is mutable -- copy, don't alias
+        buffer.geometry = defaults.geometry  # frozen -- sharing is safe
+        buffer.measurement = defaults.measurement  # frozen -- sharing is safe
+        buffer.set_calibration(
+            kevch=defaults.calibration.kevch, kev0=defaults.calibration.kev0,
+        )
 
     slot = session.buffers.load(buffer, index)
     session.buffers.active = slot
@@ -315,11 +326,24 @@ def _chain(session, args: ArgReader) -> None:
     command.handler(session, ArgReader(args.remaining, command=command.name.lower()))
 
 
+def _reference(session):
+    """The active buffer, or -- if none is loaded yet -- the session's
+    default experiment settings.
+
+    Lets MEV/THETA/etc. be set from ``~/.pyrumprc`` before any GET, for
+    exploring a SIM sample on its own (session.simulation() falls back to
+    the same defaults). Once a real buffer becomes active, these commands
+    go back to targeting it, exactly as before -- the defaults are only a
+    fallback, never a silent override of real data.
+    """
+    return session.buffers.active_buffer or session.settings.experiment_defaults
+
+
 def _setter(apply, describe):
     """Build a handler that reports the value with no argument and sets it with one."""
 
     def handler(session, args: ArgReader) -> None:
-        buffer = session.buffers.require_active()
+        buffer = _reference(session)
         if not args:
             print(describe(buffer))
             return
@@ -352,7 +376,7 @@ def cmd_beam(session, args: ArgReader) -> None:
     """``BEAM 4He++`` -- species and charge state."""
     from ...cli._common import resolve_beam
 
-    buffer = session.buffers.require_active()
+    buffer = _reference(session)
     if not args:
         print(
             f"  beam Z={buffer.beam.z} mass={buffer.beam.mass:.4f}"
@@ -377,7 +401,7 @@ def cmd_beam(session, args: ArgReader) -> None:
 
 
 def cmd_mev(session, args: ArgReader) -> None:
-    buffer = session.buffers.require_active()
+    buffer = _reference(session)
     if not args:
         print(f"  MeV = {buffer.beam.e0_MeV:g}")
         return
@@ -388,7 +412,7 @@ def cmd_mev(session, args: ArgReader) -> None:
 
 
 def cmd_geometry(session, args: ArgReader) -> None:
-    buffer = session.buffers.require_active()
+    buffer = _reference(session)
     if not args:
         print(f"  geometry = {buffer.geometry.kind.name.lower()}")
         return
@@ -407,7 +431,7 @@ def cmd_geometry(session, args: ArgReader) -> None:
 
 def cmd_conversion(session, args: ArgReader) -> None:
     """``CONVERSION <keV/ch> [keV(0)]``."""
-    buffer = session.buffers.require_active()
+    buffer = _reference(session)
     if not args:
         c = buffer.calibration
         print(f"  {c.kevch:g} keV/channel, offset {c.kev0:g} keV")
@@ -621,7 +645,7 @@ def cmd_display(session, args: ArgReader) -> None:
 
     plt = plotting.require_matplotlib()
     sample = to_sample(session.script, session.table, session.densities)
-    reference = session.buffers.require_active()
+    reference = _reference(session)
     grid = build_sample_grid(sample, reference.geometry, session.table)
 
     if session.figure is not None:
