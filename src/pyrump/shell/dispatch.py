@@ -137,6 +137,18 @@ class CommandTable:
         )
         return "\n".join(lines)
 
+    def describe(self, token: str) -> str | None:
+        """The one-line entry for a single command, for ``HELP <name>``.
+
+        None if this table has nothing matching ``token``, so callers can fall
+        through to the next table the way :func:`execute_line` falls through
+        the mode stack.
+        """
+        command = self.match(token)
+        if command is None:
+            return None
+        return f"{self.title}\n  {command.display}  {command.help}".rstrip()
+
 
 def tokenize(line: str) -> list[str]:
     """Split a command line into tokens.

@@ -246,8 +246,24 @@ def cmd_equation_help(session, args: ArgReader) -> None:
 
 
 def cmd_help(session, args: ArgReader) -> None:
+    """``HELP`` lists the SIM commands; ``HELP <name>`` describes one.
+
+    A name not in SIM's own table falls through to RUMP and then the system
+    tier, mirroring how an unrecognised command escapes this mode
+    (repl.py's ``execute_line``).
+    """
+    topic = args.optional()
     args.done()
-    print(TABLE.help_text())
+    if topic is None:
+        print(TABLE.help_text())
+        return
+    from .rump import TABLE as RUMP_TABLE
+    from .system import TABLE as SYSTEM_TABLE
+
+    text = TABLE.describe(topic) or RUMP_TABLE.describe(topic) or SYSTEM_TABLE.describe(topic)
+    if text is None:
+        raise CommandError(f"no help for {topic!r} -- try HELP with no argument")
+    print(text)
 
 
 def cmd_return(session, args: ArgReader) -> None:

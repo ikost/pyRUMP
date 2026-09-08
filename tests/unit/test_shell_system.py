@@ -411,3 +411,50 @@ def test_buffer_listings_stay_short_after_moving(session, tmp_path, capsys):
     run(session, "buffers")
     # Relative to the new working directory, it is just the file name.
     assert "a.rbs" in capsys.readouterr().out
+
+
+# -- HELP <name>: describing a single command -------------------------------
+
+
+def test_help_with_no_argument_still_lists_everything(session, capsys):
+    run(session, "help")
+    out = capsys.readouterr().out.upper()
+    assert "WHERE" in out
+    assert "CLS" in out  # the system tier, appended after RUMP's own table
+
+
+def test_help_describes_a_command_in_the_current_table(session, capsys):
+    run(session, "help pwd")
+    assert "print the working directory" in capsys.readouterr().out
+
+
+def test_help_falls_through_to_the_system_tier(session, capsys):
+    """PWD only exists in the system table, not the RUMP one."""
+    run(session, "help pwd")
+    out = capsys.readouterr().out
+    assert "General System Commands" in out
+    assert "print the working directory" in out
+
+
+def test_help_resolves_abbreviations_like_any_other_command(session, capsys):
+    run(session, "help thick")
+    assert "integral plus thickness conversion" in capsys.readouterr().out
+
+
+def test_help_reports_thickness_differently_per_mode(session, capsys):
+    """The same word means something different in each command tier."""
+    run(session, "help thickness")
+    assert "integral plus thickness conversion" in capsys.readouterr().out
+
+    run(session, "sim", "help thickness", stack=["rump"])
+    assert "set this layer's thickness" in capsys.readouterr().out
+
+
+def test_help_on_an_unknown_command_names_it_instead_of_erroring_on_extra_args(session):
+    with pytest.raises(CommandError, match="no help for 'wiggle'"):
+        run(session, "help wiggle")
+
+
+def test_help_still_rejects_more_than_one_argument(session):
+    with pytest.raises(CommandError, match="unexpected extra argument"):
+        run(session, "help pwd extra")

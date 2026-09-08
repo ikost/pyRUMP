@@ -297,8 +297,16 @@ def cmd_script(session, args: ArgReader) -> None:
 
 
 def cmd_help(session, args: ArgReader) -> None:
+    """``HELP`` lists every command here; ``HELP <name>`` describes one."""
+    topic = args.optional()
     args.done()
-    print(TABLE.help_text())
+    if topic is None:
+        print(TABLE.help_text())
+        return
+    text = TABLE.describe(topic)
+    if text is None:
+        raise CommandError(f"no help for {topic!r} -- try HELP with no argument")
+    print(text)
 
 
 TABLE = CommandTable("General System Commands")

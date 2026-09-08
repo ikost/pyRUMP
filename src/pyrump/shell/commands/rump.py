@@ -135,13 +135,25 @@ def _buffer_argument(session, args: ArgReader, *, read: bool = True) -> tuple[in
 
 
 def cmd_help(session, args: ArgReader) -> None:
-    """List every command, one section per table -- as rump.c:351-360 does."""
+    """List every command, one section per table -- as rump.c:351-360 does.
+
+    ``HELP <name>`` instead describes that one command, looking first at the
+    RUMP level and then, like an unrecognised command would, falling through
+    to the system tier (repl.py's ``execute_line``).
+    """
+    topic = args.optional()
     args.done()
     from .system import TABLE as SYSTEM_TABLE
 
-    print(TABLE.help_text())
-    print()
-    print(SYSTEM_TABLE.help_text())
+    if topic is None:
+        print(TABLE.help_text())
+        print()
+        print(SYSTEM_TABLE.help_text())
+        return
+    text = TABLE.describe(topic) or SYSTEM_TABLE.describe(topic)
+    if text is None:
+        raise CommandError(f"no help for {topic!r} -- try HELP with no argument")
+    print(text)
 
 
 def cmd_quit(session, args: ArgReader) -> None:
