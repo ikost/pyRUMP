@@ -217,6 +217,11 @@ def show(figure) -> None:
         terminal_focus.restore(token)
 
 
+def buffer_label(buffer, index: int) -> str:
+    """The name PLOT/OVERLAY would show for this buffer in a legend."""
+    return buffer.name or buffer.identifier or f"buffer {index}"
+
+
 def add_trace(session, index: int, buffer, *, clear: bool, replace: bool = False) -> None:
     """Add a buffer to the plot; ``clear`` makes it a fresh ``PLOT``.
 
@@ -230,5 +235,5 @@ def add_trace(session, index: int, buffer, *, clear: bool, replace: bool = False
         session.traces = []
     elif replace:
         session.traces = [t for t in session.traces if t.index != index]
-    label = buffer.name or buffer.identifier or f"buffer {index}"
+    label = buffer_label(buffer, index)
     session.traces.append(Trace(buffer=buffer, label=label, index=index))

@@ -636,6 +636,8 @@ def cmd_compare(session, args: ArgReader) -> None:
     figure = plot_comparison(
         data.spectrum, theory.spectrum,
         energy_axis=session.plot.energy_axis, region=region, figure=figure,
+        data_label=plotting.buffer_label(data, session.buffers.active),
+        simulation_label=plotting.buffer_label(theory, 0),
     )
     session.figure = figure
     session.traces = []

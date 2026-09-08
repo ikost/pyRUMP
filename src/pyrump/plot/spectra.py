@@ -56,6 +56,8 @@ def plot_comparison(
     region: tuple[int, int] | None = None,
     figsize: tuple[float, float] = (9, 6),
     figure=None,
+    data_label: str = "data",
+    simulation_label: str = "simulation",
 ):
     """Measured data with a simulation over it, and optionally residuals.
 
@@ -74,6 +76,11 @@ def plot_comparison(
     axes, instead of opening a new window on every call. Its axes must
     already match ``residuals`` -- callers are expected to have checked that
     via :func:`~pyrump.shell.plotting.compare_figure_for`.
+
+    ``data_label``/``simulation_label`` default to the generic "data"/
+    "simulation" but are meant to be the buffers' own names -- the same
+    :func:`~pyrump.shell.plotting.buffer_label` convention PLOT/OVERLAY use --
+    so COMPARE's legend identifies which file and which sample it's showing.
     """
     import matplotlib.pyplot as plt
 
@@ -100,8 +107,8 @@ def plot_comparison(
         figure, top = plt.subplots(figsize=figsize)
         bottom = None
 
-    top.step(x, observed, where="mid", lw=0.9, color="0.35", label="data")
-    top.plot(x, expected, lw=1.6, color="crimson", label="simulation")
+    top.step(x, observed, where="mid", lw=0.9, color="0.35", label=data_label)
+    top.plot(x, expected, lw=1.6, color="crimson", label=simulation_label)
     top.set_ylabel("Counts")
     top.set_ylim(bottom=0)
     top.legend(frameon=False)

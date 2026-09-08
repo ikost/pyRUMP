@@ -626,6 +626,21 @@ def test_compare_respects_region(session, tmp_path):
 
 
 @needs_data
+def test_compare_legend_shows_buffer_names_not_generic_labels(session, tmp_path):
+    """PLOT's legend shows the buffer's own name; COMPARE should match
+    instead of hard-coding "data"/"simulation"."""
+    sample = tmp_path / "labels_compare.lcm"
+    sample.write_text(
+        "Sim Reset\nLayer 1\n Thick 500 /cm2\n Composition Si 1 /\nMaxpth 200\n"
+    )
+    run(session, f"sim get {sample}", "compare")
+
+    top = session.figure.axes[0]
+    labels = top.get_legend_handles_labels()[1]
+    assert labels == ["test", "SIM"]  # the active buffer's name, then SIM's
+
+
+@needs_data
 def test_plot_and_compare_reuse_the_same_figure(session, tmp_path):
     """PLOT (1 panel) -> COMPARE (2 panels) -> PLOT (1 panel again) must draw
     into the same window throughout, so a user's dragged window position
