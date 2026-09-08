@@ -21,6 +21,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from ..model.detector import yield_normalisation
+from . import terminal_focus
 from .dispatch import CommandError
 
 #: Colour cycle for overlaid spectra. The first is RUMP's white-on-black data
@@ -98,51 +99,54 @@ def _apply_scale(ax, state) -> None:
         ax.set_yscale("linear")
 
 
-def figure_for(session):
-    """The session's single-panel figure and axes, created on first use.
+def _rebuilt_figure(session, n_axes: int, build):
+    """Reuse the session's live figure across layout changes.
 
-    COMPARE leaves a two-panel figure behind, so a figure with the wrong number
-    of axes is discarded rather than drawn into -- otherwise a PLOT after a
-    COMPARE would render into the top panel above an orphaned residual strip.
-    Closing the window by hand (the OS close button) is discarded the same
-    way: it deregisters the figure from pyplot without clearing its axes or
-    touching ``session.figure``, so ``fignum_exists`` is what actually catches
-    it -- otherwise PLOT/REPLOT/OVERLAY/SPL would keep drawing into a window
-    that no longer exists.
+    A window the user closed by hand is the one case a new ``Figure`` (and so
+    a new OS window, at the backend's default position) is unavoidable --
+    ``fignum_exists`` catches that. Everything else, including switching
+    panel counts (a single-panel PLOT after a two-panel COMPARE, or the
+    reverse), clears and rebuilds axes on the SAME figure via ``clf()``
+    instead of closing and reopening it, so the window never jumps back to
+    its default position or size.
     """
     plt = require_matplotlib()
-    stale = session.figure is not None and (
-        len(session.figure.axes) != 1 or not plt.fignum_exists(session.figure.number)
-    )
-    if stale:
-        plt.close(session.figure)
-        session.figure = None
-    if session.figure is None:
+    figure = session.figure
+    if figure is not None and not plt.fignum_exists(figure.number):
+        figure = None
+    if figure is None:
         plt.ion()
-        session.figure = plt.figure(figsize=(9, 5.5))
-        session.figure.add_subplot(1, 1, 1)
-    return session.figure, session.figure.axes[0]
+        figure = plt.figure()
+    if len(figure.axes) != n_axes:
+        figure.clf()
+        build(figure)
+    session.figure = figure
+    return figure
+
+
+def figure_for(session):
+    """The session's single-panel figure and axes, created on first use."""
+    def build(figure):
+        figure.set_size_inches(9, 5.5)
+        figure.add_subplot(1, 1, 1)
+
+    figure = _rebuilt_figure(session, 1, build)
+    return figure, figure.axes[0]
 
 
 def compare_figure_for(session, *, residuals: bool):
-    """The session's COMPARE figure, reused across calls like :func:`figure_for`.
+    """The session's COMPARE figure, reused across calls like :func:`figure_for`."""
+    def build(figure):
+        figure.set_size_inches(9, 6)
+        if residuals:
+            figure.subplots(
+                2, 1, sharex=True,
+                gridspec_kw={"height_ratios": [3, 1], "hspace": 0.05},
+            )
+        else:
+            figure.add_subplot(1, 1, 1)
 
-    A figure left over from PLOT/OVERLAY (wrong axis count) or a closed
-    window is discarded; otherwise the same window and canvas are redrawn
-    into rather than closed and reopened, so repeated COMPARE calls don't
-    make the plot window flash and re-raise itself.
-    """
-    plt = require_matplotlib()
-    expected_axes = 2 if residuals else 1
-    stale = session.figure is not None and (
-        len(session.figure.axes) != expected_axes
-        or not plt.fignum_exists(session.figure.number)
-    )
-    if stale:
-        plt.close(session.figure)
-        session.figure = None
-    plt.ion()
-    return session.figure
+    return _rebuilt_figure(session, 2 if residuals else 1, build)
 
 
 def draw(session) -> None:
@@ -193,13 +197,24 @@ def draw(session) -> None:
 
 
 def show(figure) -> None:
-    """Push the figure to the screen without blocking the prompt."""
+    """Push the figure to the screen without blocking the prompt.
+
+    Raising a GUI window steals focus from wherever the user was typing --
+    macOS in particular makes the new window "key". For an interactive
+    backend (one with a real ``required_interactive_framework``, unlike Agg
+    in tests) the terminal's focus is captured before drawing and restored
+    right after, via :mod:`~pyrump.shell.terminal_focus`.
+    """
     canvas = figure.canvas
+    interactive = getattr(type(canvas), "required_interactive_framework", None) is not None
+    token = terminal_focus.capture() if interactive else None
     canvas.draw_idle()
     try:
         canvas.flush_events()
     except (AttributeError, NotImplementedError):  # Agg in tests
         pass
+    if interactive:
+        terminal_focus.restore(token)
 
 
 def add_trace(session, index: int, buffer, *, clear: bool, replace: bool = False) -> None:

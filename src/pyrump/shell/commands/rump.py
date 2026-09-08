@@ -652,17 +652,15 @@ def cmd_display(session, args: ArgReader) -> None:
     if not session.script.layers:
         raise CommandError("no sample described: use SIM to build one")
 
-    plt = plotting.require_matplotlib()
+    plotting.require_matplotlib()
     sample = to_sample(session.script, session.table, session.densities)
     reference = _reference(session)
     grid = build_sample_grid(sample, reference.geometry, session.table)
 
-    if session.figure is not None:
-        plt.close(session.figure)
-    figure, ax = plt.subplots(figsize=(9, 5.5))
+    figure, ax = plotting.figure_for(session)
+    ax.clear()
     plot_depth_profile(grid, list(session.script.elements), ax=ax)
     ax.set_title(session.script.description or "Sample depth profile")
-    session.figure = figure
     session.traces = []
     plotting.show(figure)
 
@@ -1192,10 +1190,9 @@ def cmd_background(session, args: ArgReader) -> None:
         print(f"  background subtracted; result in buffer {index} ({fit.stripped.size} channels)")
 
     if not noplot:
-        plt = plotting.require_matplotlib()
-        if session.figure is not None:
-            plt.close(session.figure)
-        figure, ax = plt.subplots(figsize=(9, 5.5))
+        plotting.require_matplotlib()
+        figure, ax = plotting.figure_for(session)
+        ax.clear()
         ax.plot(fit.channels, buffer.spectrum.counts[i0 : i3 + 1], color="0.5", lw=1.0,
                 label="data")
         ax.plot(fit.channels, fit.fit, lw=1.5, label="fit")
@@ -1203,7 +1200,6 @@ def cmd_background(session, args: ArgReader) -> None:
         ax.set_xlabel("Channel")
         ax.set_ylabel("Counts")
         ax.legend(frameon=False, fontsize="small")
-        session.figure = figure
         session.traces = []
         plotting.show(figure)
 

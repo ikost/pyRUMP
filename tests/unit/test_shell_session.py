@@ -626,6 +626,31 @@ def test_compare_respects_region(session, tmp_path):
 
 
 @needs_data
+def test_plot_and_compare_reuse_the_same_figure(session, tmp_path):
+    """PLOT (1 panel) -> COMPARE (2 panels) -> PLOT (1 panel again) must draw
+    into the same window throughout, so a user's dragged window position
+    survives switching between them."""
+    sample = tmp_path / "reuse_figure.lcm"
+    sample.write_text(
+        "Sim Reset\nLayer 1\n Thick 500 /cm2\n Composition Si 1 /\nMaxpth 200\n"
+    )
+
+    run(session, "plot")
+    figure = session.figure
+    number = figure.number
+
+    run(session, f"sim get {sample}", "compare")
+    assert session.figure is figure
+    assert session.figure.number == number
+    assert len(session.figure.axes) == 2
+
+    run(session, "plot")
+    assert session.figure is figure
+    assert session.figure.number == number
+    assert len(session.figure.axes) == 1
+
+
+@needs_data
 def test_profile_prints_the_verbatim_stub_message(session, capsys):
     before = session.buffers.active_buffer.spectrum.counts.copy()
     run(session, "profile")
