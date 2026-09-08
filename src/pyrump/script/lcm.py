@@ -114,6 +114,30 @@ class Script:
         return seen
 
 
+def structure_label(script: Script) -> str:
+    """Compact substrate-first rendering of the sample's layer structure.
+
+    ``script.layers`` is surface-first (layer 1 is the topmost layer, as
+    SHOW lists it and .lcm files write it); this reverses that so the
+    substrate reads first, e.g. "Si 1 - Mn 3 Pt 1 [150A] - Ru 1 [30A]" for a
+    surface-first script of [Ru 30A, Mn3Pt1 150A, Si substrate]. The
+    substrate is shown as bare composition, with no thickness bracket.
+    Empty sample -> "".
+    """
+    if not script.layers:
+        return ""
+    parts: list[str] = []
+    for position, layer in enumerate(reversed(script.layers)):
+        composition = " ".join(
+            f"{symbol} {value:g}" for symbol, value in layer.composition.items()
+        )
+        if position == 0:
+            parts.append(composition)
+            continue
+        parts.append(f"{composition} [{layer.thickness:g}{layer.unit}]".strip())
+    return " - ".join(parts)
+
+
 def _element_pairs(tokens: list[str]) -> dict[str, float]:
     """Parse ``El value El value ... /`` into a mapping.
 

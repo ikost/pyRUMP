@@ -217,8 +217,20 @@ def show(figure) -> None:
         terminal_focus.restore(token)
 
 
-def buffer_label(buffer, index: int) -> str:
-    """The name PLOT/OVERLAY would show for this buffer in a legend."""
+def buffer_label(session, buffer, index: int) -> str:
+    """The name PLOT/OVERLAY would show for this buffer in a legend.
+
+    Buffer 0 is always the simulation (Session.simulation()'s convention), so
+    when STRUCTLABEL is on and a sample is described, its legend text becomes
+    a compact rendering of the layer structure instead of the buffer's own
+    name/identifier ("SIM").
+    """
+    if index == 0 and session.plot.structure_labels:
+        from ..script.lcm import structure_label
+
+        label = structure_label(session.script)
+        if label:
+            return label
     return buffer.name or buffer.identifier or f"buffer {index}"
 
 
@@ -235,5 +247,5 @@ def add_trace(session, index: int, buffer, *, clear: bool, replace: bool = False
         session.traces = []
     elif replace:
         session.traces = [t for t in session.traces if t.index != index]
-    label = buffer_label(buffer, index)
+    label = buffer_label(session, buffer, index)
     session.traces.append(Trace(buffer=buffer, label=label, index=index))

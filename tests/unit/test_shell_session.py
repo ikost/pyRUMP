@@ -641,6 +641,40 @@ def test_compare_legend_shows_buffer_names_not_generic_labels(session, tmp_path)
 
 
 @needs_data
+def test_structlabel_off_by_default_keeps_sim_label(session, tmp_path):
+    sample = tmp_path / "structlabel_off.lcm"
+    sample.write_text(
+        "Sim Reset\nLayer 1\n Thick 500 /cm2\n Composition Si 1 /\nMaxpth 200\n"
+    )
+    run(session, f"sim get {sample}", "compare")
+
+    labels = session.figure.axes[0].get_legend_handles_labels()[1]
+    assert labels == ["test", "SIM"]
+
+
+@needs_data
+def test_structlabel_on_shows_the_sample_structure(session, tmp_path):
+    sample = tmp_path / "structlabel_on.lcm"
+    sample.write_text(
+        "Sim Reset\nLayer 1\n Thick 30 A\n Composition Ru 1 /\n"
+        "Next\n Thick 150 A\n Composition Mn 3 Pt 1 /\n"
+        "Next\n Thick 500 /cm2\n Composition Si 1 /\nMaxpth 200\n"
+    )
+    run(session, f"sim get {sample}", "structlabel on", "compare")
+
+    labels = session.figure.axes[0].get_legend_handles_labels()[1]
+    assert labels == ["test", "Si 1 - Mn 3 Pt 1 [150A] - Ru 1 [30A]"]
+
+    run(session, "sim splot")
+    trace_labels = [t.label for t in session.traces]
+    assert trace_labels == ["Si 1 - Mn 3 Pt 1 [150A] - Ru 1 [30A]"]
+
+    run(session, "structlabel off", "compare")
+    labels = session.figure.axes[0].get_legend_handles_labels()[1]
+    assert labels == ["test", "SIM"]
+
+
+@needs_data
 def test_plot_and_compare_reuse_the_same_figure(session, tmp_path):
     """PLOT (1 panel) -> COMPARE (2 panels) -> PLOT (1 panel again) must draw
     into the same window throughout, so a user's dragged window position

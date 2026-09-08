@@ -636,8 +636,8 @@ def cmd_compare(session, args: ArgReader) -> None:
     figure = plot_comparison(
         data.spectrum, theory.spectrum,
         energy_axis=session.plot.energy_axis, region=region, figure=figure,
-        data_label=plotting.buffer_label(data, session.buffers.active),
-        simulation_label=plotting.buffer_label(theory, 0),
+        data_label=plotting.buffer_label(session, data, session.buffers.active),
+        simulation_label=plotting.buffer_label(session, theory, 0),
     )
     session.figure = figure
     session.traces = []
@@ -750,6 +750,19 @@ def cmd_labels(session, args: ArgReader) -> None:
     if session.traces:
         plotting.draw(session)
     print(f"labels {'on' if session.plot.labels else 'off'}")
+
+
+def cmd_structlabel(session, args: ArgReader) -> None:
+    """STRUCTLABEL [OFF]: show the SIM sample's layer structure instead of
+    the literal "SIM" in the simulation's legend entry -- everywhere
+    PLOT/OVERLAY/SPLOT/COMPARE draw it, via plotting.buffer_label's single
+    hook on buffer 0."""
+    token = args.optional()
+    args.done()
+    session.plot.structure_labels = token is None or token.lower() not in ("off", "no", "none")
+    if session.traces:
+        plotting.draw(session)
+    print(f"structure labels {'on' if session.plot.structure_labels else 'off'}")
 
 
 def cmd_faithful(session, args: ArgReader) -> None:
@@ -1352,6 +1365,8 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
      "plot yield in normalized units"),
     ("RAW", 2, _flag("normalized", False, "yield is raw"), "plot raw yield"),
     ("LABELS", 2, cmd_labels, "label the axes (LABELS OFF to suppress)"),
+    ("STRUCTLABEL", 4, cmd_structlabel,
+     "show the sample's layer structure as the simulation's legend text (STRUCTLABEL OFF for \"SIM\")"),
     ("ENERGY", 4, cmd_energy, "x axis in energy rather than channel"),
     # Buffers
     ("BUFFERS", 3, cmd_buffers, "display the buffer status"),

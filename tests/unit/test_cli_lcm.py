@@ -26,7 +26,13 @@ from pyrump.plot.spectra import (  # noqa: E402
     plot_spectrum,
 )
 from pyrump.profiles.equations import EquationType  # noqa: E402
-from pyrump.script.lcm import parse_lcm, read_lcm, to_sample, write_lcm  # noqa: E402
+from pyrump.script.lcm import (  # noqa: E402
+    parse_lcm,
+    read_lcm,
+    structure_label,
+    to_sample,
+    write_lcm,
+)
 
 
 from conftest import data_dir
@@ -82,6 +88,24 @@ def test_composition_list_terminated_by_slash():
 def test_element_without_amount_is_rejected():
     with pytest.raises(ValueError, match="no amount"):
         parse_lcm("Sim Reset\nLayer 1\n Thick 1 A\n Composition Si /\n")
+
+
+def test_structure_label_of_an_empty_sample_is_blank():
+    assert structure_label(parse_lcm("Sim Reset\n")) == ""
+
+
+def test_structure_label_of_a_single_layer_has_no_bracket():
+    script = parse_lcm(SIMPLE)
+    assert structure_label(script) == "Si 1"
+
+
+def test_structure_label_is_substrate_first():
+    script = parse_lcm(
+        "Sim Reset\nLayer 1\n Thick 30 A\n Composition Ru 1 /\n"
+        "Next\n Thick 150 A\n Composition Mn 3 Pt 1 /\n"
+        "Next\n Thick 500 /cm2\n Composition Si 1 /\n"
+    )
+    assert structure_label(script) == "Si 1 - Mn 3 Pt 1 [150A] - Ru 1 [30A]"
 
 
 def test_equation_and_species():

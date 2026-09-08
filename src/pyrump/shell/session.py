@@ -317,6 +317,7 @@ class PlotState:
     normalized: bool = False
     energy_axis: bool = False       # RUMP plots against channel by default
     labels: bool = True
+    structure_labels: bool = False
     forcex: bool = False
     autoids: bool = False
 
@@ -347,6 +348,7 @@ class PlotState:
                 f"  X axis     {'energy' if self.energy_axis else 'channel'}"
                 f"{', forced' if self.forcex else ''}",
                 f"  Labels     {'on' if self.labels else 'off'}",
+                f"  Struct     {'on' if self.structure_labels else 'off'}",
             ]
         )
 
