@@ -55,6 +55,7 @@ def plot_comparison(
     window: np.ndarray | None = None,
     region: tuple[int, int] | None = None,
     figsize: tuple[float, float] = (9, 6),
+    figure=None,
 ):
     """Measured data with a simulation over it, and optionally residuals.
 
@@ -67,6 +68,12 @@ def plot_comparison(
     concept as :class:`~pyrump.shell.session.PlotState`'s REGION, which
     ``PLOT``/``OVERLAY`` already honour. ``None`` (the default) plots
     everything, as before.
+
+    ``figure`` lets a caller (COMPARE) redraw into a figure it already owns,
+    the same way :func:`~pyrump.shell.plotting.draw` clears and reuses its
+    axes, instead of opening a new window on every call. Its axes must
+    already match ``residuals`` -- callers are expected to have checked that
+    via :func:`~pyrump.shell.plotting.compare_figure_for`.
     """
     import matplotlib.pyplot as plt
 
@@ -79,7 +86,12 @@ def plot_comparison(
     observed, expected = data.counts[sl], simulation.counts[sl]
     x = data.energies[sl] if energy_axis else np.arange(low, high + 1)
 
-    if residuals:
+    if figure is not None:
+        top, bottom = figure.axes[0], (figure.axes[1] if residuals else None)
+        top.clear()
+        if bottom is not None:
+            bottom.clear()
+    elif residuals:
         figure, (top, bottom) = plt.subplots(
             2, 1, figsize=figsize, sharex=True,
             gridspec_kw={"height_ratios": [3, 1], "hspace": 0.05},

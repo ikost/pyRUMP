@@ -620,13 +620,10 @@ def cmd_compare(session, args: ArgReader) -> None:
     except ValueError as error:
         raise CommandError(str(error)) from None
 
-    if session.figure is not None:
-        import matplotlib.pyplot as plt
-
-        plt.close(session.figure)
+    figure = plotting.compare_figure_for(session, residuals=True)
     figure = plot_comparison(
         data.spectrum, theory.spectrum,
-        energy_axis=session.plot.energy_axis, region=region,
+        energy_axis=session.plot.energy_axis, region=region, figure=figure,
     )
     session.figure = figure
     session.traces = []

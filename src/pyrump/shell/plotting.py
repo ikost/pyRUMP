@@ -124,6 +124,27 @@ def figure_for(session):
     return session.figure, session.figure.axes[0]
 
 
+def compare_figure_for(session, *, residuals: bool):
+    """The session's COMPARE figure, reused across calls like :func:`figure_for`.
+
+    A figure left over from PLOT/OVERLAY (wrong axis count) or a closed
+    window is discarded; otherwise the same window and canvas are redrawn
+    into rather than closed and reopened, so repeated COMPARE calls don't
+    make the plot window flash and re-raise itself.
+    """
+    plt = require_matplotlib()
+    expected_axes = 2 if residuals else 1
+    stale = session.figure is not None and (
+        len(session.figure.axes) != expected_axes
+        or not plt.fignum_exists(session.figure.number)
+    )
+    if stale:
+        plt.close(session.figure)
+        session.figure = None
+    plt.ion()
+    return session.figure
+
+
 def draw(session) -> None:
     """Render every trace according to the current :class:`PlotState`."""
     if not session.traces:
