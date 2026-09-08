@@ -111,8 +111,10 @@ def test_window_and_normalization_are_recorded(session):
 
 @needs_data
 def test_thickness_selects_a_layer_by_one_based_number(session):
+    """The displayed name echoes back the 1-based layer number the user
+    typed, not the fit engine's internal 0-based index."""
     run(session, "pert", "thick 1")
-    assert [v.name for v in session.pert.varying] == ["thickness[0]"]
+    assert [v.name for v in session.pert.varying] == ["thickness[1]"]
 
 
 @needs_data
@@ -173,7 +175,7 @@ def test_go_recovers_the_thickness_and_writes_it_back(session, capsys):
 
     output = capsys.readouterr().out
     assert "reduced chi-square" in output
-    assert "thickness[0]" in output
+    assert "thickness[1]" in output
 
 
 @needs_data

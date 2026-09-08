@@ -319,7 +319,8 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("SAVE", 2, cmd_save, "write the sample description to a file"),
     ("DENSITY", 2, cmd_density, "list the known thickness units"),
     ("SPLOT", 3, cmd_splot, "overlay the simulation on the plot"),
-    ("COMPARE", 4, cmd_compare, "plot the active buffer against the simulation"),
+    ("COMPARE", 0, cmd_compare, "plot the active buffer against the simulation"),
+    ("CMP", -3, cmd_compare, "synonym for COMPARE"),
 ]
 
 for _name, _minlen, _handler, _help in _ENTRIES:

@@ -21,6 +21,16 @@ called out below. If you need the original's exact command surface, install
 physics correctness (bug-for-bug vs. corrected numerics), not the command
 surface.
 
+### Unreleased
+
+- `COMPARE` now requires its full name (no partial abbreviation) at the RUMP,
+  SIM, and PERT levels alike, with `CMP` recognized everywhere as an explicit
+  synonym. Previously each level allowed a different, mode-dependent
+  abbreviation length -- `COMP` even collided with `COMPOSITION` in SIM and
+  PERT, silently invoking the wrong command. This is a deliberate departure
+  from matching the original's abbreviation rule for this one command, in
+  favor of one unambiguous, consistent behavior.
+
 ### 1.1.0 (2026-08-26)
 
 - New RUMP-level `OFFSET` command: shows or sets the calibration's `kev0`
@@ -149,8 +159,11 @@ Your wish? quit
 ```
 
 Command names and their **minimum abbreviations** follow the original
-(`REGion`, `OVerlay`, `COMPare`), so `reg 100 400` and `region 100 400` are the
-same command. `?` lists everything, with the required characters upper-cased.
+(`REGion`, `OVerlay`), so `reg 100 400` and `region 100 400` are the same
+command. `?` lists everything, with the required characters upper-cased. One
+exception: `COMPARE` requires its full name at every level, since a partial
+abbreviation collided with `COMPOSITION` in SIM and PERT; `CMP` works
+everywhere instead as an explicit synonym.
 
 Commands tagged `[new]` below have no original-RUMP counterpart — see the
 [Changelog](#changelog)'s versioning note for what that means for
@@ -280,6 +293,7 @@ commands.
 | `REPLOT` | redraw the current plot, unchanged |
 | `AXIS` | draw empty axes, with no data |
 | `COMPARE` | active buffer vs. the simulation, with Poisson residuals |
+| `CMP` | synonym for `COMPARE`, at the RUMP, SIM, and PERT levels alike |
 | `DISPLAY` | sample composition vs. depth (from the SIM description) |
 | `REGION lo hi` | channel range shown |
 | `EXPAND lo hi` | narrow the current region and redraw |

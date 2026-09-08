@@ -36,7 +36,16 @@ from .rump import Return, cmd_compare
 
 @dataclass(slots=True)
 class Vary:
-    """One selected parameter, with what it maps back onto."""
+    """One selected parameter, with what it maps back onto.
+
+    ``name`` is what PERT prints and echoes back to the user, so it uses the
+    same 1-based layer numbering the user typed (``THICK 1`` selects layer 1).
+    ``parameter.name`` is the fit engine's own identity for the same
+    parameter (:mod:`pyrump.fit.parameters`), which indexes layers the
+    Python-native 0-based way and is what ``FitResult.parameters``/
+    ``uncertainties`` are keyed by -- the two are deliberately not the same
+    string.
+    """
 
     parameter: object
     kind: str                 # thickness | composition | equation | simple | sample
@@ -111,7 +120,7 @@ def cmd_thickness(session, args: ArgReader) -> None:
             parameter=thickness(layer),
             kind="thickness",
             layer=layer,
-            name=f"thickness[{layer}]",
+            name=f"thickness[{layer + 1}]",
         ),
     )
 
@@ -139,7 +148,7 @@ def cmd_composition(session, args: ArgReader) -> None:
             layer=layer,
             index=index,
             symbol=symbol,
-            name=f"composition[{layer},{index}]",
+            name=f"composition[{layer + 1},{index}]",
         ),
     )
 
@@ -157,7 +166,7 @@ def cmd_species(session, args: ArgReader) -> None:
             layer=layer,
             index=index,
             symbol=symbol,
-            name=f"species[{layer},{symbol}]",
+            name=f"species[{layer + 1},{symbol}]",
         ),
     )
 
@@ -180,7 +189,7 @@ def cmd_equation(session, args: ArgReader) -> None:
             kind="equation",
             layer=layer,
             index=index,
-            name=f"equation[{layer},{index}]",
+            name=f"equation[{layer + 1},{index + 1}]",
         ),
     )
 
@@ -470,7 +479,8 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("THETA", 4, _simple("theta"), "vary the sample tilt"),
     ("OFFSET", 3, _simple("kev(0)"),
      "vary the calibration energy offset (e.g. a sample-charging shift)"),
-    ("COMPARE", 4, cmd_compare, "plot the active buffer against the simulation"),
+    ("COMPARE", 0, cmd_compare, "plot the active buffer against the simulation"),
+    ("CMP", -3, cmd_compare, "synonym for COMPARE"),
 ]
 
 for _name, _minlen, _handler, _help in _ENTRIES:
