@@ -22,6 +22,8 @@ convention used throughout the manual.
 
 from __future__ import annotations
 
+import inspect
+import re
 from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
@@ -32,6 +34,20 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 #: A command handler. Receives the session and a reader over the remaining
 #: tokens on the line, and mutates the session.
 Handler = Callable[["Session", "ArgReader"], None]
+
+#: Many handler docstrings open with their own usage line, e.g.
+#: ``"``THICKNESS lo hi element`` -- INTEGRAL plus a thickness conversion."``
+#: -- a convention already used throughout commands/*.py. Pull it out for
+#: ``HELP <name>`` rather than inventing a second, parallel place to write it.
+_USAGE_RE = re.compile(r"^``([^`]+)``")
+
+
+def _usage(handler: Handler) -> str | None:
+    doc = inspect.getdoc(handler)
+    if not doc:
+        return None
+    match = _USAGE_RE.match(doc)
+    return match.group(1) if match else None
 
 
 class CommandError(Exception):
@@ -138,16 +154,22 @@ class CommandTable:
         return "\n".join(lines)
 
     def describe(self, token: str) -> str | None:
-        """The one-line entry for a single command, for ``HELP <name>``.
+        """The full entry for a single command, for ``HELP <name>``.
 
         None if this table has nothing matching ``token``, so callers can fall
         through to the next table the way :func:`execute_line` falls through
-        the mode stack.
+        the mode stack. Adds a ``usage:`` line when the handler's own
+        docstring states one (see :func:`_usage`) -- the short table
+        description alone doesn't say what arguments a command takes.
         """
         command = self.match(token)
         if command is None:
             return None
-        return f"{self.title}\n  {command.display}  {command.help}".rstrip()
+        lines = [self.title, f"  {command.display}  {command.help}".rstrip()]
+        usage = _usage(command.handler)
+        if usage:
+            lines.append(f"  usage: {usage}")
+        return "\n".join(lines)
 
 
 def tokenize(line: str) -> list[str]:

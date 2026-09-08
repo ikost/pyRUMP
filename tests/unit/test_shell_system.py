@@ -458,3 +458,15 @@ def test_help_on_an_unknown_command_names_it_instead_of_erroring_on_extra_args(s
 def test_help_still_rejects_more_than_one_argument(session):
     with pytest.raises(CommandError, match="unexpected extra argument"):
         run(session, "help pwd extra")
+
+
+def test_help_adds_a_usage_line_when_the_handler_documents_one(session, capsys):
+    """THICKNESS's handler docstring opens with ``THICKNESS lo hi element``."""
+    run(session, "help thickness")
+    assert "usage: THICKNESS lo hi element" in capsys.readouterr().out
+
+
+def test_help_omits_the_usage_line_when_the_handler_has_none(session, capsys):
+    """PWD's handler has no docstring at all -- nothing to invent here."""
+    run(session, "help pwd")
+    assert "usage:" not in capsys.readouterr().out
