@@ -228,7 +228,9 @@ def buffer_label(session, buffer, index: int) -> str:
     if index == 0 and session.plot.structure_labels:
         from ..script.lcm import structure_label
 
-        label = structure_label(session.script)
+        label = structure_label(
+            session.script, normalize=session.plot.composition_fraction
+        )
         if label:
             return label
     return buffer.name or buffer.identifier or f"buffer {index}"

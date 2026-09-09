@@ -38,6 +38,12 @@ surface.
   RBS composition resolution) but keeps trailing zeros, so a PERT-fitted
   count that rounds to a whole number still reads as measured rather than
   exact (`"Mn2.998Pt"` -> `"Mn3.00Pt"`, not `"Mn3Pt"`).
+- New RUMP-level `COMPFRAC` command `[new]`: with `STRUCTLABEL` on, shows
+  each layer's composition as atomic fraction (summing to 1) instead of raw
+  stoichiometry -- `"Mn3Pt"` becomes `"Mn0.75Pt0.25"`. Purely a display
+  choice: it never touches the SIM sample's stored composition or PERT's fit
+  parameters, and is physically equivalent to the un-normalized form, since
+  RUMP's own atomic-density mixing rule already normalizes by the same total.
 
 ### 1.1.0 (2026-08-26)
 
@@ -311,6 +317,7 @@ commands.
 | `NORMALIZE` / `RAW` | normalized vs. raw yield units |
 | `LABELS [off]` | axis labels on or off |
 | `STRUCTLABEL [off]` | show the SIM sample's layer structure (substrate first) as the simulation's legend text, instead of "SIM" |
+| `COMPFRAC [off]` `[new]` | within `STRUCTLABEL`, show each layer's composition as atomic fraction (sums to 1) instead of raw stoichiometry |
 | `ENERGY [off]` | x axis in energy (keV) rather than channel |
 | `PARMS` / `PARAMETERS` | print the current plot settings |
 

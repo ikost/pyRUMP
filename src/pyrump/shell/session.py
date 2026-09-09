@@ -318,6 +318,7 @@ class PlotState:
     energy_axis: bool = False       # RUMP plots against channel by default
     labels: bool = True
     structure_labels: bool = False
+    composition_fraction: bool = False
     forcex: bool = False
     autoids: bool = False
 
@@ -349,6 +350,7 @@ class PlotState:
                 f"{', forced' if self.forcex else ''}",
                 f"  Labels     {'on' if self.labels else 'off'}",
                 f"  Struct     {'on' if self.structure_labels else 'off'}",
+                f"  CompFrac   {'on' if self.composition_fraction else 'off'}",
             ]
         )
 

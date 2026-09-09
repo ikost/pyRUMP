@@ -765,6 +765,20 @@ def cmd_structlabel(session, args: ArgReader) -> None:
     print(f"structure labels {'on' if session.plot.structure_labels else 'off'}")
 
 
+def cmd_compfrac(session, args: ArgReader) -> None:
+    """COMPFRAC [OFF]: within STRUCTLABEL's layer structure, show each
+    layer's composition as atomic fraction (summing to 1) instead of raw
+    stoichiometry -- "Mn0.75Pt0.25" instead of "Mn3Pt". Cosmetic only: it
+    reformats the STRUCTLABEL string, nothing the SIM sample or PERT fit
+    parameters actually store (script/lcm.py's structure_label)."""
+    token = args.optional()
+    args.done()
+    session.plot.composition_fraction = token is None or token.lower() not in ("off", "no", "none")
+    if session.traces:
+        plotting.draw(session)
+    print(f"composition fraction {'on' if session.plot.composition_fraction else 'off'}")
+
+
 def cmd_faithful(session, args: ArgReader) -> None:
     token = args.optional()
     args.done()
@@ -1367,6 +1381,8 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("LABELS", 2, cmd_labels, "label the axes (LABELS OFF to suppress)"),
     ("STRUCTLABEL", 4, cmd_structlabel,
      "show the sample's layer structure as the simulation's legend text (STRUCTLABEL OFF for \"SIM\")"),
+    ("COMPFRAC", 4, cmd_compfrac,
+     "show STRUCTLABEL composition as atomic fraction, not raw stoichiometry"),
     ("ENERGY", 4, cmd_energy, "x axis in energy rather than channel"),
     # Buffers
     ("BUFFERS", 3, cmd_buffers, "display the buffer status"),

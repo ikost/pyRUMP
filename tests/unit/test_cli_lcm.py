@@ -150,6 +150,17 @@ def test_structure_label_rounds_thickness_to_the_nearest_whole_unit():
     assert structure_label(script) == "Si [300/cm2] - Mn [150A]"
 
 
+def test_structure_label_normalize_shows_atomic_fraction():
+    script = parse_lcm(
+        "Sim Reset\nLayer 1\n Thick 150 A\n Composition Mn 3 Pt 1 /\n"
+        "Next\n Thick 500 /cm2\n Composition Si 1 /\n"
+    )
+    assert (
+        structure_label(script, normalize=True)
+        == "Si [500/cm2] - Mn0.75Pt0.25 [150A]"
+    )
+
+
 def test_equation_and_species():
     script = parse_lcm(
         "Sim Reset\nLayer 1\n Thick 1000 A\n Composition Si 1 /\n"

@@ -675,6 +675,23 @@ def test_structlabel_on_shows_the_sample_structure(session, tmp_path):
 
 
 @needs_data
+def test_compfrac_on_shows_atomic_fraction(session, tmp_path):
+    sample = tmp_path / "compfrac_on.lcm"
+    sample.write_text(
+        "Sim Reset\nLayer 1\n Thick 150 A\n Composition Mn 3 Pt 1 /\n"
+        "Next\n Thick 500 /cm2\n Composition Si 1 /\nMaxpth 200\n"
+    )
+    run(session, f"sim get {sample}", "structlabel on", "compfrac on", "compare")
+
+    labels = session.figure.axes[0].get_legend_handles_labels()[1]
+    assert labels == ["test", "Si [500/cm2] - Mn0.75Pt0.25 [150A]"]
+
+    run(session, "compfrac off", "compare")
+    labels = session.figure.axes[0].get_legend_handles_labels()[1]
+    assert labels == ["test", "Si [500/cm2] - Mn3Pt [150A]"]
+
+
+@needs_data
 def test_plot_and_compare_reuse_the_same_figure(session, tmp_path):
     """PLOT (1 panel) -> COMPARE (2 panels) -> PLOT (1 panel again) must draw
     into the same window throughout, so a user's dragged window position
