@@ -134,6 +134,23 @@ def state_for(session) -> PertState:
     return session.pert
 
 
+def layers_at_risk(session, from_index: int) -> list[str]:
+    """Names of PERT selections whose layer is at or after ``from_index``.
+
+    Inserting or removing a SIM layer at ``from_index`` shifts every later
+    layer's position, which silently misdirects any such selection: the fit
+    parameters it built (:mod:`pyrump.fit.parameters`'s ``thickness()``/
+    ``composition()``/``equation_parameter()``) close over a plain integer
+    layer index, not the layer's identity, so they now read/write whatever
+    layer ended up at that index. Used by SIM's DELETE/OPEN to warn, not
+    block -- callers decide what to do with the names.
+    """
+    state = session.pert
+    if state is None:
+        return []
+    return [v.name for v in state.varying if v.layer >= from_index]
+
+
 def _layer_argument(session, args: ArgReader) -> int:
     """A 1-based layer number, validated against the sample."""
     number = args.integer("a layer number")

@@ -119,6 +119,37 @@ def test_thickness_selects_a_layer_by_one_based_number(session):
 
 
 @needs_data
+def test_sim_delete_warns_about_a_pert_selection_on_a_later_layer(session, capsys):
+    """Deleting layer 1 shifts layer 2 down to index 0, so the earlier
+    ``thickness 2`` selection (layer index 1) now silently points at
+    whatever ended up there -- SIM must say so."""
+    run(session, "pert", "thickness 2", "return", "sim", "layer 1", "delete")
+    output = capsys.readouterr().out
+    assert "WARNING" in output
+    assert "layer 2 thickness" in output
+    assert [layer.thickness for layer in session.script.layers] == [5000.0]
+
+
+@needs_data
+def test_sim_delete_of_a_later_layer_does_not_warn(session, capsys):
+    """Deleting layer 2 never shifts layer 1, so a selection on layer 1
+    (the earlier, unaffected layer) needs no warning."""
+    run(session, "pert", "thickness 1", "return", "sim", "layer 2", "delete")
+    output = capsys.readouterr().out
+    assert "WARNING" not in output
+
+
+@needs_data
+def test_sim_open_warns_about_a_pert_selection_on_the_current_layer(session, capsys):
+    """Inserting a blank layer above layer 1 shifts it (and the
+    already-selected ``thickness 1``) down to index 1."""
+    run(session, "pert", "thickness 1", "return", "sim", "layer 1", "open")
+    output = capsys.readouterr().out
+    assert "WARNING" in output
+    assert "layer 1 thickness" in output
+
+
+@needs_data
 def test_selecting_a_layer_outside_the_sample_is_rejected(session):
     with pytest.raises(CommandError, match="outside 1-2"):
         run(session, "pert", "thick 9")

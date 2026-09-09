@@ -269,12 +269,33 @@ class SampleEditor:
     def next_layer(self) -> None:
         self.select(self.current + 1)
 
-    def open_layer(self) -> None:
-        """Insert a blank layer above the pointer and select it."""
+    def open_layer(self) -> int:
+        """Insert a blank layer above the pointer and select it.
+
+        Returns the insertion index, so a caller that tracks external
+        layer-index references (PERT's selections -- see
+        :mod:`pyrump.shell.commands.pert`) can tell which of them just
+        shifted.
+        """
         self._prune()
         index = min(self.current, len(self.script.layers))
         self.script.layers.insert(index, LcmLayer())
         self.current = index
+        return index
+
+    def close_layer(self) -> int:
+        """Remove the current layer (sim.htm's DELETE/CLOSE).
+
+        A no-op if the pointer is on the implicit blank layer -- callers
+        should check :attr:`layer` first if that should be an error.
+        Returns the removed index, same reason as :meth:`open_layer`.
+        """
+        self._prune()
+        index = self.current
+        if index < len(self.script.layers):
+            del self.script.layers[index]
+            self.current = min(index, len(self.script.layers))
+        return index
 
     def reset(self) -> None:
         self.script = Script()
@@ -304,6 +325,8 @@ class SampleEditor:
             self._writable()
         elif command == "open":
             self.open_layer()
+        elif command.startswith("del") or command == "close":
+            self.close_layer()
         elif command.startswith("desc"):
             script.description = line.split(None, 1)[1].strip().strip("'\"")
         elif command.startswith("thick"):

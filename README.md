@@ -44,6 +44,17 @@ surface.
   choice: it never touches the SIM sample's stored composition or PERT's fit
   parameters, and is physically equivalent to the un-normalized form, since
   RUMP's own atomic-density mixing rule already normalizes by the same total.
+- New SIM-level `DELETE` command (with `CLOSE` as its original synonym,
+  sim2.c's cmlist2), removing the current layer -- ported from the original,
+  which pyRUMP had been missing entirely. Original RUMP protects against a
+  locked-layer hazard with a per-layer counter that refuses to delete a layer
+  PERT is fitting; pyRUMP's PERT selections are index-based rather than
+  pointer-based (`fit/parameters.py`'s `thickness()`/`composition()` close
+  over a plain layer index), so deleting *or inserting* a layer can
+  misdirect a selection on a layer that merely shifted, not just the one
+  removed. Rather than block the edit, `DELETE` and `OPEN` now print a
+  warning naming every PERT selection whose layer index is at or past the
+  change, so you know to check `PERT PARMS` and re-select if needed.
 
 ### 1.1.0 (2026-08-26)
 
@@ -425,6 +436,7 @@ holds cannot drift apart. `SIM SAVE` writes RUMP's own format.
 | `LAYER <n>` | move to layer *n* |
 | `NEXT` | move to the next layer, opening one if needed |
 | `OPEN` | insert a blank layer above the current one |
+| `DELETE` / `CLOSE` | remove the current layer |
 | `RESET` | reset the sample to empty space |
 | `SHOW` | display the sample description |
 | `STATUS` | summarize layers, maxpth, straggle, multiple |

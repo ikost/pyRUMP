@@ -78,6 +78,31 @@ def test_open_inserts_above_the_current_layer():
     assert list(script.layers[1].composition) == ["C"]
 
 
+def test_delete_removes_the_current_layer():
+    editor = run(
+        "Layer 1", "Thick 100 A", "Composition Si 1 /",
+        "Next", "Thick 200 A", "Composition Au 1 /",
+        "Layer 1", "Delete",
+    )
+    script = editor.finish()
+    assert [layer.thickness for layer in script.layers] == [200.0]
+    assert list(script.layers[0].composition) == ["Au"]
+
+
+def test_close_is_a_synonym_for_delete():
+    editor = run(
+        "Layer 1", "Thick 100 A", "Composition Si 1 /",
+        "Next", "Thick 200 A", "Composition Au 1 /",
+        "Layer 1", "Close",
+    )
+    assert [layer.thickness for layer in editor.finish().layers] == [200.0]
+
+
+def test_delete_on_the_blank_layer_is_a_no_op():
+    editor = run("Layer 1", "Thick 100 A", "Composition Si 1 /", "Next", "Delete")
+    assert [layer.thickness for layer in editor.finish().layers] == [100.0]
+
+
 def test_a_layer_keeps_its_composition_when_only_thickness_is_zero():
     # Composition alone is enough to keep a layer, matching parse_lcm's original
     # "thickness > 0 or composition" rule.

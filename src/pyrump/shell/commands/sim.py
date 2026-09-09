@@ -80,12 +80,39 @@ def cmd_next(session, args: ArgReader) -> None:
     print(_where(editor))
 
 
+def _warn_shifted(session, from_index: int) -> None:
+    """Print a warning if any PERT selection's layer index just shifted."""
+    from .pert import layers_at_risk
+
+    at_risk = layers_at_risk(session, from_index)
+    if at_risk:
+        print(
+            "  WARNING: PERT is still varying " + ", ".join(at_risk) + " -- "
+            "layer numbers shifted, so these may now refer to the wrong "
+            "layer. Check PERT PARMS and re-select if needed."
+        )
+
+
 def cmd_open(session, args: ArgReader) -> None:
     args.done()
     editor = editor_for(session)
-    editor.open_layer()
+    index = editor.open_layer()
     session.touch()
     print("new layer opened up")
+    _warn_shifted(session, index)
+    print(_where(editor))
+
+
+def cmd_delete(session, args: ArgReader) -> None:
+    """DELETE (or CLOSE): remove the current layer (sim.htm's DELETE)."""
+    args.done()
+    editor = editor_for(session)
+    if editor.layer is None:
+        raise CommandError("nothing to delete -- you are on the blank layer")
+    index = editor.close_layer()
+    session.touch()
+    print(f"layer {index + 1} deleted")
+    _warn_shifted(session, index)
     print(_where(editor))
 
 
@@ -303,6 +330,8 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("LAYER", 2, cmd_layer, "move to a layer by number"),
     ("NEXT", 2, cmd_next, "move to the next layer"),
     ("OPEN", 2, cmd_open, "insert a blank layer above this one"),
+    ("DELETE", 3, cmd_delete, "remove this layer"),
+    ("CLOSE", -5, cmd_delete, "synonym for DELETE"),
     ("RESET", 5, cmd_reset, "reset the sample to empty space"),
     ("SHOW", 2, cmd_show, "display the sample"),
     ("STATUS", 2, cmd_status, "summarise the SIM parameters"),
