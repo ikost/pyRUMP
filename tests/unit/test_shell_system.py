@@ -350,7 +350,7 @@ def test_an_unknown_command_still_errors(session):
 # -- the regression this change is really about ----------------------------
 
 
-def _write_spectrum(path: Path) -> None:
+def _write_spectrum(path: Path, identifier: str = "regression fixture") -> None:
     """A minimal valid .rbs, so GET works without the atomic data tables."""
     import numpy as np
 
@@ -366,7 +366,7 @@ def _write_spectrum(path: Path) -> None:
             calibration=Calibration(npt=64),
             geometry=Geometry(theta=0.0, phi=10.0),
             measurement=Measurement(),
-            identifier="regression fixture",
+            identifier=identifier,
         ),
     )
 
@@ -394,6 +394,51 @@ def test_the_same_file_reached_by_different_relative_paths_is_one_buffer(
     # And by yet another spelling of the same path.
     run(session, "get ./a.rbs")
     assert session.buffers.get(2) is None
+
+
+def test_get_scrolls_a_new_file_into_buffer_1(session, tmp_path):
+    """RUMP's GET (rdwr.c's ``RbsBufferScroll``): buffer 1 is always
+    whatever was read most recently, and anything already there moves down
+    to make room -- it is never destroyed."""
+    _write_spectrum(tmp_path / "a.rbs", identifier="first")
+    _write_spectrum(tmp_path / "b.rbs", identifier="second")
+
+    run(session, f"get {tmp_path / 'a.rbs'}")
+    assert session.buffers.active == 1
+    assert session.buffers[1].identifier == "first"
+
+    run(session, f"get {tmp_path / 'b.rbs'}")
+    assert session.buffers.active == 1
+    assert session.buffers[1].identifier == "second"
+    assert session.buffers[2].identifier == "first"
+
+
+def test_get_scroll_keeps_growing_rather_than_destroying(session, tmp_path):
+    """Unlike the original's fixed-size ring, nothing here ever falls off
+    the end and gets freed -- the buffer list just keeps growing."""
+    for name in ("a", "b", "c"):
+        _write_spectrum(tmp_path / f"{name}.rbs", identifier=name)
+        run(session, f"get {tmp_path / f'{name}.rbs'}")
+
+    assert session.buffers[1].identifier == "c"
+    assert session.buffers[2].identifier == "b"
+    assert session.buffers[3].identifier == "a"
+
+
+def test_get_reselecting_an_open_file_does_not_scroll(session, tmp_path):
+    """Re-GETting a file already open in some buffer just re-selects it
+    (cmds.htm's PLOT behaviour) -- it must not also shuffle every other
+    buffer down a slot."""
+    _write_spectrum(tmp_path / "a.rbs", identifier="first")
+    _write_spectrum(tmp_path / "b.rbs", identifier="second")
+    run(session, f"get {tmp_path / 'a.rbs'}", f"get {tmp_path / 'b.rbs'}")
+    assert session.buffers[1].identifier == "second"
+    assert session.buffers[2].identifier == "first"
+
+    run(session, f"get {tmp_path / 'a.rbs'}")
+    assert session.buffers.active == 2
+    assert session.buffers[1].identifier == "second"
+    assert session.buffers[2].identifier == "first"
 
 
 def test_buffer_listings_stay_short_after_moving(session, tmp_path, capsys):

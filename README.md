@@ -55,6 +55,14 @@ surface.
   removed. Rather than block the edit, `DELETE` and `OPEN` now print a
   warning naming every PERT selection whose layer index is at or past the
   change, so you know to check `PERT PARMS` and re-select if needed.
+- `GET`/`READ`ing a file not already open in some buffer now scrolls it into
+  buffer 1 and pushes every other data buffer up one slot, matching the
+  original's `RbsBufferScroll` (`rdwr.c`): buffer 1 is "whatever was read
+  most recently," not a fixed slot. Previously pyRUMP placed each new file
+  in the lowest empty slot instead, leaving buffer 1 wherever the first file
+  happened to land. Unlike the original's fixed-size ring, nothing is
+  destroyed to make room -- the buffer list just keeps growing, preserving
+  the existing no-buffer-limit behaviour.
 
 ### 1.1.0 (2026-08-26)
 
@@ -253,12 +261,19 @@ commands act on implicitly. Buffer **0 is the simulation**; data starts at 1.
 | `WRITE f.rbs` / `WRASCII f.dat` | save the active buffer, binary or text |
 | `RECALCULATE` | force buffer 0 (the simulation) to recompute |
 
-Unlike the original there is no ten-buffer limit and nothing is destroyed to
-make room. Buffer 0 has **no simulate command**: it is recomputed whenever the
-sample or the active buffer's parameters change, which is how RUMP behaved.
+Reading a file you don't already have open always lands it in buffer 1 and
+becomes ACTIVE, pushing every other data buffer up one slot -- matching the
+original, where buffer 1 is "whatever was read most recently," not a fixed
+slot. Unlike the original, though, nothing ever falls off the end and gets
+destroyed to make room: the buffer list just keeps growing. Re-`GET`ting a
+file already open in some buffer just re-selects it in place, without
+scrolling anything (`cmds.htm`'s documented `PLOT` behaviour). Buffer 0 has
+**no simulate command**: it is recomputed whenever the sample or the active
+buffer's parameters change, which is how RUMP behaved.
 
 ```
-Your wish? get measured.rbs     /* reads the file into a new buffer   */
+Your wish? get measured.rbs     /* becomes buffer 1, ACTIVE            */
+Your wish? get another.rbs      /* becomes the new buffer 1; measured.rbs is now buffer 2 */
 Your wish? get 0                /* point back at the simulation       */
 Your wish? copy 0 2              /* snapshot the simulation into buffer 2 */
 ```

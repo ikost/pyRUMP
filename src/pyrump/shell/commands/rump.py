@@ -44,11 +44,15 @@ class Return(Exception):
 # ---------------------------------------------------------------------------
 
 
-def read_into_buffer(session, path: Path, index: int | None = None) -> int:
-    """Read a spectrum file into a buffer and make it ACTIVE.
+def read_into_buffer(session, path: Path) -> int:
+    """Read a spectrum file into buffer 1 and make it ACTIVE.
 
     If a buffer already holds this file, it is selected instead of re-read --
-    the behaviour cmds.htm describes for PLOT.
+    the behaviour cmds.htm describes for PLOT. Otherwise the new spectrum
+    becomes buffer 1 and every other data buffer shifts up one slot
+    (``BufferSet.scroll_in``, matching RUMP's own ``RbsBufferScroll``): in
+    RUMP, buffer 1 is always "whatever was read most recently," not a fixed
+    slot you point at.
     """
     from ...cli._common import read_spectrum
     from ...io.rbs import RbsSpectrum
@@ -92,7 +96,7 @@ def read_into_buffer(session, path: Path, index: int | None = None) -> int:
             kevch=defaults.calibration.kevch, kev0=defaults.calibration.kev0,
         )
 
-    slot = session.buffers.load(buffer, index)
+    slot = session.buffers.scroll_in(buffer)
     session.buffers.active = slot
     session.touch()
     return slot

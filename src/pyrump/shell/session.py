@@ -186,8 +186,12 @@ class Buffer:
 class BufferSet:
     """The numbered buffers, and which one is ACTIVE.
 
-    Index 0 is always the simulation. Data buffers start at 1. Unlike the
-    original there is no upper limit and nothing is silently destroyed.
+    Index 0 is always the simulation. Data buffers start at 1, and reading a
+    new file always lands in buffer 1, pushing every other data buffer up
+    one slot (:meth:`scroll_in`) -- RUMP's own behaviour, where buffer 1 is
+    "whatever was read most recently." Unlike the original's fixed-size
+    ring, which drops whatever falls off the far end, there is no upper
+    limit here and nothing is silently destroyed.
     """
 
     slots: list[Buffer | None] = field(default_factory=lambda: [None])
@@ -253,6 +257,17 @@ class BufferSet:
             index = self.first_free()
         self.set(index, buffer)
         return index
+
+    def scroll_in(self, buffer: Buffer) -> int:
+        """Install ``buffer`` as the new buffer 1, pushing every other data
+        buffer up one slot -- RUMP's ``RbsBufferScroll`` (rdwr.c), run
+        whenever GET (or PLOT/OVERLAY/etc. given a filename) reads a file
+        that isn't already open in some buffer. Unlike the original's
+        fixed-size ring, which destroys whatever falls off the far end,
+        nothing here is destroyed: the list just grows by one slot.
+        """
+        self.slots.insert(1, buffer)
+        return 1
 
     def release(self, index: int) -> None:
         if index == 0:
