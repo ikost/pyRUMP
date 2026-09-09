@@ -114,28 +114,79 @@ class Script:
         return seen
 
 
-def structure_label(script: Script) -> str:
+def _count(value: float) -> str:
+    """One element's stoichiometry count, chemical-notation style.
+
+    A count of exactly 1 is omitted (MgO, not Mg1O1). A count that is
+    exactly whole otherwise renders bare ("3", not "3.00"). Anything else
+    rounds to 2 decimals (nearest 1%) and keeps trailing zeros -- an RBS
+    measurement resolves composition to roughly 0.1 at% for heavy elements
+    and as coarse as 5% for light ones, so a PERT-fitted count has no
+    business showing more digits than that, but a value that merely rounds
+    to a whole number (2.998) must still read as measured, not exact
+    ("3.00", not "3").
+    """
+    if value == 1:
+        return ""
+    if value == int(value):
+        return _g(value)
+    return f"{value:.2f}"
+
+
+def _formula(composition: dict[str, float], *, normalize: bool = False) -> str:
+    """Compact chemical-formula rendering: {"Mg": 1, "O": 1} -> "MgO".
+
+    With ``normalize``, counts are first rescaled to sum to 1 within this
+    layer -- {"Mn": 3, "Pt": 1} -> {"Mn": 0.75, "Pt": 0.25} -- showing atomic
+    fraction instead of raw stoichiometry (COMPFRAC). This is purely
+    cosmetic: it never touches ``composition`` itself, so SIM's physics and
+    PERT's fit parameters (which vary the real dict) are unaffected --
+    RUMP's atomic-density mixing rule already normalizes by the same total
+    (:func:`pyrump.atomic.density.layer_atomic_density`), so the two
+    representations are physically identical.
+    """
+    if normalize:
+        total = sum(composition.values())
+        if total > 0:
+            composition = {
+                symbol: value / total for symbol, value in composition.items()
+            }
+    return "".join(f"{symbol}{_count(value)}" for symbol, value in composition.items())
+
+
+def thickness_label(value: float) -> str:
+    """A thickness for display, rounded to the nearest whole unit.
+
+    A fraction of an angstrom -- or of whatever other unit a layer's
+    thickness happens to be in -- is below RBS's depth resolution, so
+    showing digits past the decimal point only implies false precision
+    (a PERT-fitted 299.198 displays as 299). Used everywhere a thickness is
+    shown to the user (SIM SHOW, the plot legend, PERT GO); ``write_lcm``
+    keeps full precision, since a saved ``.lcm`` file is meant to round-trip
+    exactly.
+    """
+    return _g(round(value))
+
+
+def structure_label(script: Script, *, normalize: bool = False) -> str:
     """Compact substrate-first rendering of the sample's layer structure.
 
     ``script.layers`` is surface-first (layer 1 is the topmost layer, as
     SHOW lists it and .lcm files write it); this reverses that so the
-    substrate reads first, e.g. "Si 1 - Mn 3 Pt 1 [150A] - Ru 1 [30A]" for a
-    surface-first script of [Ru 30A, Mn3Pt1 150A, Si substrate]. The
-    substrate is shown as bare composition, with no thickness bracket.
-    Empty sample -> "".
+    substrate reads first, e.g. "Si [500/cm2] - Mn3Pt [150A] - Ru [30A]"
+    for a surface-first script of [Ru 30A, Mn3Pt1 150A, Si substrate
+    500/cm2]. Every layer, substrate included, shows its thickness and
+    unit. Composition renders as a compact chemical formula, or as atomic
+    fractions when ``normalize`` is set (see :func:`_formula`). Empty
+    sample -> "".
     """
     if not script.layers:
         return ""
-    parts: list[str] = []
-    for position, layer in enumerate(reversed(script.layers)):
-        composition = " ".join(
-            f"{symbol} {value:g}" for symbol, value in layer.composition.items()
-        )
-        if position == 0:
-            parts.append(composition)
-            continue
-        parts.append(f"{composition} [{layer.thickness:g}{layer.unit}]".strip())
-    return " - ".join(parts)
+    return " - ".join(
+        f"{_formula(layer.composition, normalize=normalize)} "
+        f"[{thickness_label(layer.thickness)}{layer.unit}]"
+        for layer in reversed(script.layers)
+    )
 
 
 def _element_pairs(tokens: list[str]) -> dict[str, float]:

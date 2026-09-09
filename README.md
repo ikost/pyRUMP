@@ -30,6 +30,14 @@ surface.
   PERT, silently invoking the wrong command. This is a deliberate departure
   from matching the original's abbreviation rule for this one command, in
   favor of one unambiguous, consistent behavior.
+- `STRUCTLABEL`'s layer structure now renders composition as a compact
+  chemical formula (`"Mg 1 O 1"` -> `"MgO"`, `"Si 1 O 2"` -> `"SiO2"`) with
+  the count omitted whenever it's exactly 1, and shows the substrate's own
+  thickness bracket like every other layer -- previously the substrate had
+  none. A non-whole count rounds to 2 decimals (nearest 1%, matching typical
+  RBS composition resolution) but keeps trailing zeros, so a PERT-fitted
+  count that rounds to a whole number still reads as measured rather than
+  exact (`"Mn2.998Pt"` -> `"Mn3.00Pt"`, not `"Mn3Pt"`).
 
 ### 1.1.0 (2026-08-26)
 

@@ -15,7 +15,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ...script.lcm import EQUATION_NAMES, SampleEditor, read_lcm, write_lcm
+from ...script.lcm import (
+    EQUATION_NAMES,
+    SampleEditor,
+    read_lcm,
+    thickness_label,
+    write_lcm,
+)
 from ..dispatch import ArgReader, CommandError, CommandTable
 from .rump import Return, cmd_compare
 
@@ -119,7 +125,8 @@ def describe(session, editor: SampleEditor) -> str:
             f"{symbol} {value:g}" for symbol, value in layer.composition.items()
         )
         lines.append(
-            f" {mark}{index + 1:3d}  {layer.thickness:12g} {layer.unit:<8s} {composition}"
+            f" {mark}{index + 1:3d}  {thickness_label(layer.thickness):>12s}"
+            f" {layer.unit:<8s} {composition}"
         )
         if layer.species:
             species = " ".join(

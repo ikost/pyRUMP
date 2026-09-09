@@ -663,11 +663,11 @@ def test_structlabel_on_shows_the_sample_structure(session, tmp_path):
     run(session, f"sim get {sample}", "structlabel on", "compare")
 
     labels = session.figure.axes[0].get_legend_handles_labels()[1]
-    assert labels == ["test", "Si 1 - Mn 3 Pt 1 [150A] - Ru 1 [30A]"]
+    assert labels == ["test", "Si [500/cm2] - Mn3Pt [150A] - Ru [30A]"]
 
     run(session, "sim splot")
     trace_labels = [t.label for t in session.traces]
-    assert trace_labels == ["Si 1 - Mn 3 Pt 1 [150A] - Ru 1 [30A]"]
+    assert trace_labels == ["Si [500/cm2] - Mn3Pt [150A] - Ru [30A]"]
 
     run(session, "structlabel off", "compare")
     labels = session.figure.axes[0].get_legend_handles_labels()[1]

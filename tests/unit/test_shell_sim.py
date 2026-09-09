@@ -110,3 +110,15 @@ def test_editing_round_trips_through_write_lcm():
     assert parse_lcm(write_lcm(script)).layers[0].composition == (
         script.layers[0].composition
     )
+
+
+def test_show_rounds_thickness_to_the_nearest_whole_unit():
+    """RBS has no depth resolution below roughly an angstrom, so SHOW
+    shouldn't display fractional thickness -- unlike write_lcm, which keeps
+    full precision so a saved .lcm round-trips exactly."""
+    from pyrump.shell.commands.sim import describe
+
+    editor = run("Layer 1", "Thick 150.198 A", "Composition Si 1 /")
+    output = describe(None, editor)
+    assert "150" in output
+    assert "150.198" not in output

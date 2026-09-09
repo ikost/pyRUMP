@@ -94,9 +94,9 @@ def test_structure_label_of_an_empty_sample_is_blank():
     assert structure_label(parse_lcm("Sim Reset\n")) == ""
 
 
-def test_structure_label_of_a_single_layer_has_no_bracket():
+def test_structure_label_of_a_single_layer_shows_its_thickness():
     script = parse_lcm(SIMPLE)
-    assert structure_label(script) == "Si 1"
+    assert structure_label(script) == "Si [2000A]"
 
 
 def test_structure_label_is_substrate_first():
@@ -105,7 +105,49 @@ def test_structure_label_is_substrate_first():
         "Next\n Thick 150 A\n Composition Mn 3 Pt 1 /\n"
         "Next\n Thick 500 /cm2\n Composition Si 1 /\n"
     )
-    assert structure_label(script) == "Si 1 - Mn 3 Pt 1 [150A] - Ru 1 [30A]"
+    assert structure_label(script) == "Si [500/cm2] - Mn3Pt [150A] - Ru [30A]"
+
+
+def test_structure_label_renders_a_compact_chemical_formula():
+    script = parse_lcm(
+        "Sim Reset\nLayer 1\n Thick 100 A\n Composition Mg 1 O 1 /\n"
+        "Next\n Thick 500 /cm2\n Composition Si 1 O 2 /\n"
+    )
+    assert structure_label(script) == "SiO2 [500/cm2] - MgO [100A]"
+
+
+def test_structure_label_rounds_fractional_counts_to_2_decimals():
+    script = parse_lcm(
+        "Sim Reset\nLayer 1\n Thick 150 A\n Composition Mn 2.734 Pt 1 /\n"
+        "Next\n Thick 500 /cm2\n Composition Si 1 /\n"
+    )
+    assert structure_label(script) == "Si [500/cm2] - Mn2.73Pt [150A]"
+
+
+def test_structure_label_keeps_trailing_zeros_for_a_near_whole_count():
+    script = parse_lcm(
+        "Sim Reset\nLayer 1\n Thick 150 A\n Composition Mn 2.998 Pt 1 /\n"
+        "Next\n Thick 500 /cm2\n Composition Si 1 /\n"
+    )
+    assert structure_label(script) == "Si [500/cm2] - Mn3.00Pt [150A]"
+
+
+def test_structure_label_shows_a_bare_whole_count_with_no_decimals():
+    script = parse_lcm(
+        "Sim Reset\nLayer 1\n Thick 150 A\n Composition Mn 3 Pt 1 /\n"
+        "Next\n Thick 500 /cm2\n Composition Si 1 /\n"
+    )
+    assert structure_label(script) == "Si [500/cm2] - Mn3Pt [150A]"
+
+
+def test_structure_label_rounds_thickness_to_the_nearest_whole_unit():
+    """Sub-angstrom (or sub-whatever-the-unit-is) precision is meaningless
+    for RBS depth resolution, so the legend shouldn't imply it."""
+    script = parse_lcm(
+        "Sim Reset\nLayer 1\n Thick 150.198 A\n Composition Mn 1 /\n"
+        "Next\n Thick 299.5 /cm2\n Composition Si 1 /\n"
+    )
+    assert structure_label(script) == "Si [300/cm2] - Mn [150A]"
 
 
 def test_equation_and_species():
