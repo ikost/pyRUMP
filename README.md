@@ -396,7 +396,9 @@ these — see the [known-limitations note](#milestones).
 `SIM` edits the sample description; `PERT` fits it. Both are sub-levels with
 their own prompt, and — as in the original — a command the sub-level does not
 recognise is passed out to the RUMP level, which returns you there automatically.
-`SIM <command>` also works as a one-shot from the top level.
+`SIM <command>` and `PERT <command>` also work as one-shots from the top level
+-- e.g. `PERT GET usual.pert GO` loads a saved fit setup and runs it in a
+single line, handy in a macro.
 
 ```
 Your wish? sim
@@ -465,7 +467,9 @@ PERT Command: go
   reduced chi-square 1.2849 on 20 dof
   12 evaluations, Both `ftol` and `xtol` termination conditions are satisfied.
   data scaled by 0.99441 over the norm window
-  thickness[0]                      299.198  +/- 0.3801   (was 200)
+  layer 1 thickness                    299  +/- 0.3801   (was 200)
+
+  fitted stack   Si [5000/cm2] - Au [299/cm2]
 ```
 
 Fitted values are written back into the sample description, so `SIM SHOW` and
@@ -481,14 +485,17 @@ a simultaneous least-squares fit (`SINGLE` loops one parameter at a time).
 | `RETURN` / `QUIT` | return to the RUMP level |
 | `GO` | run the fit |
 | `PARMS` | display the current selection and windows |
-| `CLEAR` | forget every selected parameter and window |
-| `WINDOW lo hi` / `WINDOW clear` | add / clear an error window, in channels (up to 10) |
+| `SHOW` | display the sample description (same as `SIM SHOW`) |
+| `GET <file>` / `GET <file> GO` | replay a saved selection from a `.pert` file, replacing the current one, and optionally run the fit right after |
+| `SAVE <file>` | save the current selection (windows + varying parameters) to a `.pert` file |
+| `CLEAR` / `CLEAR <n>` | forget everything, or just the *n*th varying parameter (1-based, as numbered by `PARMS`) |
+| `WINDOW lo hi` / `WINDOW clear` / `WINDOW remove <n>` | add / clear all / remove the *n*th error window, in channels (up to 10) |
 | `NORMALIZE lo hi` / `NORMALIZE off` | set / clear the normalisation window |
 | `SINGLE` / `MULTI` | fit one parameter at a time / all together (default) |
 | `VOLUME [off]` | verbose progress messages |
 | `THICKNESS <layer>` | vary a layer's thickness |
-| `COMPOSITION <layer> <El>` | vary one element's composition in a layer |
-| `SPECIES <layer> <El>` | vary the `EQUATION` species composition |
+| `COMPOSITION <layer> <El>` | vary one element's composition in a layer (must already be declared there) |
+| `SPECIES <layer> <El>` | vary the `EQUATION` species composition (must already be declared there) |
 | `EQUATION <layer> <n>` | vary equation parameter *n* |
 | `MEV` / `FWHM` / `THETA` / `CORRECTION` / `STRAGGLE` | vary that beam, detector or sample parameter |
 | `OFFSET` `[new]` | vary the calibration energy offset alone (e.g. a sample-charging shift) |

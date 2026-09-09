@@ -177,7 +177,13 @@ def cmd_sim(session, args: ArgReader) -> None:
 
 
 def cmd_pert(session, args: ArgReader) -> None:
-    args.done()
+    if args:
+        # "PERT GO", "PERT GET usual.pert GO" -- one-shot form, handled by
+        # PERT's own table (GET is what understands a trailing GO).
+        from .pert import execute_in_pert
+
+        execute_in_pert(session, args)
+        return
     raise EnterMode("pert")
 
 

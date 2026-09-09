@@ -13,12 +13,17 @@ Divergences from the original, both noted in the plan:
 * ``MULTI`` is the default, because :func:`pyrump.fit.lm.fit` is a
   simultaneous least-squares solve. ``SINGLE`` is emulated by fitting one
   parameter at a time, in the order they were selected.
+* ``GET``/``SAVE`` round-trip a ``.pert`` file, as in the original -- but as
+  plain PERT commands (``WINDOW``, ``THICKNESS``, ...), not RUMP's own
+  bounded-``VARY`` format (``pert.c``'s ``PertWriteParms``), since pyRUMP's
+  PERT has no generic ``VARY`` verb or per-parameter min/max to round-trip.
 """
 
 from __future__ import annotations
 
 import warnings
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import numpy as np
 
@@ -32,6 +37,54 @@ from ...fit.parameters import (
 from ...fit.windows import MAX_ERROR_WINDOWS, Window, WindowSet
 from ..dispatch import ArgReader, CommandError, CommandTable
 from .rump import Return, cmd_compare
+from .sim import describe as _describe_sample
+from .sim import editor_for
+
+
+def _format_windows(windows: list[Window]) -> str:
+    """One-line, 1-based ``[n] lo-hi`` rendering of the error windows."""
+    if not windows:
+        return "(none -- the whole spectrum)"
+    return "  ".join(f"[{i}] {w.low}-{w.high}" for i, w in enumerate(windows, start=1))
+
+
+def _format_varying(varying: list[Vary]) -> list[str]:
+    """Lines for the 'varying:' block, one per parameter, 1-based ``[n]``."""
+    if not varying:
+        return ["  varying:    (nothing selected)"]
+    lines = ["  varying:"]
+    lines.extend(f"    [{i}] {v.name}" for i, v in enumerate(varying, start=1))
+    return lines
+
+
+#: The few simple-parameter rump-names whose command word differs (pert.py's
+#: OFFSET adds ``kev(0)``, the only one where the two aren't the same string).
+_SIMPLE_PARAMETER_COMMANDS = {"kev(0)": "offset"}
+
+
+def _vary_command(entry: Vary) -> str:
+    """The PERT command line that would recreate this one selection."""
+    if entry.kind == "thickness":
+        return f"thickness {entry.layer + 1}"
+    if entry.kind == "composition":
+        return f"composition {entry.layer + 1} {entry.symbol}"
+    if entry.kind == "species":
+        return f"species {entry.layer + 1} {entry.symbol}"
+    if entry.kind == "equation":
+        return f"equation {entry.layer + 1} {entry.index + 1}"
+    return _SIMPLE_PARAMETER_COMMANDS.get(entry.name, entry.name)
+
+
+def _to_lines(state: PertState) -> list[str]:
+    """Command lines that recreate ``state``, for PERT SAVE/GET."""
+    lines = [f"window {w.low} {w.high}" for w in state.windows.error]
+    norm = state.windows.normalisation
+    if norm is not None:
+        lines.append(f"normalize {norm.low} {norm.high}")
+    if not state.multi:
+        lines.append("single")
+    lines.extend(_vary_command(v) for v in state.varying)
+    return lines
 
 
 @dataclass(slots=True)
@@ -66,20 +119,12 @@ class PertState:
 
     def describe(self) -> str:
         lines = [f"  mode        {'multiple' if self.multi else 'single'} variable"]
-        if self.windows.error:
-            spans = ", ".join(f"{w.low}-{w.high}" for w in self.windows.error)
-        else:
-            spans = "(none -- the whole spectrum)"
-        lines.append(f"  error win   {spans}")
+        lines.append(f"  error win   {_format_windows(self.windows.error)}")
         norm = self.windows.normalisation
         lines.append(
             f"  norm win    {f'{norm.low}-{norm.high}' if norm else '(none)'}"
         )
-        if self.varying:
-            lines.append("  varying:")
-            lines.extend(f"    {v.name}" for v in self.varying)
-        else:
-            lines.append("  varying:    (nothing selected)")
+        lines.extend(_format_varying(self.varying))
         return "\n".join(lines)
 
 
@@ -120,7 +165,7 @@ def cmd_thickness(session, args: ArgReader) -> None:
             parameter=thickness(layer),
             kind="thickness",
             layer=layer,
-            name=f"thickness[{layer + 1}]",
+            name=f"layer {layer + 1} thickness",
         ),
     )
 
@@ -135,11 +180,27 @@ def _element_index(session, symbol: str) -> int:
     )
 
 
+def _layer_element(session, layer: int, symbol: str, kind: str) -> str:
+    """Confirm ``symbol`` is declared in *this* layer's composition/species,
+    not just somewhere in the sample, and return it in its stored casing.
+    """
+    layer_obj = session.script.layers[layer]
+    table = layer_obj.species if kind == "species" else layer_obj.composition
+    for name in table:
+        if name.lower() == symbol.lower():
+            return name
+    raise CommandError(
+        f"{symbol} is not part of layer {layer + 1}'s {kind} "
+        f"(it has: {', '.join(table) or '(nothing)'}) -- check your input"
+    )
+
+
 def cmd_composition(session, args: ArgReader) -> None:
     layer = _layer_argument(session, args)
     symbol = args.token("an element symbol")
     args.done()
     index = _element_index(session, symbol)
+    canonical = _layer_element(session, layer, symbol, "composition")
     _add(
         session,
         Vary(
@@ -147,8 +208,8 @@ def cmd_composition(session, args: ArgReader) -> None:
             kind="composition",
             layer=layer,
             index=index,
-            symbol=symbol,
-            name=f"composition[{layer + 1},{index}]",
+            symbol=canonical,
+            name=f"layer {layer + 1} composition {canonical}",
         ),
     )
 
@@ -158,6 +219,7 @@ def cmd_species(session, args: ArgReader) -> None:
     symbol = args.token("an element symbol")
     args.done()
     index = _element_index(session, symbol)
+    canonical = _layer_element(session, layer, symbol, "species")
     _add(
         session,
         Vary(
@@ -165,8 +227,8 @@ def cmd_species(session, args: ArgReader) -> None:
             kind="species",
             layer=layer,
             index=index,
-            symbol=symbol,
-            name=f"species[{layer + 1},{symbol}]",
+            symbol=canonical,
+            name=f"layer {layer + 1} species {canonical}",
         ),
     )
 
@@ -189,7 +251,7 @@ def cmd_equation(session, args: ArgReader) -> None:
             kind="equation",
             layer=layer,
             index=index,
-            name=f"equation[{layer + 1},{index + 1}]",
+            name=f"layer {layer + 1} equation parameter {index + 1}",
         ),
     )
 
@@ -234,6 +296,18 @@ def cmd_window(session, args: ArgReader) -> None:
         state.windows.error = []
         print("  error windows cleared")
         return
+    if token is not None and token.lower() == "remove":
+        args.token()
+        n = args.integer("a window number")
+        args.done()
+        windows = state.windows.error
+        if not windows:
+            raise CommandError("no error windows are set")
+        if not 1 <= n <= len(windows):
+            raise CommandError(f"window {n} is outside 1-{len(windows)}")
+        del windows[n - 1]
+        print(f"  error windows {_format_windows(windows)}")
+        return
     low = args.integer("the first channel")
     high = args.integer("the last channel")
     args.done()
@@ -242,7 +316,7 @@ def cmd_window(session, args: ArgReader) -> None:
     if len(state.windows.error) >= MAX_ERROR_WINDOWS:
         raise CommandError(f"at most {MAX_ERROR_WINDOWS} error windows")
     state.windows.error.append(Window(low, high))
-    print(f"  error window {low}-{high}")
+    print(f"  error windows {_format_windows(state.windows.error)}")
 
 
 def cmd_normalize(session, args: ArgReader) -> None:
@@ -284,10 +358,72 @@ def cmd_parms(session, args: ArgReader) -> None:
     print(state_for(session).describe())
 
 
-def cmd_clear(session, args: ArgReader) -> None:
+def cmd_show(session, args: ArgReader) -> None:
+    """Display the sample description, as SIM SHOW does.
+
+    RUMP's own ``pert.c`` has this too (``PE_SHOW``, calling the same
+    ``SimShowSample``) -- undocumented there; documented here since it's the
+    natural way to check what a layer actually contains before COMPOSITION
+    or SPECIES.
+    """
     args.done()
+    print(_describe_sample(session, editor_for(session)))
+
+
+def cmd_get(session, args: ArgReader) -> None:
+    """Replay a saved PERT selection from a ``.pert`` file, replacing this one.
+
+    A trailing ``GO`` runs the fit immediately after loading, so ``PERT GET
+    usual.pert GO`` works as a single line (from the RUMP prompt or in a
+    macro) -- the common "load my usual setup and fit" idiom.
+    """
+    from ..repl import execute_file
+
+    path = Path(args.token("a .pert file"))
+    run_go = False
+    token = args.peek()
+    if token is not None and token.lower() == "go":
+        args.token()
+        run_go = True
+    args.done()
+    if not path.suffix:
+        path = path.with_suffix(".pert")
+    if not path.exists():
+        raise CommandError(f"no such file: {path}")
     session.pert = PertState()
-    print("  PERT settings cleared")
+    execute_file(session, path, stack=["rump", "pert"])
+    print(f"read {path}")
+    print(state_for(session).describe())
+    if run_go:
+        cmd_go(session, ArgReader([], command="go"))
+
+
+def cmd_save(session, args: ArgReader) -> None:
+    """Write the current selection to a ``.pert`` file, for GET to replay later."""
+    path = Path(args.token("an output .pert file"))
+    args.done()
+    if not path.suffix:
+        path = path.with_suffix(".pert")
+    lines = _to_lines(state_for(session))
+    path.write_text("\n".join(lines) + ("\n" if lines else ""))
+    print(f"wrote {path}")
+
+
+def cmd_clear(session, args: ArgReader) -> None:
+    if not args:
+        session.pert = PertState()
+        print("  PERT settings cleared")
+        return
+    n = args.integer("a parameter number")
+    args.done()
+    state = state_for(session)
+    varying = state.varying
+    if not varying:
+        raise CommandError("nothing selected to clear")
+    if not 1 <= n <= len(varying):
+        raise CommandError(f"parameter {n} is outside 1-{len(varying)}")
+    del varying[n - 1]
+    print("\n".join(_format_varying(varying)))
 
 
 def cmd_volume(session, args: ArgReader) -> None:
@@ -321,6 +457,22 @@ def cmd_help(session, args: ArgReader) -> None:
 
 def cmd_return(session, args: ArgReader) -> None:
     raise Return()
+
+
+def execute_in_pert(session, args: ArgReader) -> None:
+    """Run a one-shot ``PERT <command>`` from the RUMP level, as SIM does.
+
+    ``PERT GET usual.pert GO`` reaches here as ``args`` = ``["GET",
+    "usual.pert", "GO"]``: this dispatches only the first word (``GET``,
+    with the rest as its own args) -- GET's own handler is what understands
+    the trailing ``GO`` and runs the fit after loading.
+    """
+    name = args.token("a PERT command")
+    command = TABLE.match(name)
+    if command is None:
+        raise CommandError(f"unrecognized PERT command: {name}")
+    command.handler(session, ArgReader(args.remaining, command=command.name.lower()))
+    args.index = len(args.tokens)
 
 
 # ---------------------------------------------------------------------------
@@ -369,7 +521,7 @@ def _write_back(session, entry: Vary, inputs: FitInputs, before: float) -> None:
 def cmd_go(session, args: ArgReader) -> None:
     args.done()
     from ...fit.lm import fit
-    from ...script.lcm import to_sample
+    from ...script.lcm import structure_label, thickness_label, to_sample
     from ...sim.engine import simulate
 
     state = state_for(session)
@@ -444,10 +596,16 @@ def cmd_go(session, args: ArgReader) -> None:
         name = entry.parameter.name
         value = entry.parameter.get(inputs)
         sigma = result.uncertainties.get(name)
-        line = f"  {entry.name:26s} {value:14.6g}"
+        before = starting[entry.name]
+        if entry.kind == "thickness":
+            value_text, before_text = thickness_label(value), thickness_label(before)
+        else:
+            value_text, before_text = f"{value:.6g}", f"{before:.6g}"
+        line = f"  {entry.name:26s} {value_text:>14s}"
         if sigma:
             line += f"  +/- {sigma:.4g}"
-        print(line + f"   (was {starting[entry.name]:.6g})")
+        print(line + f"   (was {before_text})")
+    print(f"\n  fitted stack   {structure_label(session.script)}")
 
 
 TABLE = CommandTable("PERT Commands")
@@ -459,9 +617,12 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("QUIT", 1, cmd_return, "return to the RUMP level (not exit pyRUMP)"),
     ("GO", 2, cmd_go, "run the search"),
     ("PARMS", 2, cmd_parms, "display the current settings"),
-    ("CLEAR", 2, cmd_clear, "forget every selected parameter and window"),
+    ("SHOW", 2, cmd_show, "display the sample description (same as SIM SHOW)"),
+    ("GET", 2, cmd_get, "replay a saved PERT selection from a .pert file, or GET <file> GO"),
+    ("SAVE", 2, cmd_save, "save the current PERT selection to a .pert file"),
+    ("CLEAR", 2, cmd_clear, "forget every selected parameter and window, or CLEAR <n> one parameter"),
     # Windows and mode
-    ("WINDOW", 2, cmd_window, "set an error window in channels"),
+    ("WINDOW", 2, cmd_window, "set an error window in channels, or WINDOW REMOVE <n>"),
     ("NORMALIZE", 2, cmd_normalize, "set the normalisation window"),
     ("SINGLE", 2, cmd_single, "vary one parameter at a time"),
     ("MULTI", 3, cmd_multi, "vary all parameters together (default)"),
