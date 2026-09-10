@@ -717,6 +717,27 @@ def test_plot_and_compare_reuse_the_same_figure(session, tmp_path):
 
 
 @needs_data
+def test_a_hand_resized_window_survives_switching_to_compare(session, tmp_path):
+    """A window the user dragged bigger (or smaller) must stay that size
+    across a panel-count change, not snap back to COMPARE's own default --
+    only a genuinely new figure (e.g. after the user closes the window)
+    should ever apply a default size."""
+    sample = tmp_path / "resize_survives.lcm"
+    sample.write_text(
+        "Sim Reset\nLayer 1\n Thick 500 /cm2\n Composition Si 1 /\nMaxpth 200\n"
+    )
+
+    run(session, "plot")
+    session.figure.set_size_inches(14, 10)
+
+    run(session, f"sim get {sample}", "compare")
+    assert session.figure.get_size_inches() == pytest.approx((14, 10))
+
+    run(session, "plot")
+    assert session.figure.get_size_inches() == pytest.approx((14, 10))
+
+
+@needs_data
 def test_profile_prints_the_verbatim_stub_message(session, capsys):
     before = session.buffers.active_buffer.spectrum.counts.copy()
     run(session, "profile")

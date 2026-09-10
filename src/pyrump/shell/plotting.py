@@ -99,16 +99,17 @@ def _apply_scale(ax, state) -> None:
         ax.set_yscale("linear")
 
 
-def _rebuilt_figure(session, n_axes: int, build):
+def _rebuilt_figure(session, n_axes: int, build, *, default_size: tuple[float, float]):
     """Reuse the session's live figure across layout changes.
 
     A window the user closed by hand is the one case a new ``Figure`` (and so
-    a new OS window, at the backend's default position) is unavoidable --
-    ``fignum_exists`` catches that. Everything else, including switching
-    panel counts (a single-panel PLOT after a two-panel COMPARE, or the
-    reverse), clears and rebuilds axes on the SAME figure via ``clf()``
-    instead of closing and reopening it, so the window never jumps back to
-    its default position or size.
+    a new OS window, at the backend's default position and size) is
+    unavoidable -- ``fignum_exists`` catches that, and only then is
+    ``default_size`` applied. Everything else, including switching panel
+    counts (a single-panel PLOT after a two-panel COMPARE, or the reverse),
+    clears and rebuilds axes on the SAME figure via ``clf()`` instead of
+    closing and reopening it -- and leaves its size alone, so a window the
+    user resized or moved by hand doesn't snap back on the next COMPARE.
     """
     plt = require_matplotlib()
     figure = session.figure
@@ -117,6 +118,7 @@ def _rebuilt_figure(session, n_axes: int, build):
     if figure is None:
         plt.ion()
         figure = plt.figure()
+        figure.set_size_inches(*default_size)
     if len(figure.axes) != n_axes:
         figure.clf()
         build(figure)
@@ -127,17 +129,15 @@ def _rebuilt_figure(session, n_axes: int, build):
 def figure_for(session):
     """The session's single-panel figure and axes, created on first use."""
     def build(figure):
-        figure.set_size_inches(9, 5.5)
         figure.add_subplot(1, 1, 1)
 
-    figure = _rebuilt_figure(session, 1, build)
+    figure = _rebuilt_figure(session, 1, build, default_size=(9, 5.5))
     return figure, figure.axes[0]
 
 
 def compare_figure_for(session, *, residuals: bool):
     """The session's COMPARE figure, reused across calls like :func:`figure_for`."""
     def build(figure):
-        figure.set_size_inches(9, 6)
         if residuals:
             figure.subplots(
                 2, 1, sharex=True,
@@ -146,7 +146,7 @@ def compare_figure_for(session, *, residuals: bool):
         else:
             figure.add_subplot(1, 1, 1)
 
-    return _rebuilt_figure(session, 2 if residuals else 1, build)
+    return _rebuilt_figure(session, 2 if residuals else 1, build, default_size=(9, 6))
 
 
 def draw(session) -> None:
