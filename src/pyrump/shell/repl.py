@@ -119,11 +119,24 @@ def execute_line(session: Session, line: str, stack: list[str]) -> None:
     raise CommandError(f"unrecognized command: {name}")
 
 
+#: Extensions tried, in order, for a bare (extension-less) XEQ/CALL/EXECUTE
+#: argument. ``.cmd`` is pyRUMP's own convention; ``.rbs``/``.RBS`` are
+#: included because real RBS acquisition software often writes its output as
+#: a plain ``EMPTY``/``SWALLOW`` command macro under that extension (see the
+#: README's Buffers section) -- meant to be replayed with XEQ, not read with
+#: GET, despite the misleading name.
+MACRO_EXTENSIONS = (".cmd", ".rbs", ".RBS")
+
+
 def execute_file(session: Session, path: Path, stack: list[str] | None = None) -> None:
     """Run a macro file. Aborts at the first failing line, naming it."""
     path = Path(path)
     if not path.exists() and not path.suffix:
-        path = path.with_suffix(".cmd")
+        for ext in MACRO_EXTENSIONS:
+            candidate = path.with_suffix(ext)
+            if candidate.exists():
+                path = candidate
+                break
     if not path.exists():
         raise CommandError(f"no such command file: {path}")
 
@@ -134,7 +147,15 @@ def execute_file(session: Session, path: Path, stack: list[str] | None = None) -
     if stack is None:
         stack = ["rump"]
 
-    frame = XeqFrame(lines=path.read_text().splitlines())
+    try:
+        text = path.read_text()
+    except UnicodeDecodeError as error:
+        raise CommandError(
+            f"{path} is not a text command file ({error}) -- "
+            "binary spectrum data belongs with GET, not XEQ"
+        ) from None
+
+    frame = XeqFrame(lines=text.splitlines())
     session.xeq_depth = depth + 1
     session.xeq_stack.append(frame)
     try:

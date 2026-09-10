@@ -81,6 +81,15 @@ surface.
   (unbounded in the original; some of pyRUMP's own parameters, like
   thickness, already default to a physically sensible floor) -- give it and
   it overrides that default outright, matching the original.
+- `XEQ`/`CALL`/`EXECUTE` (and `.pyrumprc`/`--macro`, which share the same
+  loader) now also try `.rbs`/`.RBS` `[new]` for a bare, extension-less
+  argument, alongside the existing `.cmd` default -- some RBS acquisition
+  software writes its output as a plain `EMPTY`/`SWALLOW` command macro
+  under that extension (a real-world pattern, not a pyRUMP one: the file's
+  *content* is RUMP commands despite the name), meant to be replayed with
+  `XEQ` rather than read with `GET`. Trying to `XEQ` genuine binary `.rbs`
+  spectrum data now fails with a clear message naming the mistake, instead
+  of a raw decode error.
 
 ### 1.1.0 (2026-08-26)
 
@@ -563,7 +572,12 @@ PERT Command: go
 
 `XEQ <file>` runs a file of commands through the same interpreter the prompt
 uses, so an analysis can be checked in as a text file and replayed. `CALL` and
-`EXECUTE` are synonyms.
+`EXECUTE` are synonyms. A bare name with no extension is tried as-is, then as
+`.cmd`, then as `.rbs`/`.RBS` -- the last two `[new]` because some RBS
+acquisition software writes its output as a plain `EMPTY`/`SWALLOW` command
+macro under that extension (see [Buffers](#buffers)), despite the name
+suggesting real spectrum data. `XEQ`ing an actual binary `.rbs` file (that
+belongs with `GET`) fails with a clear message rather than a decode error.
 
 `SCRIPT <file>` logs what you type into exactly such a file, and `SCRIPT OFF`
 stops. `LOGFILE` and `RECORD` are synonyms.

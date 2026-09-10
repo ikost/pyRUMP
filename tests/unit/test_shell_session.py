@@ -417,6 +417,45 @@ def test_xeq_on_a_missing_file(session):
 
 
 @needs_data
+@pytest.mark.parametrize("suffix", [".rbs", ".RBS"])
+def test_xeq_finds_a_bare_name_with_an_rbs_extension(session, tmp_path, suffix):
+    """Real RBS acquisition software often writes its output as a plain
+    EMPTY/SWALLOW command macro under a ``.rbs``/``.RBS`` extension, meant
+    to be replayed with XEQ rather than read with GET -- so a bare XEQ
+    argument should find one of those, the same way it already finds a
+    bare ``.cmd``."""
+    macro = tmp_path / f"m{suffix}"
+    macro.write_text("region 50 250\nsqrt\n")
+    run(session, f"xeq {tmp_path / 'm'}")
+    assert (session.plot.low, session.plot.high) == (50, 250)
+    assert session.plot.yscale == "sqrt"
+
+
+@needs_data
+def test_xeq_of_genuine_binary_rbs_data_fails_cleanly(session, tmp_path):
+    """A real spectrum file belongs with GET, not XEQ -- trying to XEQ one
+    should give a clear error naming the mistake, not a raw decode
+    traceback."""
+    from pyrump.io.rbs import RbsSpectrum, write_rbs
+    from pyrump.model.detector import Measurement
+    from pyrump.model.geometry import Geometry
+    from pyrump.model.spectrum import Calibration as RbsCalibration
+
+    path = tmp_path / "data.rbs"
+    write_rbs(
+        path,
+        RbsSpectrum(
+            counts=np.arange(64, dtype=float),
+            calibration=RbsCalibration(npt=64),
+            geometry=Geometry(theta=0.0, phi=10.0),
+            measurement=Measurement(),
+        ),
+    )
+    with pytest.raises(CommandError, match="not a text command file"):
+        run(session, f"xeq {path}")
+
+
+@needs_data
 def test_a_self_calling_macro_is_stopped(session, tmp_path):
     macro = tmp_path / "loop.cmd"
     macro.write_text(f"xeq {tmp_path / 'loop.cmd'}\n")
