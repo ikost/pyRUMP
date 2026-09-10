@@ -14,15 +14,17 @@ Divergences from the original, both noted in the plan:
   simultaneous least-squares solve. ``SINGLE`` is emulated by fitting one
   parameter at a time, in the order they were selected.
 * ``GET``/``SAVE`` round-trip a ``.pert`` file, as in the original -- but as
-  plain PERT commands (``WINDOW``, ``THICKNESS``, ...), not RUMP's own
-  bounded-``VARY`` format (``pert.c``'s ``PertWriteParms``), since pyRUMP's
-  PERT has no generic ``VARY`` verb or per-parameter min/max to round-trip.
+  plain PERT commands (``WINDOW``, ``THICKNESS``, ...) rather than RUMP's own
+  bounded-``VARY`` format (``pert.c``'s ``PertWriteParms``): pyRUMP has no
+  generic ``VARY`` verb, so a search bound is instead an optional trailing
+  ``<min> <max>`` on the selecting command itself (``THICKNESS 1 100 500``),
+  which round-trips the same way GET/SAVE always have.
 """
 
 from __future__ import annotations
 
 import warnings
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 import numpy as np
@@ -53,7 +55,9 @@ def _format_varying(varying: list[Vary]) -> list[str]:
     if not varying:
         return ["  varying:    (nothing selected)"]
     lines = ["  varying:"]
-    lines.extend(f"    [{i}] {v.name}" for i, v in enumerate(varying, start=1))
+    for i, v in enumerate(varying, start=1):
+        bound = f"  bounds {v.bounds[0]:g}-{v.bounds[1]:g}" if v.bounds else ""
+        lines.append(f"    [{i}] {v.name}{bound}")
     return lines
 
 
@@ -65,14 +69,18 @@ _SIMPLE_PARAMETER_COMMANDS = {"kev(0)": "offset"}
 def _vary_command(entry: Vary) -> str:
     """The PERT command line that would recreate this one selection."""
     if entry.kind == "thickness":
-        return f"thickness {entry.layer + 1}"
-    if entry.kind == "composition":
-        return f"composition {entry.layer + 1} {entry.symbol}"
-    if entry.kind == "species":
-        return f"species {entry.layer + 1} {entry.symbol}"
-    if entry.kind == "equation":
-        return f"equation {entry.layer + 1} {entry.index + 1}"
-    return _SIMPLE_PARAMETER_COMMANDS.get(entry.name, entry.name)
+        base = f"thickness {entry.layer + 1}"
+    elif entry.kind == "composition":
+        base = f"composition {entry.layer + 1} {entry.symbol}"
+    elif entry.kind == "species":
+        base = f"species {entry.layer + 1} {entry.symbol}"
+    elif entry.kind == "equation":
+        base = f"equation {entry.layer + 1} {entry.index + 1}"
+    else:
+        base = _SIMPLE_PARAMETER_COMMANDS.get(entry.name, entry.name)
+    if entry.bounds is not None:
+        base += f" {entry.bounds[0]:g} {entry.bounds[1]:g}"
+    return base
 
 
 def _to_lines(state: PertState) -> list[str]:
@@ -98,6 +106,13 @@ class Vary:
     Python-native 0-based way and is what ``FitResult.parameters``/
     ``uncertainties`` are keyed by -- the two are deliberately not the same
     string.
+
+    ``bounds``, if given, is the user's own ``<min> <max>`` from the
+    selecting command -- kept separately from ``parameter.lower``/``.upper``
+    (which the solver actually reads, and which already default to a
+    physically sensible range for some parameters, e.g. thickness >= 0) so
+    that ``PARMS``/``SAVE`` only echo a bound the user actually typed, not
+    every parameter's built-in default range.
     """
 
     parameter: object
@@ -106,6 +121,7 @@ class Vary:
     index: int = -1
     symbol: str = ""
     name: str = ""
+    bounds: tuple[float, float] | None = None
 
 
 @dataclass(slots=True)
@@ -160,6 +176,23 @@ def _layer_argument(session, args: ArgReader) -> int:
     return number - 1
 
 
+def _optional_bounds(args: ArgReader) -> tuple[float, float] | None:
+    """Parse an optional trailing ``<min> <max>`` search bound.
+
+    Matches the original's own ``VARY`` grammar (pert.c's
+    ``PertGetVariable``): give neither to leave the parameter at its default
+    range, or both to constrain the search to it. There is no way to give
+    just one -- as in the original, min and max travel together.
+    """
+    if not args:
+        return None
+    low = args.number("a minimum bound")
+    high = args.number("a maximum bound")
+    if high <= low:
+        raise CommandError(f"empty bound: {low} to {high}")
+    return low, high
+
+
 def _add(session, entry: Vary) -> None:
     state = state_for(session)
     if any(v.name == entry.name for v in state.varying):
@@ -175,14 +208,19 @@ def _add(session, entry: Vary) -> None:
 
 def cmd_thickness(session, args: ArgReader) -> None:
     layer = _layer_argument(session, args)
+    bound = _optional_bounds(args)
     args.done()
+    param = thickness(layer)
+    if bound is not None:
+        param = replace(param, lower=bound[0], upper=bound[1])
     _add(
         session,
         Vary(
-            parameter=thickness(layer),
+            parameter=param,
             kind="thickness",
             layer=layer,
             name=f"layer {layer + 1} thickness",
+            bounds=bound,
         ),
     )
 
@@ -215,18 +253,23 @@ def _layer_element(session, layer: int, symbol: str, kind: str) -> str:
 def cmd_composition(session, args: ArgReader) -> None:
     layer = _layer_argument(session, args)
     symbol = args.token("an element symbol")
+    bound = _optional_bounds(args)
     args.done()
     index = _element_index(session, symbol)
     canonical = _layer_element(session, layer, symbol, "composition")
+    param = composition(layer, index)
+    if bound is not None:
+        param = replace(param, lower=bound[0], upper=bound[1])
     _add(
         session,
         Vary(
-            parameter=composition(layer, index),
+            parameter=param,
             kind="composition",
             layer=layer,
             index=index,
             symbol=canonical,
             name=f"layer {layer + 1} composition {canonical}",
+            bounds=bound,
         ),
     )
 
@@ -234,18 +277,23 @@ def cmd_composition(session, args: ArgReader) -> None:
 def cmd_species(session, args: ArgReader) -> None:
     layer = _layer_argument(session, args)
     symbol = args.token("an element symbol")
+    bound = _optional_bounds(args)
     args.done()
     index = _element_index(session, symbol)
     canonical = _layer_element(session, layer, symbol, "species")
+    param = composition(layer, index)
+    if bound is not None:
+        param = replace(param, lower=bound[0], upper=bound[1])
     _add(
         session,
         Vary(
-            parameter=composition(layer, index),
+            parameter=param,
             kind="species",
             layer=layer,
             index=index,
             symbol=canonical,
             name=f"layer {layer + 1} species {canonical}",
+            bounds=bound,
         ),
     )
 
@@ -253,6 +301,7 @@ def cmd_species(session, args: ArgReader) -> None:
 def cmd_equation(session, args: ArgReader) -> None:
     layer = _layer_argument(session, args)
     index = args.integer("a parameter number") - 1
+    bound = _optional_bounds(args)
     args.done()
     profile = session.script.layers[layer].profile
     if profile is None:
@@ -261,28 +310,35 @@ def cmd_equation(session, args: ArgReader) -> None:
         raise CommandError(
             f"equation parameter {index + 1} is outside 1-{len(profile.parameters)}"
         )
+    param = equation_parameter(layer, index)
+    if bound is not None:
+        param = replace(param, lower=bound[0], upper=bound[1])
     _add(
         session,
         Vary(
-            parameter=equation_parameter(layer, index),
+            parameter=param,
             kind="equation",
             layer=layer,
             index=index,
             name=f"layer {layer + 1} equation parameter {index + 1}",
+            bounds=bound,
         ),
     )
 
 
 def _simple(rump_name: str, kind: str = "simple"):
-    """A no-argument parameter from SIMPLE_PARAMETERS."""
+    """A parameter from SIMPLE_PARAMETERS, with an optional trailing bound."""
 
     def handler(session, args: ArgReader) -> None:
+        bound = _optional_bounds(args)
         args.done()
         try:
             param = parameter(rump_name)
         except KeyError as error:
             raise CommandError(str(error)) from None
-        _add(session, Vary(parameter=param, kind=kind, name=rump_name))
+        if bound is not None:
+            param = replace(param, lower=bound[0], upper=bound[1])
+        _add(session, Vary(parameter=param, kind=kind, name=rump_name, bounds=bound))
 
     return handler
 
@@ -517,12 +573,10 @@ def _write_back(session, entry: Vary, inputs: FitInputs, before: float) -> None:
         symbol = entry.symbol or session.script.elements[entry.index]
         target[symbol] = value
     elif entry.kind == "equation":
-        from dataclasses import replace as _replace
-
         profile = layers[entry.layer].profile
         params = list(profile.parameters)
         params[entry.index] = value
-        layers[entry.layer].profile = _replace(profile, parameters=tuple(params))
+        layers[entry.layer].profile = replace(profile, parameters=tuple(params))
     elif entry.kind == "sample":
         setattr(session.script, entry.name, value)
     else:
@@ -644,19 +698,19 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("SINGLE", 2, cmd_single, "vary one parameter at a time"),
     ("MULTI", 3, cmd_multi, "vary all parameters together (default)"),
     ("VOLUME", 3, cmd_volume, "verbose progress messages"),
-    # Parameters
-    ("THICKNESS", 2, cmd_thickness, "vary a layer thickness"),
-    ("COMPOSITION", 3, cmd_composition, "vary an element in a layer"),
-    ("SPECIES", 2, cmd_species, "vary the species composition"),
-    ("EQUATION", 2, cmd_equation, "vary an equation parameter"),
-    ("MEV", 3, _simple("mev"), "vary the beam energy"),
-    ("FWHM", 2, _simple("fwhm"), "vary the detector resolution"),
-    ("STRAGGLE", 5, _simple("straggle", "sample"), "vary the straggling constant"),
+    # Parameters -- all take an optional trailing "<min> <max>" search bound
+    ("THICKNESS", 2, cmd_thickness, "vary a layer thickness, e.g. THICKNESS <layer> [<min> <max>]"),
+    ("COMPOSITION", 3, cmd_composition, "vary an element in a layer [<min> <max>]"),
+    ("SPECIES", 2, cmd_species, "vary the species composition [<min> <max>]"),
+    ("EQUATION", 2, cmd_equation, "vary an equation parameter [<min> <max>]"),
+    ("MEV", 3, _simple("mev"), "vary the beam energy [<min> <max>]"),
+    ("FWHM", 2, _simple("fwhm"), "vary the detector resolution [<min> <max>]"),
+    ("STRAGGLE", 5, _simple("straggle", "sample"), "vary the straggling constant [<min> <max>]"),
     ("FUZZ", 2, cmd_fuzz, "vary the fuzz parameter (not implemented)"),
-    ("CORRECTION", 3, _simple("correction"), "vary the normalization correction"),
-    ("THETA", 4, _simple("theta"), "vary the sample tilt"),
+    ("CORRECTION", 3, _simple("correction"), "vary the normalization correction [<min> <max>]"),
+    ("THETA", 4, _simple("theta"), "vary the sample tilt [<min> <max>]"),
     ("OFFSET", 3, _simple("kev(0)"),
-     "vary the calibration energy offset (e.g. a sample-charging shift)"),
+     "vary the calibration energy offset (e.g. a sample-charging shift) [<min> <max>]"),
     ("COMPARE", 0, cmd_compare, "plot the active buffer against the simulation"),
     ("CMP", -3, cmd_compare, "synonym for COMPARE"),
 ]

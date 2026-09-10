@@ -63,6 +63,18 @@ surface.
   happened to land. Unlike the original's fixed-size ring, nothing is
   destroyed to make room -- the buffer list just keeps growing, preserving
   the existing no-buffer-limit behaviour.
+- Every PERT parameter-selecting command now takes an optional trailing
+  `<min> <max>` search bound, e.g. `THICKNESS 1 100 500` or `FWHM 15 25` --
+  restoring functionality the original had (every one of these commands was
+  secretly an alias for `pert.c`'s bounded `VARY`) that pyRUMP had been
+  missing entirely. The bound is a real constraint enforced by the solver
+  every iteration (`fit/parameters.py`'s `Parameter.lower`/`.upper`, already
+  wired into `fit/lm.py`'s bounded least-squares call), not just a display
+  hint, and it's echoed by `PARMS` and round-tripped by `GET`/`SAVE` like
+  any other selection. Omit it and a parameter keeps its default range
+  (unbounded in the original; some of pyRUMP's own parameters, like
+  thickness, already default to a physically sensible floor) -- give it and
+  it overrides that default outright, matching the original.
 
 ### 1.1.0 (2026-08-26)
 
@@ -520,12 +532,17 @@ a simultaneous least-squares fit (`SINGLE` loops one parameter at a time).
 | `NORMALIZE lo hi` / `NORMALIZE off` | set / clear the normalisation window |
 | `SINGLE` / `MULTI` | fit one parameter at a time / all together (default) |
 | `VOLUME [off]` | verbose progress messages |
-| `THICKNESS <layer>` | vary a layer's thickness |
-| `COMPOSITION <layer> <El>` | vary one element's composition in a layer (must already be declared there) |
-| `SPECIES <layer> <El>` | vary the `EQUATION` species composition (must already be declared there) |
-| `EQUATION <layer> <n>` | vary equation parameter *n* |
-| `MEV` / `FWHM` / `THETA` / `CORRECTION` / `STRAGGLE` | vary that beam, detector or sample parameter |
-| `OFFSET` `[new]` | vary the calibration energy offset alone (e.g. a sample-charging shift) |
+| `THICKNESS <layer> [<min> <max>]` | vary a layer's thickness, optionally bounded |
+| `COMPOSITION <layer> <El> [<min> <max>]` | vary one element's composition in a layer (must already be declared there) |
+| `SPECIES <layer> <El> [<min> <max>]` | vary the `EQUATION` species composition (must already be declared there) |
+| `EQUATION <layer> <n> [<min> <max>]` | vary equation parameter *n* |
+| `MEV` / `FWHM` / `THETA` / `CORRECTION` / `STRAGGLE` `[<min> <max>]` | vary that beam, detector or sample parameter |
+| `OFFSET` `[new]` `[<min> <max>]` | vary the calibration energy offset alone (e.g. a sample-charging shift) |
+
+Every one of the above takes an optional trailing `<min> <max>` search
+bound -- a real constraint the solver enforces, not just a label. Omit it and
+the parameter keeps its default range; give it and it replaces that default
+outright. `PARMS` echoes any bound in force, and `SAVE`/`GET` round-trip it.
 | `FUZZ` | not implemented — raises an error |
 | `COMPARE` `[new]` | active buffer vs. the simulation, with residuals |
 

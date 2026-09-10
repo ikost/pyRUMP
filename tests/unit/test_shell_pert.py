@@ -327,6 +327,97 @@ def test_show_prints_the_sample_description(session, capsys):
     assert "Si" in output
 
 
+# -- optional search bounds --------------------------------------------------
+
+
+@needs_data
+def test_thickness_accepts_an_optional_bound(session):
+    run(session, "pert", "thickness 1 100 500")
+    entry = session.pert.varying[0]
+    assert entry.bounds == (100.0, 500.0)
+    assert entry.parameter.lower == 100.0
+    assert entry.parameter.upper == 500.0
+
+
+@needs_data
+def test_thickness_with_no_bound_keeps_the_default_range(session):
+    run(session, "pert", "thickness 1")
+    entry = session.pert.varying[0]
+    assert entry.bounds is None
+    assert entry.parameter.lower == 0.0  # thickness's own physical floor
+
+
+@needs_data
+def test_a_reversed_bound_is_rejected(session):
+    with pytest.raises(CommandError, match="empty bound"):
+        run(session, "pert", "thickness 1 500 100")
+
+
+@needs_data
+def test_a_bound_with_only_one_number_is_rejected(session):
+    with pytest.raises(CommandError, match="expected a maximum bound"):
+        run(session, "pert", "thickness 1 100")
+
+
+@needs_data
+def test_a_simple_parameter_accepts_a_bound(session):
+    run(session, "pert", "mev 1.5 2.5")
+    entry = session.pert.varying[0]
+    assert entry.bounds == (1.5, 2.5)
+    assert entry.parameter.lower == 1.5
+    assert entry.parameter.upper == 2.5
+
+
+@needs_data
+def test_composition_accepts_a_bound(session):
+    run(session, "pert", "composition 1 Au 0.5 1.0")
+    entry = session.pert.varying[0]
+    assert entry.bounds == (0.5, 1.0)
+
+
+@needs_data
+def test_parms_shows_a_bound_only_for_a_parameter_that_has_one(session, capsys):
+    run(session, "pert", "thickness 1 100 500", "mev", "parms")
+    output = capsys.readouterr().out
+    assert "layer 1 thickness  bounds 100-500" in output
+    assert "mev" in output
+    assert "mev  bounds" not in output
+
+
+@needs_data
+def test_bound_overrides_the_parameter_own_default_floor(session):
+    """Thickness normally floors at 0 by default; an explicit negative
+    lower bound should win outright, matching the original -- pyRUMP's
+    built-in floor is a convenience default, not a hard physical rule the
+    user cannot override."""
+    run(session, "pert", "thickness 1 -50 500")
+    assert session.pert.varying[0].parameter.lower == -50.0
+
+
+@needs_data
+def test_bound_is_enforced_by_the_fit(session, capsys):
+    """Bounding thickness 1 to [190, 210] -- below the true 300 -- should
+    stop the solver at the boundary rather than reaching the true value,
+    proving the bound reaches the solver and isn't just cosmetic."""
+    run(session, "pert", "window 355 375", "norm 140 200", "thickness 1 190 210", "go")
+    fitted = session.script.layers[0].thickness
+    assert fitted <= 210.5
+    assert fitted != pytest.approx(TRUTH, rel=0.05)
+
+
+@needs_data
+def test_save_and_get_round_trip_a_bound(session, tmp_path):
+    pert_file = tmp_path / "bounded.pert"
+    run(
+        session, "pert", "thickness 1 100 500",
+        f"save {pert_file}", "clear", f"get {pert_file}",
+    )
+    entry = session.pert.varying[0]
+    assert entry.bounds == (100.0, 500.0)
+    assert entry.parameter.lower == 100.0
+    assert entry.parameter.upper == 500.0
+
+
 # -- GET/SAVE ----------------------------------------------------------------
 
 
