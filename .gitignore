@@ -22,3 +22,4 @@ htmlcov/
 
 # oracle build artifacts
 tests/oracle/build/
+mytest/
