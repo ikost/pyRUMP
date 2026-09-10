@@ -532,12 +532,13 @@ PERT Command: go
 ```
 
 ```
+  fit took 0.34 s
   reduced chi-square 1.2849 on 20 dof
   12 evaluations, Both `ftol` and `xtol` termination conditions are satisfied.
   data scaled by 0.99441 over the norm window
   layer 1 thickness                    299  +/- 0.3801   (was 200)
 
-  fitted stack   Si [5000/cm2] - Au [299/cm2]
+  sample id      au7.rbs
 ```
 
 Fitted values are written back into the sample description, so `SIM SHOW` and

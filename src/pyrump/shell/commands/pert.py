@@ -23,6 +23,7 @@ Divergences from the original, both noted in the plan:
 
 from __future__ import annotations
 
+import time
 import warnings
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -599,7 +600,7 @@ def _write_back(session, entry: Vary, inputs: FitInputs, before: float) -> None:
 def cmd_go(session, args: ArgReader) -> None:
     args.done()
     from ...fit.lm import fit
-    from ...script.lcm import structure_label, thickness_label, to_sample
+    from ...script.lcm import thickness_label, to_sample
     from ...sim.engine import simulate
 
     state = state_for(session)
@@ -640,6 +641,7 @@ def cmd_go(session, args: ArgReader) -> None:
         print(f"    eval {evaluation:3d}   chi2/dof {reduced:.4f}")
 
     result = None
+    started = time.perf_counter()
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("always", RuntimeWarning)
@@ -659,12 +661,14 @@ def cmd_go(session, args: ArgReader) -> None:
                     )
     except ValueError as error:
         raise CommandError(f"go: {error}") from None
+    elapsed = time.perf_counter() - started
 
     for entry in state.varying:
         _write_back(session, entry, inputs, starting[entry.name])
     session.editor = None
     session.touch()
 
+    print(f"  fit took {elapsed:.2f} s")
     print(f"\n  reduced chi-square {result.reduced_chi_square:.4f} on {result.dof} dof")
     print(f"  {result.n_evaluations} evaluations, {result.message}")
     if result.normalisation != 1.0:
@@ -687,7 +691,8 @@ def cmd_go(session, args: ArgReader) -> None:
         if sigma:
             line += f"  +/- {sigma:.4g}"
         print(line + f"   (was {before_text})")
-    print(f"\n  fitted stack   {structure_label(session.script)}")
+    sample_id = data_buffer.identifier or data_buffer.name or "(unnamed)"
+    print(f"\n  sample id      {sample_id}")
 
 
 TABLE = CommandTable("PERT Commands")

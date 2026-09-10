@@ -562,8 +562,9 @@ def test_pert_get_go_runs_as_a_single_line(session, tmp_path, capsys):
     fitted = session.script.layers[0].thickness
     assert fitted == pytest.approx(TRUTH, rel=0.05)
     output = capsys.readouterr().out
+    assert "fit took" in output
     assert "reduced chi-square" in output
-    assert "fitted stack" in output
+    assert "sample id" in output
 
 
 @needs_data
@@ -589,11 +590,10 @@ def test_go_recovers_the_thickness_and_writes_it_back(session, capsys):
     assert fitted != GUESS
 
     output = capsys.readouterr().out
+    assert "fit took" in output
     assert "reduced chi-square" in output
     assert "layer 1 thickness" in output
-    assert "fitted stack" in output
-    assert "Au" in output
-    assert "Si" in output
+    assert "sample id      au" in output
 
 
 @needs_data
