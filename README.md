@@ -504,7 +504,7 @@ holds cannot drift apart. `SIM SAVE` writes RUMP's own format.
 | `FUZZ <amount> <steps>` | roughen the interface above this layer |
 | `SUBLAYER <n>` | force a sublayer count |
 | `STHICKNESS <v> <unit>` | or set the thickness of each sublayer |
-| `MAXPTH <v>` | default sublayer thickness, 10¹⁵ at/cm² |
+| `MAXPTH [<v>]` | default sublayer thickness, 10¹⁵ at/cm² -- shows the current value with no argument |
 | `STRAGGLE <v>` | Bohr straggling multiplier |
 | `ABSORBER <n>` | first *n* layers are a dead layer/window, not sample |
 | `MULTIPLE <v>` | multiple-scattering amount |

@@ -280,6 +280,43 @@ def test_rbs_load_is_unaffected_by_session_defaults(tmp_path):
     assert fresh.buffers.require_active().beam.e0_MeV == 2.5
 
 
+# -- SIM MAXPTH --------------------------------------------------------------
+
+
+_MAXPTH_SAMPLE = "Sim Reset\nLayer 1\n Thick 500 /cm2\n Composition Si 1 /\nMaxpth 200\n"
+
+
+@needs_data
+def test_maxpth_with_no_argument_shows_the_current_value(session, tmp_path, capsys):
+    """Every other layer/sample setter needs a value; MAXPTH is sample-wide
+    state, so "what is it now" is always answerable -- it must not fall
+    through to the generic per-layer setter path and raise a raw IndexError
+    from the missing float(rest[0])."""
+    sample = tmp_path / "s.lcm"
+    sample.write_text(_MAXPTH_SAMPLE)
+    run(session, f"sim get {sample}")
+
+    capsys.readouterr()
+    run(session, "sim maxpth")
+    assert "maxpth 200" in capsys.readouterr().out
+
+
+@needs_data
+def test_maxpth_with_a_value_sets_it_and_echoes_it_back(session, tmp_path, capsys):
+    sample = tmp_path / "s.lcm"
+    sample.write_text(_MAXPTH_SAMPLE)
+    run(session, f"sim get {sample}")
+
+    capsys.readouterr()
+    run(session, "sim maxpth 500")
+    assert "maxpth 500" in capsys.readouterr().out
+    assert session.script.maxpth == 500.0
+
+    capsys.readouterr()
+    run(session, "sim maxpth")
+    assert "maxpth 500" in capsys.readouterr().out
+
+
 @needs_data
 def test_abbreviations_work_through_the_repl(session):
     run(session, "reg 100 400", "sq", "norm")

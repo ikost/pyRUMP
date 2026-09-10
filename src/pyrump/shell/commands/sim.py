@@ -55,6 +55,21 @@ def _editor_command(verb: str):
     return handler
 
 
+def cmd_maxpth(session, args: ArgReader) -> None:
+    """``MAXPTH [<v>]`` -- default sublayer thickness, 1e15 at/cm^2.
+
+    With no argument, prints the current value. This is sample-wide state
+    (not per-layer, like THICKNESS), so "what is it right now" is always a
+    well-defined question -- unlike the generic ``_editor_command`` path,
+    which just forwards an empty argument list and fails with a raw
+    ``IndexError`` from the missing ``float(rest[0])``.
+    """
+    editor = editor_for(session)
+    if args:
+        _apply(session, "maxpth", args)
+    print(f"  maxpth {editor.script.maxpth:g}")
+
+
 def cmd_layer(session, args: ArgReader) -> None:
     editor = editor_for(session)
     if args:
@@ -359,7 +374,7 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("SUBLAYER", 3, _editor_command("sublayer"), "sublayers in this layer"),
     ("STHICKNESS", 3, _editor_command("sthick"), "thickness of each sublayer"),
     # Global sample parameters
-    ("MAXPTH", 3, _editor_command("maxpth"), "maximum internal layer thickness"),
+    ("MAXPTH", 3, cmd_maxpth, "maximum internal layer thickness, or show it with no argument"),
     ("STRAGGLE", 4, _editor_command("straggle"), "Bohr straggling multiplier"),
     ("ABSORBER", 3, _editor_command("absorber"), "stopper-foil layer count"),
     ("MULTIPLE", 3, _editor_command("multiple"), "multiple-scattering amount"),
