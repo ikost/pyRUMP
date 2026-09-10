@@ -90,6 +90,20 @@ surface.
   `XEQ` rather than read with `GET`. Trying to `XEQ` genuine binary `.rbs`
   spectrum data now fails with a clear message naming the mistake, instead
   of a raw decode error.
+- `PERT GO` is roughly 2x faster on a multi-parameter fit (profiled on a real
+  4-layer sample: ~11s -> ~5-6s for an 8-parameter `MULTI` fit). The stopping
+  polynomial's first derivative was going through
+  `np.polynomial.polynomial.polyder`/`polyval` -- generic N-D routines whose
+  per-call overhead dominated the whole fit once `flyout`'s O(n_slab^2) walk
+  called them millions of times for what's really a fixed, tiny degree-5
+  polynomial. Differentiating a plain power-basis polynomial is just
+  `coefficients[1:] * arange(1, NDEG)`, inlined by hand instead
+  (`sim/outbound.py`, `sim/precal.py`) -- numerically identical (verified
+  against the C oracle), just without the generic-array machinery.
+- `PERT VOLUME` previously accepted but did nothing. It now prints a line
+  per model evaluation during `GO` -- each evaluation is a full simulation,
+  so a fit with several varying parameters can run for seconds with no
+  other output, easy to mistake for a hung prompt.
 
 ### 1.1.0 (2026-08-26)
 
@@ -546,7 +560,7 @@ a simultaneous least-squares fit (`SINGLE` loops one parameter at a time).
 | `WINDOW lo hi` / `WINDOW clear` / `WINDOW remove <n>` | add / clear all / remove the *n*th error window, in channels (up to 10) |
 | `NORMALIZE lo hi` / `NORMALIZE off` | set / clear the normalisation window |
 | `SINGLE` / `MULTI` | fit one parameter at a time / all together (default) |
-| `VOLUME [off]` | verbose progress messages |
+| `VOLUME [off]` | print a line per model evaluation during `GO` |
 | `THICKNESS <layer> [<min> <max>]` | vary a layer's thickness, optionally bounded |
 | `COMPOSITION <layer> <El> [<min> <max>]` | vary one element's composition in a layer (must already be declared there) |
 | `SPECIES <layer> <El> [<min> <max>]` | vary the `EQUATION` species composition (must already be declared there) |

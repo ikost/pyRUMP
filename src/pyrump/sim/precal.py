@@ -38,6 +38,14 @@ from ..stopping.table import NDEG, StoppingTable
 _STRAGGLE_CONSTANT = 12.56637e15
 _ELECTRON_CHARGE_TERM = 1.4398e-10
 
+#: Exponents for evaluating the stopping polynomial and its first derivative
+#: at a scalar ``x``, precomputed once rather than reallocated on every slab
+#: (see :mod:`pyrump.sim.outbound`, which has the same constants -- the outward
+#: path calls the equivalent millions of times per fit; this one "only" once
+#: per slab, since the inbound march is O(n_slab)).
+_POWERS = np.arange(NDEG)
+_DERIV_SCALE = np.arange(1, NDEG)
+
 
 @dataclass(slots=True)
 class InboundPath:
@@ -140,13 +148,19 @@ def march_inbound(
 
         coefficients = slab_coefficients[index]
         x = table.transform(current * e_scale)
-        powers = x ** np.arange(NDEG)
+        powers = x ** _POWERS
 
         p0 = float(coefficients @ powers)
-        p1 = float(_derivative_at(table, coefficients, current * e_scale, 1) * e_scale)
-        p2 = float(
-            _derivative_at(table, coefficients, current * e_scale, 2) * e_scale * e_scale
-        )
+        first = coefficients[1:] * _DERIV_SCALE
+        p1 = float((first @ powers[:-1]) / (2 * x)) * e_scale
+        # d2S/dE2, RUMP's SQRT_DDS_POWER macro -- reads p[2] where the maths
+        # wants p[1] (stopping.h:47-49), reproduced as-is; see
+        # StoppingTable.derivative's own warning for the full story.
+        head = (
+            (3.75 * coefficients[5] * x + 2 * coefficients[4]) * x
+            + 0.75 * coefficients[3]
+        ) * x * x
+        p2 = float((head - 0.25 * coefficients[2]) / x**3) * e_scale * e_scale
 
         current -= energy_loss_step(p0, p1, p2, sec)
 
@@ -159,23 +173,6 @@ def march_inbound(
         reached = index + 1
 
     return InboundPath(energy=energy, straggle=straggle, reached=reached)
-
-
-def _derivative_at(
-    table: StoppingTable, coefficients: np.ndarray, energy_keV: float, order: int
-) -> float:
-    """Derivative of a slab-summed polynomial, using the table's conventions.
-
-    Shares :meth:`StoppingTable.derivative`'s semantics, including RUMP's
-    ``SQRT_DDS_POWER`` index bug for ``order=2``.
-    """
-    x = table.transform(energy_keV)
-    first = np.polynomial.polynomial.polyder(coefficients)
-    if order == 1:
-        return float(np.polynomial.polynomial.polyval(x, first) / (2 * x))
-    p = coefficients
-    head = ((3.75 * p[5] * x + 2 * p[4]) * x + 0.75 * p[3]) * x * x
-    return float((head - 0.25 * p[2]) / x**3)
 
 
 def surface_energy_loss(

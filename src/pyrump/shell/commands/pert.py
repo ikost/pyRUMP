@@ -500,6 +500,13 @@ def cmd_clear(session, args: ArgReader) -> None:
 
 
 def cmd_volume(session, args: ArgReader) -> None:
+    """``VOLUME [off]`` -- print a line for every model evaluation during
+    ``GO`` (default off).
+
+    Each evaluation is a full simulation, so a fit with several varying
+    parameters can run for seconds with nothing else printed in between --
+    this is the difference between that and an apparently hung prompt.
+    """
     token = args.optional()
     args.done()
     state = state_for(session)
@@ -629,6 +636,9 @@ def cmd_go(session, args: ArgReader) -> None:
         [state.varying] if state.multi else [[v] for v in state.varying]
     )
 
+    def _progress(evaluation: int, reduced: float) -> None:
+        print(f"    eval {evaluation:3d}   chi2/dof {reduced:.4f}")
+
     result = None
     try:
         with warnings.catch_warnings():
@@ -640,6 +650,7 @@ def cmd_go(session, args: ArgReader) -> None:
                     inputs,
                     [v.parameter for v in group],
                     windows=state.windows,
+                    progress=_progress if state.verbose else None,
                 )
                 if not state.multi:
                     print(

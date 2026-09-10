@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import warnings
 from dataclasses import dataclass, field
+from typing import Callable
 
 import numpy as np
 from scipy.optimize import least_squares
@@ -95,12 +96,19 @@ def fit(
     max_iterations: int = DEFAULT_MAX_ITERATIONS,
     derivative_step: float = DEFAULT_DERIVATIVE_STEP,
     eps: float = DEFAULT_EPS,
+    progress: Callable[[int, float], None] | None = None,
 ) -> FitResult:
     """Fit ``parameters`` so the simulation matches ``data``.
 
     ``simulate_fn(inputs) -> np.ndarray`` runs the forward model and returns
     channel counts. ``inputs`` is mutated during the fit and left holding the
     best-fit values.
+
+    ``progress``, if given, is called after every model evaluation as
+    ``progress(evaluations, reduced_chi_square)`` -- each evaluation is a full
+    simulation (see the module docstring), so a fit with more than a few
+    varying parameters can run for several seconds with nothing else printed
+    in between; this is PERT's ``VOLUME`` hook into that.
 
     Raises if a normalisation window is combined with a free ``correction``
     parameter, which is degenerate — RUMP rejects it too.
@@ -137,6 +145,8 @@ def fit(
             valid=window,
             n_parameters=len(parameters),
         )
+        if progress is not None:
+            progress(evaluations, result.reduced)
         return result.residuals[window]
 
     start = pack(parameters, inputs)

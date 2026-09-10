@@ -323,6 +323,26 @@ def test_recovers_a_known_thickness(runner):
 
 
 @pytestmark_fit
+def test_progress_callback_is_called_once_per_evaluation(runner):
+    """PERT's ``VOLUME`` hangs off this -- a fit with several varying
+    parameters can run for seconds between prints otherwise, easy to mistake
+    for a hung prompt."""
+    data = _synthetic(runner)
+    inputs = _inputs(thick=900.0)
+    calls: list[tuple[int, float]] = []
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        result = fit(
+            runner, data, inputs, [thickness(0)],
+            windows=WindowSet(error=[Window(205, 240)]),
+            progress=lambda n, reduced: calls.append((n, reduced)),
+        )
+    assert len(calls) == result.n_evaluations
+    assert [n for n, _ in calls] == list(range(1, result.n_evaluations + 1))
+    assert all(isinstance(reduced, float) for _, reduced in calls)
+
+
+@pytestmark_fit
 def test_recovers_two_parameters(runner):
     data = _synthetic(runner)
     inputs = _inputs(thick=900.0, fwhm=25.0)

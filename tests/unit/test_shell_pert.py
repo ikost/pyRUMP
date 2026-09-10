@@ -579,6 +579,23 @@ def test_go_recovers_the_thickness_and_writes_it_back(session, capsys):
 
 
 @needs_data
+def test_volume_on_prints_per_evaluation_progress_during_go(session, capsys):
+    """A fit with several varying parameters can take seconds with nothing
+    printed in between otherwise, easy to mistake for a hung prompt."""
+    run(session, "pert", "window 355 375", "norm 140 200", "thick 1", "volume", "go")
+    output = capsys.readouterr().out
+    assert "eval   1" in output
+    assert "chi2/dof" in output
+
+
+@needs_data
+def test_volume_off_by_default_prints_no_per_evaluation_progress(session, capsys):
+    run(session, "pert", "window 355 375", "norm 140 200", "thick 1", "go")
+    output = capsys.readouterr().out
+    assert "eval " not in output
+
+
+@needs_data
 def test_go_prints_the_fitted_thickness_rounded_to_a_whole_unit(session, capsys):
     """Sub-angstrom precision is meaningless for RBS, so both the fitted
     value and the "(was ...)" comparison should be whole numbers -- unlike

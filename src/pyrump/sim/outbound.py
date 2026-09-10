@@ -23,23 +23,47 @@ import numpy as np
 
 from ..stopping.table import NDEG, StoppingTable
 
+#: Exponents for evaluating the stopping polynomial and its first derivative
+#: at a scalar ``x``, precomputed once rather than reallocated on every call
+#: -- ``flyout``'s O(n_slab^2) walk calls these millions of times over a fit.
+_POWERS = np.arange(NDEG)
+_DERIV_SCALE = np.arange(1, NDEG)
+
 
 def _evaluate(table: StoppingTable, coefficients: np.ndarray, energy_keV: float) -> float:
     x = table.transform(energy_keV)
-    return float(coefficients @ (x ** np.arange(NDEG)))
+    return float(coefficients @ (x ** _POWERS))
 
 
-def _derivatives(
+def _evaluate_and_derivatives(
     table: StoppingTable, coefficients: np.ndarray, energy_keV: float
-) -> tuple[float, float]:
-    """First and second derivative, reproducing RUMP's ``SQRT_DDS_POWER`` bug."""
+) -> tuple[float, float, float]:
+    """``p0, d1, d2`` at one energy, reproducing RUMP's ``SQRT_DDS_POWER`` bug.
+
+    ``flyout`` always wants the value and both derivatives at the same
+    ``energy_keV``; computing them together shares one ``table.transform``
+    call and one set of powers of ``x`` instead of the two apiece that
+    calling :func:`_evaluate` and a separate derivative helper would need.
+
+    The first derivative is mathematically
+    ``np.polynomial.polynomial.polyval(x, np.polynomial.polynomial.polyder(coefficients))``,
+    but those generic N-D routines carry enough per-call overhead (shape
+    handling via ``moveaxis``, mainly) that profiling a real PERT fit showed
+    them dominating its entire runtime: this is a fixed, tiny degree-5
+    polynomial evaluated millions of times, not the arbitrary-shape case
+    those routines are built for. Differentiating a plain power-basis
+    polynomial is exactly ``coefficients[1:] * arange(1, NDEG)`` -- inlined
+    below, numerically identical, without the generic-array overhead.
+    """
     x = table.transform(energy_keV)
-    first = np.polynomial.polynomial.polyder(coefficients)
-    d1 = float(np.polynomial.polynomial.polyval(x, first) / (2 * x))
+    powers = x ** _POWERS
+    p0 = float(coefficients @ powers)
+    first = coefficients[1:] * _DERIV_SCALE
+    d1 = float((first @ powers[:-1]) / (2 * x))
     p = coefficients
     head = ((3.75 * p[5] * x + 2 * p[4]) * x + 0.75 * p[3]) * x * x
     d2 = float((head - 0.25 * p[2]) / x**3)
-    return d1, d2
+    return p0, d1, d2
 
 
 def flyout(
@@ -76,8 +100,7 @@ def flyout(
         step_sec = 1.0e-3 if slab < first_surface else sec
 
         coefficients = slab_coefficients_out[slab]
-        p0 = _evaluate(table, coefficients, energy * e2_scale)
-        d1, d2 = _derivatives(table, coefficients, energy * e2_scale)
+        p0, d1, d2 = _evaluate_and_derivatives(table, coefficients, energy * e2_scale)
         p1 = d1 * e2_scale
         p2 = d2 * e2_scale * e2_scale
 
