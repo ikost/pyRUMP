@@ -14,6 +14,7 @@ import os
 import sys
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from pyrump.shell.commands import system
@@ -394,6 +395,52 @@ def test_the_same_file_reached_by_different_relative_paths_is_one_buffer(
     # And by yet another spelling of the same path.
     run(session, "get ./a.rbs")
     assert session.buffers.get(2) is None
+
+
+def _write_ascii_macro(path: Path, identifier: str, counts: list[int]) -> None:
+    """A minimal WRASCII-style command macro: ``EMPTY`` bootstraps the
+    buffer, ``SWALLOW`` reads the trailing numeric lines as channel data --
+    the same shape real acquisition software writes out, sometimes with a
+    misleading ``.RBS`` extension despite being a plain command script
+    (cmds.htm's own SWALLOW example is literally ``empty swallow``)."""
+    lines = ["Empty", f"Identifier '{identifier}", "Swallow"]
+    lines.extend(str(c) for c in counts)
+    lines.append("")
+    path.write_text("\n".join(lines))
+
+
+def test_xeq_of_two_ascii_macros_scrolls_rather_than_clobbers(session, tmp_path):
+    """A real-world pattern: replaying two WRASCII-style ``EMPTY``/``SWALLOW``
+    macros back to back (e.g. via ``XEQ``, as some RBS acquisition software's
+    ``.RBS``-suffixed text exports are meant to be run) must land the second
+    reading in buffer 1 and push the first down to buffer 2 -- not silently
+    overwrite it, which is what a non-scrolling ``EMPTY`` would do since
+    buffer 1 is already ACTIVE by the second macro."""
+    first = tmp_path / "first.rbs"
+    second = tmp_path / "second.rbs"
+    _write_ascii_macro(first, "first run", [1, 2, 3])
+    _write_ascii_macro(second, "second run", [4, 5, 6])
+
+    run(session, f"xeq {first}")
+    assert session.buffers.active == 1
+    assert session.buffers[1].identifier == "first run"
+
+    run(session, f"xeq {second}")
+    assert session.buffers.active == 1
+    assert session.buffers[1].identifier == "second run"
+    assert session.buffers[2].identifier == "first run"
+    np.testing.assert_array_equal(session.buffers[2].spectrum.counts, [1.0, 2.0, 3.0])
+    np.testing.assert_array_equal(session.buffers[1].spectrum.counts, [4.0, 5.0, 6.0])
+
+
+def test_empty_with_an_explicit_number_resets_in_place_without_scrolling(session):
+    """``EMPTY <n>`` is a pyRUMP-only convenience the original didn't have --
+    it targets one specific buffer and must not scroll anything else."""
+    run(session, "empty 1")
+    run(session, "empty 2")
+    assert session.buffers.active == 2
+    assert session.buffers.get(1) is not None
+    assert session.buffers.get(3) is None
 
 
 def test_get_scrolls_a_new_file_into_buffer_1(session, tmp_path):

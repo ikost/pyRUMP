@@ -503,13 +503,21 @@ def cmd_filename(session, args: ArgReader) -> None:
 
 
 def cmd_empty(session, args: ArgReader) -> None:
-    """``EMPTY [n]`` -- reset buffer *n* to blank (bmanip.c: B_EMPTY).
+    """``EMPTY [n]`` -- reset buffer *n* to blank, or scroll a fresh blank
+    buffer into buffer 1 (bmanip.c: B_EMPTY).
 
-    RUMP always has a "current" buffer to reset; pyRUMP buffers do not exist
-    until something is loaded, so with no buffer active this opens a fresh
-    one instead. That is how WRASCII macros bootstrap themselves -- they
-    always open with an ``Empty ...`` line (cmds.htm's SWALLOW example is
-    literally ``empty swallow``).
+    With no argument this matches the original's own ``B_EMPTY``, which
+    calls ``RbsBufferScroll`` exactly as reading a new file does: a blank
+    buffer becomes buffer 1 and everything else shifts up one slot, rather
+    than overwriting whatever happens to be active. That matters because
+    ``EMPTY`` is how a WRASCII-style macro bootstraps a spectrum (cmds.htm's
+    own SWALLOW example is literally ``empty swallow``) -- some real
+    acquisition software even writes these as ``.RBS``-suffixed text files,
+    replayed with ``XEQ``. Running two such macros back to back must land
+    the second reading in buffer 1 with the first pushed down to buffer 2,
+    not silently overwrite it. Giving an explicit buffer number is a
+    pyRUMP-only convenience the original didn't have, and resets only that
+    one buffer in place -- nothing else moves.
     """
     token = args.peek()
     index: int | None = None
@@ -518,15 +526,14 @@ def cmd_empty(session, args: ArgReader) -> None:
             index = int(float(token))
         except ValueError:
             index = None
+    blank = Buffer(spectrum=Spectrum.zeros(Calibration()))
     if index is not None:
         args.token()
         if index == 0:
             raise CommandError("buffer 0 is the simulation and cannot be emptied")
-    elif session.buffers.active_buffer is not None:
-        index = session.buffers.active
+        session.buffers.set(index, blank)
     else:
-        index = session.buffers.first_free()
-    session.buffers.set(index, Buffer(spectrum=Spectrum.zeros(Calibration())))
+        index = session.buffers.scroll_in(blank)
     session.buffers.active = index
     session.touch()
     print(f"buffer {index} emptied")

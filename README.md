@@ -55,14 +55,20 @@ surface.
   removed. Rather than block the edit, `DELETE` and `OPEN` now print a
   warning naming every PERT selection whose layer index is at or past the
   change, so you know to check `PERT PARMS` and re-select if needed.
-- `GET`/`READ`ing a file not already open in some buffer now scrolls it into
-  buffer 1 and pushes every other data buffer up one slot, matching the
-  original's `RbsBufferScroll` (`rdwr.c`): buffer 1 is "whatever was read
-  most recently," not a fixed slot. Previously pyRUMP placed each new file
-  in the lowest empty slot instead, leaving buffer 1 wherever the first file
-  happened to land. Unlike the original's fixed-size ring, nothing is
-  destroyed to make room -- the buffer list just keeps growing, preserving
-  the existing no-buffer-limit behaviour.
+- `GET`/`READ`ing a file not already open in some buffer, and bare `EMPTY`
+  (no buffer number), now scroll into buffer 1 and push every other data
+  buffer up one slot, matching the original's `RbsBufferScroll` (`rdwr.c`
+  for `GET`, `bmanip.c`'s `B_EMPTY` for `EMPTY`): buffer 1 is "whatever was
+  read most recently," not a fixed slot. Previously `GET` placed each new
+  file in the lowest empty slot instead, and bare `EMPTY` reset whatever
+  buffer was already active in place -- so replaying two WRASCII-style
+  `EMPTY`/`SWALLOW` macros back to back (some RBS acquisition software
+  writes these out with a misleading `.RBS` extension, meant to be replayed
+  with `XEQ`) silently overwrote the first reading instead of pushing it
+  down to buffer 2. `EMPTY <n>`, a pyRUMP-only convenience the original
+  didn't have, still resets just that one buffer in place. Unlike the
+  original's fixed-size ring, nothing is destroyed to make room in either
+  case -- the buffer list just keeps growing.
 - Every PERT parameter-selecting command now takes an optional trailing
   `<min> <max>` search bound, e.g. `THICKNESS 1 100 500` or `FWHM 15 25` --
   restoring functionality the original had (every one of these commands was
@@ -267,7 +273,7 @@ commands act on implicitly. Buffer **0 is the simulation**; data starts at 1.
 | `POINTAT <n>` | point at buffer *n*, by number only |
 | `BUFFERS` | list the buffers, marking the active one |
 | `ACTIVE` | print the active buffer's full parameter set |
-| `EMPTY [n]` | reset buffer *n* (default: active, or the first free one) to blank |
+| `EMPTY [n]` | scroll a fresh blank buffer into buffer 1 (default), or reset buffer *n* in place |
 | `COPY a b` / `MOVE a b` | copy / exchange |
 | `RELEASE [n]` / `NEWALL` | drop one buffer (default: active) / drop all |
 | `WRITE f.rbs` / `WRASCII f.dat` | save the active buffer, binary or text |
