@@ -564,7 +564,7 @@ def test_pert_get_go_runs_as_a_single_line(session, tmp_path, capsys):
     output = capsys.readouterr().out
     assert "fit took" in output
     assert "reduced chi-square" in output
-    assert "sample id" in output
+    assert "au Si" in output
 
 
 @needs_data
@@ -593,7 +593,7 @@ def test_go_recovers_the_thickness_and_writes_it_back(session, capsys):
     assert "fit took" in output
     assert "reduced chi-square" in output
     assert "layer 1 thickness" in output
-    assert "sample id      au" in output
+    assert "au Si [5000/cm2] - Au [" in output
 
 
 @needs_data

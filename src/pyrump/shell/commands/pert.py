@@ -616,8 +616,9 @@ def _write_back(session, entry: Vary, inputs: FitInputs, before: float) -> None:
 def cmd_go(session, args: ArgReader) -> None:
     args.done()
     from ...fit.lm import fit
-    from ...script.lcm import thickness_label, to_sample
+    from ...script.lcm import structure_label, thickness_label, to_sample
     from ...sim.engine import simulate
+    from .. import plotting
 
     state = state_for(session)
     if not state.varying:
@@ -707,8 +708,8 @@ def cmd_go(session, args: ArgReader) -> None:
         if sigma:
             line += f"  +/- {sigma:.4g}"
         print(line + f"   (was {before_text})")
-    sample_id = data_buffer.identifier or data_buffer.name or "(unnamed)"
-    print(f"\n  sample id      {sample_id}")
+    sample_id = plotting.buffer_label(session, data_buffer, session.buffers.active)
+    print(f"\n  {sample_id} {structure_label(session.script)}")
 
     if state.autocmp:
         cmd_compare(session, ArgReader([], command="compare"))

@@ -538,7 +538,7 @@ PERT Command: go
   data scaled by 0.99441 over the norm window
   layer 1 thickness                    299  +/- 0.3801   (was 200)
 
-  sample id      au7.rbs
+  SC0338.RBS Si [5000/cm2] - Au [299/cm2]
 ```
 
 Fitted values are written back into the sample description, so `SIM SHOW` and
