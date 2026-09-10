@@ -104,9 +104,22 @@ def cmd_open(session, args: ArgReader) -> None:
 
 
 def cmd_delete(session, args: ArgReader) -> None:
-    """DELETE (or CLOSE): remove the current layer (sim.htm's DELETE)."""
-    args.done()
+    """DELETE (or CLOSE): remove the current layer, or DELETE n a chosen one.
+
+    sim.htm's DELETE takes no argument; pyRUMP additionally lets you name a
+    layer number, so you don't have to LAYER there first.
+    """
     editor = editor_for(session)
+    if args:
+        number = args.integer("a layer number")
+        args.done()
+        if number < 1 or number > len(editor.script.layers):
+            raise CommandError(
+                f"layer {number} is not defined ({len(editor.script.layers)} layers)"
+            )
+        editor.select(number - 1)
+    else:
+        args.done()
     if editor.layer is None:
         raise CommandError("nothing to delete -- you are on the blank layer")
     index = editor.close_layer()
@@ -330,7 +343,7 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("LAYER", 2, cmd_layer, "move to a layer by number"),
     ("NEXT", 2, cmd_next, "move to the next layer"),
     ("OPEN", 2, cmd_open, "insert a blank layer above this one"),
-    ("DELETE", 3, cmd_delete, "remove this layer"),
+    ("DELETE", 3, cmd_delete, "remove this layer, or DELETE n a chosen layer"),
     ("CLOSE", -5, cmd_delete, "synonym for DELETE"),
     ("RESET", 5, cmd_reset, "reset the sample to empty space"),
     ("SHOW", 2, cmd_show, "display the sample"),

@@ -131,6 +131,17 @@ def test_sim_delete_warns_about_a_pert_selection_on_a_later_layer(session, capsy
 
 
 @needs_data
+def test_sim_delete_takes_a_layer_number_directly(session, capsys):
+    """``DELETE n`` selects that layer and removes it in one step, without
+    a preceding ``LAYER n`` -- same effect, same shift warning."""
+    run(session, "pert", "thickness 2", "return", "sim", "delete 1")
+    output = capsys.readouterr().out
+    assert "WARNING" in output
+    assert "layer 2 thickness" in output
+    assert [layer.thickness for layer in session.script.layers] == [5000.0]
+
+
+@needs_data
 def test_sim_delete_of_a_later_layer_does_not_warn(session, capsys):
     """Deleting layer 2 never shifts layer 1, so a selection on layer 1
     (the earlier, unaffected layer) needs no warning."""
@@ -153,6 +164,13 @@ def test_sim_open_warns_about_a_pert_selection_on_the_current_layer(session, cap
 def test_selecting_a_layer_outside_the_sample_is_rejected(session):
     with pytest.raises(CommandError, match="outside 1-2"):
         run(session, "pert", "thick 9")
+
+
+@needs_data
+def test_sim_delete_of_an_undefined_layer_number_is_rejected(session):
+    with pytest.raises(CommandError, match="layer 9 is not defined"):
+        run(session, "sim", "delete 9")
+    assert [layer.thickness for layer in session.script.layers] == [GUESS, 5000.0]
 
 
 @needs_data
