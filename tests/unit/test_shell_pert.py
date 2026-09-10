@@ -614,6 +614,28 @@ def test_volume_off_by_default_prints_no_per_evaluation_progress(session, capsys
 
 
 @needs_data
+def test_autocmp_off_by_default_does_not_plot_after_go(session):
+    run(session, "pert", "window 355 375", "norm 140 200", "thick 1", "go")
+    assert session.figure is None
+
+
+@needs_data
+def test_autocmp_on_plots_the_comparison_after_go(session):
+    run(session, "pert", "window 355 375", "norm 140 200", "thick 1", "autocmp", "go")
+    assert session.figure is not None
+    assert session.figure.axes
+
+
+@needs_data
+def test_autocmp_off_turns_it_back_off(session, capsys):
+    run(session, "pert", "autocmp", "autocmp off")
+    output = capsys.readouterr().out
+    assert "autocmp off" in output
+    run(session, "pert", "window 355 375", "norm 140 200", "thick 1", "go")
+    assert session.figure is None
+
+
+@needs_data
 def test_go_prints_the_fitted_thickness_rounded_to_a_whole_unit(session, capsys):
     """Sub-angstrom precision is meaningless for RBS, so both the fitted
     value and the "(was ...)" comparison should be whole numbers -- unlike

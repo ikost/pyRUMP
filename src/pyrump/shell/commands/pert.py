@@ -133,9 +133,11 @@ class PertState:
     windows: WindowSet = field(default_factory=WindowSet)
     multi: bool = True
     verbose: bool = False
+    autocmp: bool = False
 
     def describe(self) -> str:
         lines = [f"  mode        {'multiple' if self.multi else 'single'} variable"]
+        lines.append(f"  autocmp     {'on' if self.autocmp else 'off'}")
         lines.append(f"  error win   {_format_windows(self.windows.error)}")
         norm = self.windows.normalisation
         lines.append(
@@ -515,6 +517,20 @@ def cmd_volume(session, args: ArgReader) -> None:
     print(f"  messages {'on' if state.verbose else 'off'}")
 
 
+def cmd_autocmp(session, args: ArgReader) -> None:
+    """``AUTOCMP [off]`` -- run COMPARE automatically at the end of GO
+    (default off).
+
+    Saves the separate COMPARE call after every fit, for anyone who always
+    wants to eyeball the residuals right away.
+    """
+    token = args.optional()
+    args.done()
+    state = state_for(session)
+    state.autocmp = token is None or token.lower() not in ("off", "no", "0")
+    print(f"  autocmp {'on' if state.autocmp else 'off'}")
+
+
 def cmd_help(session, args: ArgReader) -> None:
     """``HELP`` lists the PERT commands; ``HELP <name>`` describes one.
 
@@ -694,6 +710,9 @@ def cmd_go(session, args: ArgReader) -> None:
     sample_id = data_buffer.identifier or data_buffer.name or "(unnamed)"
     print(f"\n  sample id      {sample_id}")
 
+    if state.autocmp:
+        cmd_compare(session, ArgReader([], command="compare"))
+
 
 TABLE = CommandTable("PERT Commands")
 
@@ -714,6 +733,7 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("SINGLE", 2, cmd_single, "vary one parameter at a time"),
     ("MULTI", 3, cmd_multi, "vary all parameters together (default)"),
     ("VOLUME", 3, cmd_volume, "verbose progress messages"),
+    ("AUTOCMP", 4, cmd_autocmp, "run COMPARE automatically at the end of GO"),
     # Parameters -- all take an optional trailing "<min> <max>" search bound
     ("THICKNESS", 2, cmd_thickness, "vary a layer thickness, e.g. THICKNESS <layer> [<min> <max>]"),
     ("COMPOSITION", 3, cmd_composition, "vary an element in a layer [<min> <max>]"),

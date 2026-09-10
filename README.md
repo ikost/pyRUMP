@@ -562,6 +562,7 @@ a simultaneous least-squares fit (`SINGLE` loops one parameter at a time).
 | `NORMALIZE lo hi` / `NORMALIZE off` | set / clear the normalisation window |
 | `SINGLE` / `MULTI` | fit one parameter at a time / all together (default) |
 | `VOLUME [off]` | print a line per model evaluation during `GO` |
+| `AUTOCMP [off]` | run `COMPARE` automatically at the end of `GO` (default off) |
 | `THICKNESS <layer> [<min> <max>]` | vary a layer's thickness, optionally bounded |
 | `COMPOSITION <layer> <El> [<min> <max>]` | vary one element's composition in a layer (must already be declared there) |
 | `SPECIES <layer> <El> [<min> <max>]` | vary the `EQUATION` species composition (must already be declared there) |
