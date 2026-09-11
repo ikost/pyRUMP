@@ -787,6 +787,61 @@ def test_structlabel_on_shows_the_sample_structure(session, tmp_path):
     assert labels == ["test", "SIM"]
 
 
+_SPLOT_SAMPLE = (
+    "Sim Reset\nLayer 1\n Thick 30 A\n Composition Ru 1 /\n"
+    "Next\n Thick 150 A\n Composition Mn 3 Pt 1 /\n"
+    "Next\n Thick 500 /cm2\n Composition Si 1 /\nMaxpth 200\n"
+)
+
+
+@needs_data
+def test_splot_element_overlays_only_that_elements_contribution(session, tmp_path):
+    # A wide enough calibration to actually catch these edges (~hundreds of
+    # keV), which the default 5 keV/ch test buffer doesn't reach.
+    session.buffers.get(1).spectrum.calibration = Calibration(kevch=50.0, npt=64)
+    sample = tmp_path / "splot_element.lcm"
+    sample.write_text(_SPLOT_SAMPLE)
+    run(session, f"sim get {sample}", "plot 1", "sim splot Ru")
+    trace = session.traces[-1]
+    assert trace.label == "SIM(Ru)"
+    full = session.simulation()
+    assert trace.buffer.spectrum.total() < full.spectrum.total()
+
+
+@needs_data
+def test_splot_layer_overlays_only_that_layers_contribution(session, tmp_path):
+    session.buffers.get(1).spectrum.calibration = Calibration(kevch=50.0, npt=64)
+    sample = tmp_path / "splot_layer.lcm"
+    sample.write_text(_SPLOT_SAMPLE)
+    run(session, f"sim get {sample}", "plot 1", "sim splot 2")
+    trace = session.traces[-1]
+    assert trace.label == "SIM(layer 2)"
+    full = session.simulation()
+    assert trace.buffer.spectrum.total() < full.spectrum.total()
+
+
+@needs_data
+def test_splot_rejects_unknown_element(session, tmp_path):
+    sample = tmp_path / "splot_unknown.lcm"
+    sample.write_text(
+        "Sim Reset\nLayer 1\n Thick 500 /cm2\n Composition Si 1 /\nMaxpth 200\n"
+    )
+    run(session, f"sim get {sample}", "plot 1")
+    with pytest.raises(CommandError, match="does not exist in target"):
+        run(session, "sim splot Au")
+
+
+@needs_data
+def test_splot_rejects_out_of_range_layer(session, tmp_path):
+    sample = tmp_path / "splot_layer_range.lcm"
+    sample.write_text(
+        "Sim Reset\nLayer 1\n Thick 500 /cm2\n Composition Si 1 /\nMaxpth 200\n"
+    )
+    run(session, f"sim get {sample}", "plot 1")
+    with pytest.raises(CommandError, match="doesn't exist"):
+        run(session, "sim splot 5")
+
+
 @needs_data
 def test_compfrac_on_shows_atomic_fraction(session, tmp_path):
     sample = tmp_path / "compfrac_on.lcm"

@@ -527,6 +527,50 @@ class Session:
         self.dirty = False
         return buffer
 
+    def selective_simulation(
+        self, *, element_z: int | None = None, layer: int | None = None, label: str = "SIM"
+    ) -> Buffer:
+        """A partial simulation restricted to one element or one sample layer.
+
+        ``SimMakeit``'s ``specific_elem``/``specific_layer`` (creatr.c:1000-1052)
+        -- SPLOT's own mechanism. ``layer`` is a 0-based index into
+        ``script.layers`` (layer 1, as ``SIM SHOW`` lists it, is 0 here), not
+        RUMP's own internal sublayer numbering -- which RUMP's own docs admit
+        "does not correspond to the numbering of the user layers" (sim.htm,
+        "Splot"); pyRUMP addresses the layer the user actually typed instead.
+
+        Never touches buffer 0 -- unlike the full simulation, this is not
+        cached, since SPLOT overlays it directly rather than through the
+        persistent simulation buffer RUMP kept it in (its own "temp buffer",
+        which pyRUMP does not model).
+        """
+        from ..script.lcm import to_sample
+        from ..sim.engine import simulate
+
+        if not self.script.layers:
+            raise KeyError("no sample described: use SIM to build one")
+        reference = self.buffers.active_buffer or self.settings.experiment_defaults
+
+        sample = to_sample(self.script, self.table, self.densities)
+        spectrum = simulate(
+            sample,
+            reference.beam,
+            reference.geometry,
+            self.registry,
+            self.table,
+            reference.calibration,
+            reference.measurement,
+            element_filter=element_z,
+            layer_filter=layer,
+        )
+        return Buffer(
+            spectrum=spectrum,
+            beam=reference.beam,
+            geometry=reference.geometry,
+            measurement=reference.measurement,
+            name=label,
+        )
+
     def write_log(self, line: str) -> None:
         if self.log_file is not None:
             self.log_file.write(line.rstrip() + "\n")

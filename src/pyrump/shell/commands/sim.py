@@ -285,16 +285,52 @@ def cmd_density(session, args: ArgReader) -> None:
 
 
 def cmd_splot(session, args: ArgReader) -> None:
-    """Overlay the simulation on the current plot.
+    """``SPLOT [<element> | <layer>]`` -- overlay the simulation, or a
+    selective element/layer contribution, on the current plot.
+
+    ``RbsSplot`` (sim2.c:2215-2248): no argument overlays the full theory,
+    same as PLOT/OVERLAY draw it. An integer restricts the overlay to one
+    sample layer -- all elements, that depth only, numbered the way ``SIM
+    SHOW`` lists layers rather than RUMP's own internal-sublayer count (see
+    :meth:`~pyrump.shell.session.Session.selective_simulation`). Any other
+    token names an element already in the sample, restricting the overlay to
+    its contribution summed over every layer it appears in.
 
     Replaces any simulation trace already on the plot rather than stacking a
-    new one, so repeated SPL calls while tweaking the sample update the
+    new one, so repeated SPLOT calls while tweaking the sample update the
     overlay in place instead of piling up copies.
     """
+    token = args.optional()
     args.done()
     from .. import plotting
 
-    buffer = session.simulation()
+    if not session.script.layers:
+        raise CommandError("no sample described: use SIM to build one")
+
+    if token is None:
+        buffer = session.simulation()
+    else:
+        try:
+            layer = int(token)
+        except ValueError:
+            try:
+                element = session.table.by_symbol(token)
+            except KeyError:
+                raise CommandError(f"splot: {token!r} is not a known element") from None
+            in_target = {session.table.by_symbol(s).z for s in session.script.elements}
+            if element.z not in in_target:
+                raise CommandError(
+                    f"splot: element {element.symbol} does not exist in target"
+                )
+            buffer = session.selective_simulation(
+                element_z=element.z, label=f"SIM({element.symbol})"
+            )
+        else:
+            if not 1 <= layer <= len(session.script.layers):
+                raise CommandError(f"splot: layer {layer} doesn't exist")
+            buffer = session.selective_simulation(
+                layer=layer - 1, label=f"SIM(layer {layer})"
+            )
     plotting.add_trace(session, 0, buffer, clear=False, replace=True)
     plotting.draw(session)
 
@@ -382,7 +418,7 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("GET", 3, cmd_get, "read a sample description from a file"),
     ("SAVE", 2, cmd_save, "write the sample description to a file"),
     ("DENSITY", 2, cmd_density, "list the known thickness units"),
-    ("SPLOT", 3, cmd_splot, "overlay the simulation on the plot"),
+    ("SPLOT", 3, cmd_splot, "overlay the simulation, or one element/layer, on the plot"),
     ("COMPARE", 0, cmd_compare, "plot the active buffer against the simulation"),
     ("CMP", -3, cmd_compare, "synonym for COMPARE"),
 ]

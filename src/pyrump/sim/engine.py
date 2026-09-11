@@ -153,11 +153,23 @@ def simulate_bricks(
     periodic_table: PeriodicTable,
     *,
     screening: bool = True,
+    element_filter: int | None = None,
+    layer_filter: int | None = None,
 ) -> Bricks:
     """Run the forward model up to the brick stage.
 
     Bricks are emitted one block per target isotope, heaviest first, matching
     the order the C produces so captures can be compared element-wise.
+
+    ``element_filter``/``layer_filter`` restrict the yield to one target
+    element (by Z, summed over every layer it appears in) or one slab index
+    into :attr:`~pyrump.sim.slabs.SlabGrid.layer_index` -- SPLOT's selective
+    plot (``SimMakeit``, creatr.c:1000-1052). Both only zero out which slab
+    densities feed :func:`simulate_isotope`'s yield integral; the
+    stopping-power table and inbound march below are still built from the
+    *full*, unfiltered stack, so energy loss through material above or below
+    the selection is unaffected -- the same order ``SimPrecal``/``SimMakeit``
+    keep.
     """
     geometry.validate()
 
@@ -184,6 +196,12 @@ def simulate_bricks(
 
     blocks: list[np.ndarray] = []
     for column, z_target in enumerate(sample.element_z):
+        if element_filter is not None and z_target != element_filter:
+            continue
+        density = grid.composition[:, column]
+        if layer_filter is not None:
+            density = np.where(grid.layer_index == layer_filter, density, 0.0)
+
         element = periodic_table.by_z(z_target)
         # Monoisotopic elements still get one pass, at the average mass.
         isotopes = sorted(element.isotopes, key=lambda i: -i.mass) or [
@@ -211,7 +229,7 @@ def simulate_bricks(
                 table,
                 coefficients,
                 coefficients,  # backscatter: in and out share the projectile table
-                grid.composition[:, column],
+                density,
                 inbound,
                 cross_section,
                 m_beam=beam.mass,
@@ -243,11 +261,18 @@ def simulate(
     *,
     screening: bool = True,
     convolve_edge: str = "rump",
+    element_filter: int | None = None,
+    layer_filter: int | None = None,
 ) -> Spectrum:
     """Full forward model: sample in, channel spectrum out.
 
     ``convolve_edge`` selects RUMP's non-count-conserving edge handling
     (default) or a renormalising variant; see :mod:`pyrump.sim.convolve`.
+
+    ``element_filter``/``layer_filter`` are SPLOT's selective plot, passed
+    straight through to :func:`simulate_bricks`; every stage after bricks
+    (convolution, normalisation, pile-up, multiple scattering, background)
+    still runs unconditionally, matching ``SimCreateDetails``'s own order.
     """
     measurement = measurement or Measurement()
 
@@ -261,7 +286,8 @@ def simulate(
             sample, thicknesses=list(thicknesses)
         )
         bricks = simulate_bricks(
-            replica, beam, geometry, registry, periodic_table, screening=screening
+            replica, beam, geometry, registry, periodic_table, screening=screening,
+            element_filter=element_filter, layer_filter=layer_filter,
         )
         if len(bricks) == 0:
             continue
