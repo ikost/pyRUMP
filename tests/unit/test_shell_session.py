@@ -551,6 +551,25 @@ def test_matrix_rejects_forbidden_kinematics(session):
 
 
 @needs_data
+def test_matrix_marks_an_existing_plot(session):
+    # A wide enough calibration to actually cover Au's predicted edge energy
+    # (~1845 keV), which the default 5 keV/ch test buffer doesn't reach.
+    wide = make_buffer(channels=64)
+    wide.spectrum.calibration = Calibration(kevch=50.0, npt=64)
+    session.buffers.load(wide, 2)
+    run(session, "plot 2", "matrix Au")
+    ax = session.figure.axes[0]
+    assert any(line.get_marker() == "+" for line in ax.lines)
+    assert any(text.get_text() == "Au" for text in ax.texts)
+
+
+@needs_data
+def test_matrix_does_not_mark_with_no_plot_up(session, capsys):
+    run(session, "matrix Au")
+    assert session.figure is None
+
+
+@needs_data
 def test_whatisit_finds_candidates_near_a_channel(session, capsys):
     run(session, "whatisit 20")
     out = capsys.readouterr().out

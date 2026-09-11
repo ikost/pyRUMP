@@ -272,6 +272,39 @@ def mark_whatisit(session, candidates, target_keV) -> bool:
     return True
 
 
+def mark_matrix(session, buffer, energy_keV: float, channel: float, height: float, symbol: str) -> bool:
+    """Crosshair MATRIX's predicted point directly onto the plot.
+
+    ``RbsMark(MK_XHR, ...)`` (anlytc.c:274): a small "+" at the predicted
+    ``(energy, height)``, labelled with the element symbol -- unlike
+    WHATISIT's bottom ticks, this sits right on the spectrum where the step
+    should be. ``height`` arrives in normalized yield units
+    (counts/uC/keV/msr, :attr:`MatrixResult.height`'s own convention) and is
+    converted to raw counts here when the plot isn't in NORMALIZE mode --
+    the same factor :func:`_values` already applies the other way.
+
+    Draws nothing (and RUMP's own C prints no warning for it either,
+    anlytc.c:274's silent ``if (PlotSystem...)``) when there is no active
+    PLOT/OVERLAY, or when the point falls outside the current x range.
+    """
+    if not session.traces:
+        return False
+    require_matplotlib()
+    figure, ax = figure_for(session)
+    x = energy_keV if session.plot.energy_axis else channel
+    low, high = ax.get_xlim()
+    if x < low or x > high:
+        return False
+    y = height if session.plot.normalized else height * yield_normalisation(buffer.measurement)
+    ax.plot([x], [y], marker="+", markersize=12, markeredgewidth=1.6, color="0.15", linestyle="none")
+    ax.annotate(
+        symbol, (x, y), xytext=(0, 8), textcoords="offset points",
+        ha="center", va="bottom", fontsize="small", fontweight="bold",
+    )
+    show(figure)
+    return True
+
+
 def buffer_label(session, buffer, index: int) -> str:
     """The name PLOT/OVERLAY would show for this buffer in a legend.
 

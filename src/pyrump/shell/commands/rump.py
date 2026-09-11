@@ -977,7 +977,8 @@ def cmd_matrix(session, args: ArgReader) -> None:
     """``MATRIX el`` -- expected energy, channel and matrix height.
 
     ``RbsSigma``/``RbsEpsilon`` combined into a predicted step height
-    (anlytc.c:258-275).
+    (anlytc.c:258-275), crosshaired onto the plot if one is showing (see
+    :func:`~pyrump.shell.plotting.mark_matrix`).
     """
     from ...analysis.elements import matrix_result
 
@@ -993,6 +994,9 @@ def cmd_matrix(session, args: ArgReader) -> None:
     print(
         f"  {result.symbol} expected at {result.energy_keV:8.1f} eV"
         f" ({result.channel:6.1f}) and height {result.height:8.3f}"
+    )
+    plotting.mark_matrix(
+        session, buffer, result.energy_keV, result.channel, result.height, result.symbol
     )
 
 
