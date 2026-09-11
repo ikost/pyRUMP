@@ -21,45 +21,61 @@ called out below. If you need the original's exact command surface, install
 physics correctness (bug-for-bug vs. corrected numerics), not the command
 surface.
 
-### Unreleased
+### 1.2.0 (2026-09-11)
 
-- `COMPARE` now requires its full name (no partial abbreviation) at the RUMP,
-  SIM, and PERT levels alike, with `CMP` recognized everywhere as an explicit
-  synonym. Previously each level allowed a different, mode-dependent
-  abbreviation length -- `COMP` even collided with `COMPOSITION` in SIM and
-  PERT, silently invoking the wrong command. This is a deliberate departure
-  from matching the original's abbreviation rule for this one command, in
-  favor of one unambiguous, consistent behavior. Because `CMP` is a full
-  synonym rather than a partial abbreviation, it's registered as its own
-  table entry kept out of the `?`/`HELP` listing (as any synonym is, to
-  avoid a redundant "synonym for COMPARE" row) -- which meant a bare listing
-  showed plain `COMPARE` with no hint `CMP` also works. It now shows
-  `COMPARE / CMP`, at all three levels.
-- `STRUCTLABEL`'s layer structure now renders composition as a compact
-  chemical formula (`"Mg 1 O 1"` -> `"MgO"`, `"Si 1 O 2"` -> `"SiO2"`) with
-  the count omitted whenever it's exactly 1, and shows the substrate's own
-  thickness bracket like every other layer -- previously the substrate had
-  none. A non-whole count rounds to 2 decimals (nearest 1%, matching typical
-  RBS composition resolution) but keeps trailing zeros, so a PERT-fitted
-  count that rounds to a whole number still reads as measured rather than
-  exact (`"Mn2.998Pt"` -> `"Mn3.00Pt"`, not `"Mn3Pt"`).
+- Plotting now reuses a single persistent window across `PLOT`/`OVERLAY`/
+  `COMPARE`/`DISPLAY` instead of opening a new one on every call, and no
+  longer steals keyboard focus from the terminal when it redraws -- so typing
+  the next command never means alt-tabbing back first. A window resized by
+  hand also survives switching between `PLOT`'s single panel and `COMPARE`'s
+  two-panel layout, which previously snapped it back to `COMPARE`'s
+  hardcoded default size.
+- Legend labels are no longer hardcoded to `"Data"` -- `PLOT`/`OVERLAY`/
+  `COMPARE` show each buffer's own name or identifier, and a `SIM` buffer
+  falls back to `"SIM"`.
+- Fixed and filled in gaps across `?`/`HELP` at every level (RUMP, SIM,
+  PERT, and the system commands): some commands had no description, or were
+  missing from the listing outright.
+- `STRUCTLABEL` `[new]`: toggles showing the `SIM` sample's layer structure
+  in the plot legend instead of the buffer's own name. Composition renders
+  as a compact chemical formula (`"Mg 1 O 1"` -> `"MgO"`, `"Si 1 O 2"` ->
+  `"SiO2"`) with the count omitted whenever it's exactly 1, and shows the
+  substrate's own thickness bracket like every other layer. A non-whole
+  count rounds to 2 decimals (nearest 1%, matching typical RBS composition
+  resolution) but keeps trailing zeros, so a PERT-fitted count that rounds
+  to a whole number still reads as measured rather than exact
+  (`"Mn2.998Pt"` -> `"Mn3.00Pt"`, not `"Mn3Pt"`).
 - New RUMP-level `COMPFRAC` command `[new]`: with `STRUCTLABEL` on, shows
   each layer's composition as atomic fraction (summing to 1) instead of raw
   stoichiometry -- `"Mn3Pt"` becomes `"Mn0.75Pt0.25"`. Purely a display
   choice: it never touches the SIM sample's stored composition or PERT's fit
   parameters, and is physically equivalent to the un-normalized form, since
   RUMP's own atomic-density mixing rule already normalizes by the same total.
+- PERT overhaul: varying-parameter display names read as "layer 1
+  thickness" instead of the terse "thickness[1]"; `COMPOSITION`/`SPECIES`
+  now reject an element not actually declared in the target layer instead of
+  silently accepting any element in the sample; `PARMS` numbers windows and
+  varying parameters (1-based) so `WINDOW REMOVE <n>`/`CLEAR <n>` can target
+  one without clearing everything; new `SHOW` (undocumented in the original,
+  ported here) prints the same sample description as `SIM SHOW`, without
+  leaving PERT first; new `GET`/`SAVE` round-trip a whole PERT selection
+  through a `.pert` file, as the original did -- `GET <file> GO` loads and
+  fits in one line; and `PERT <command>` now works as a one-shot from the
+  RUMP level, mirroring `SIM`'s existing one-shot form.
 - New SIM-level `DELETE` command (with `CLOSE` as its original synonym,
   sim2.c's cmlist2), removing the current layer -- ported from the original,
-  which pyRUMP had been missing entirely. Original RUMP protects against a
-  locked-layer hazard with a per-layer counter that refuses to delete a layer
-  PERT is fitting; pyRUMP's PERT selections are index-based rather than
-  pointer-based (`fit/parameters.py`'s `thickness()`/`composition()` close
-  over a plain layer index), so deleting *or inserting* a layer can
-  misdirect a selection on a layer that merely shifted, not just the one
-  removed. Rather than block the edit, `DELETE` and `OPEN` now print a
-  warning naming every PERT selection whose layer index is at or past the
-  change, so you know to check `PERT PARMS` and re-select if needed.
+  which pyRUMP had been missing entirely. `DELETE <n>`, a pyRUMP-only
+  convenience the original didn't have, selects and removes that layer
+  directly, without requiring `LAYER n` first. Original
+  RUMP protects against a locked-layer hazard with a per-layer counter that
+  refuses to delete a layer PERT is fitting; pyRUMP's PERT selections are
+  index-based rather than pointer-based (`fit/parameters.py`'s
+  `thickness()`/`composition()` close over a plain layer index), so deleting
+  *or inserting* a layer can misdirect a selection on a layer that merely
+  shifted, not just the one removed. Rather than block the edit, `DELETE`
+  and `OPEN` now print a warning naming every PERT selection whose layer
+  index is at or past the change, so you know to check `PERT PARMS` and
+  re-select if needed.
 - `GET`/`READ`ing a file not already open in some buffer, and bare `EMPTY`
   (no buffer number), now scroll into buffer 1 and push every other data
   buffer up one slot, matching the original's `RbsBufferScroll` (`rdwr.c`
@@ -109,6 +125,63 @@ surface.
   per model evaluation during `GO` -- each evaluation is a full simulation,
   so a fit with several varying parameters can run for seconds with no
   other output, easy to mistake for a hung prompt.
+- `SIM MAXPTH` with no argument now shows the current value instead of
+  raising a raw "list index out of range" error, and prints the value after
+  setting it too (previously silent on success) -- unlike a per-layer
+  setting, `MAXPTH` is sample-wide state, so "what is it right now" is
+  always a well-defined question worth answering directly.
+- `PERT GO` now prints how long the search took, and ends with one copyable
+  line naming the active buffer's sample ID next to the resulting layer
+  stack (e.g. `SC0338.RBS Si [5000/cm2] - Au [299/cm2]`) -- easy to paste
+  alongside a fit result to record which dataset and outcome it belongs to.
+- New PERT-level `AUTOCMP` command `[new]`: run `COMPARE` automatically at
+  the end of `GO` (default off), saving the separate `COMPARE` call after
+  every fit for anyone who always wants to eyeball the residuals right away.
+  Like `VOLUME`, it's a standing preference -- typically set once from
+  `~/.pyrumprc` -- so `GET`/`CLEAR` (which replace or forget the rest of the
+  current PERT selection) carry it over rather than silently turning it back
+  off.
+- `COMPARE` now requires its full name (no partial abbreviation) at the RUMP,
+  SIM, and PERT levels alike, with `CMP` recognized everywhere as an explicit
+  synonym. Previously each level allowed a different, mode-dependent
+  abbreviation length -- `COMP` even collided with `COMPOSITION` in SIM and
+  PERT, silently invoking the wrong command. This is a deliberate departure
+  from matching the original's abbreviation rule for this one command, in
+  favor of one unambiguous, consistent behavior. Because `CMP` is a full
+  synonym rather than a partial abbreviation, it's registered as its own
+  table entry kept out of the `?`/`HELP` listing (as any synonym is, to
+  avoid a redundant "synonym for COMPARE" row) -- which meant a bare listing
+  showed plain `COMPARE` with no hint `CMP` also works. It now shows
+  `COMPARE / CMP`, at all three levels.
+- `WHATISIT <channel>` now also overlays its candidates on the plot, if one
+  is showing -- a solid tick for the best-matching element, dashed ticks for
+  its 2 neighbors by Z on each side, each labelled with the symbol. The text
+  listing itself is unchanged; only the plot marking is new, matching what
+  RUMP's own `WHATISIT` did on a graphics device, which pyRUMP never had one
+  for until now.
+- `MATRIX <element>` now crosshairs its predicted `(energy, height)` point
+  directly onto the plot too, if one is showing, the same way the original
+  did on a graphics device.
+- `SIM SPLOT` now takes an optional element or layer argument, RUMP's own
+  "selective plot" `SPLOT` had (with no argument it still overlays the full
+  simulation as before). An element symbol overlays just that element's
+  contribution summed over every layer it appears in; an integer overlays
+  just that one sample layer's contribution across every element (numbered
+  the way `SIM SHOW` lists layers, not RUMP's own internal-sublayer
+  numbering, which by RUMP's own docs "does not correspond to the numbering
+  of the user layers"). A selective overlay keeps its own place on the plot
+  rather than replacing an existing full-simulation `OVERLAY 0`, so `PLOT`,
+  `OVERLAY 0`, and several `SPLOT`s can all sit on the same graph in
+  different colors; repeating the same selection still updates that one
+  trace in place instead of piling up copies.
+- `CURSOR` is implemented for the first time (previously a stub always
+  printing "Cursor not enabled or illegal device", since pyRUMP had no
+  graphics device to speak of). It's now `CURSOR <channel>`: reads channel,
+  energy, and yield/counts at the nearest real sample in the active buffer
+  -- snapped to the data, the way RUMP's own graphics-cursor crosshair was,
+  rather than an arbitrary position, and with no mouse involved. Prints
+  which buffer (index and name) it read from, since `OVERLAY`/`SPLOT` never
+  change which buffer is active, only `PLOT` does.
 
 ### 1.1.0 (2026-08-26)
 
