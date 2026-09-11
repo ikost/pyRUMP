@@ -466,7 +466,10 @@ def cmd_get(session, args: ArgReader) -> None:
         path = path.with_suffix(".pert")
     if not path.exists():
         raise CommandError(f"no such file: {path}")
-    session.pert = PertState()
+    # autocmp is a standing preference (typically set once from .pyrumprc),
+    # not part of the file-specific selection GET replaces -- carry it over
+    # so a fresh GET doesn't silently turn it back off.
+    session.pert = PertState(autocmp=state_for(session).autocmp)
     execute_file(session, path, stack=["rump", "pert"])
     print(f"read {path}")
     print(state_for(session).describe())
@@ -487,7 +490,8 @@ def cmd_save(session, args: ArgReader) -> None:
 
 def cmd_clear(session, args: ArgReader) -> None:
     if not args:
-        session.pert = PertState()
+        # Same standing-preference carve-out as GET (see cmd_get).
+        session.pert = PertState(autocmp=state_for(session).autocmp)
         print("  PERT settings cleared")
         return
     n = args.integer("a parameter number")

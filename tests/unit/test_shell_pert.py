@@ -636,6 +636,39 @@ def test_autocmp_off_turns_it_back_off(session, capsys):
 
 
 @needs_data
+def test_autocmp_survives_get(session, tmp_path):
+    """AUTOCMP is a standing preference (typically set once from
+    .pyrumprc), not part of the file-specific selection GET replaces -- a
+    .pert file never records it (_to_lines has no AUTOCMP line), so it must
+    survive GET's reset on its own."""
+    pert_file = tmp_path / "usual.pert"
+    run(session, "pert", "thick 1", f"save {pert_file}")
+    run(session, "pert", "autocmp", f"get {pert_file}")
+    assert session.pert.autocmp is True
+
+
+@needs_data
+def test_autocmp_survives_clear(session):
+    run(session, "pert", "autocmp", "clear")
+    assert session.pert.autocmp is True
+
+
+@needs_data
+def test_autocmp_still_plots_after_get_go(session, tmp_path):
+    """The common "load my usual setup and fit" idiom (cmd_get's own
+    docstring) must not silently drop a standing AUTOCMP preference before
+    GO ever checks it."""
+    pert_file = tmp_path / "usual.pert"
+    run(
+        session, "pert", "window 355 375", "norm 140 200", "thick 1",
+        f"save {pert_file}", "clear",
+    )
+    run(session, "pert", "autocmp", f"get {pert_file} go")
+    assert session.figure is not None
+    assert session.figure.axes
+
+
+@needs_data
 def test_go_prints_the_fitted_thickness_rounded_to_a_whole_unit(session, capsys):
     """Sub-angstrom precision is meaningless for RBS, so both the fitted
     value and the "(was ...)" comparison should be whole numbers -- unlike
