@@ -809,6 +809,18 @@ def test_splot_element_overlays_only_that_elements_contribution(session, tmp_pat
 
 
 @needs_data
+def test_splot_element_keeps_its_own_label_under_structlabel(session, tmp_path):
+    # STRUCTLABEL's structure-of-the-whole-sample legend text is right for a
+    # plain SPLOT, but must not paper over a selective one's own name.
+    session.buffers.get(1).spectrum.calibration = Calibration(kevch=50.0, npt=64)
+    sample = tmp_path / "splot_element_structlabel.lcm"
+    sample.write_text(_SPLOT_SAMPLE)
+    run(session, f"sim get {sample}", "structlabel on", "plot 1", "sim splot Ru")
+    trace = session.traces[-1]
+    assert trace.label == "SIM(Ru)"
+
+
+@needs_data
 def test_splot_layer_overlays_only_that_layers_contribution(session, tmp_path):
     session.buffers.get(1).spectrum.calibration = Calibration(kevch=50.0, npt=64)
     sample = tmp_path / "splot_layer.lcm"

@@ -308,12 +308,16 @@ def mark_matrix(session, buffer, energy_keV: float, channel: float, height: floa
 def buffer_label(session, buffer, index: int) -> str:
     """The name PLOT/OVERLAY would show for this buffer in a legend.
 
-    Buffer 0 is always the simulation (Session.simulation()'s convention), so
-    when STRUCTLABEL is on and a sample is described, its legend text becomes
-    a compact rendering of the layer structure instead of the buffer's own
-    name/identifier ("SIM").
+    Buffer 0 is usually the full simulation (Session.simulation()'s
+    convention), so when STRUCTLABEL is on and a sample is described, its
+    legend text becomes a compact rendering of the layer structure instead of
+    the buffer's own name/identifier ("SIM"). But a selective SPLOT overlay
+    also lands at index 0 without ever being stored into buffer 0 (see
+    Session.selective_simulation) precisely so it keeps its own "SIM(Ru)" /
+    "SIM(layer 2)" name here instead of being mistaken for the whole sample --
+    checked by identity, not position, against what buffer 0 actually holds.
     """
-    if index == 0 and session.plot.structure_labels:
+    if index == 0 and session.plot.structure_labels and buffer is session.buffers.get(0):
         from ..script.lcm import structure_label
 
         label = structure_label(
