@@ -21,7 +21,6 @@ from pyrump.shell.commands.rump import Quit  # noqa: E402
 from pyrump.shell.dispatch import CommandError  # noqa: E402
 from pyrump.shell.repl import execute_file, execute_line  # noqa: E402
 from pyrump.shell.session import Buffer, BufferSet, PlotState, Session  # noqa: E402
-from pyrump.shell import plotting  # noqa: E402
 
 
 from conftest import data_dir
@@ -959,30 +958,34 @@ def test_profile_prints_the_verbatim_stub_message(session, capsys):
 
 
 @needs_data
-def test_cursor_prints_the_verbatim_stub_message(session, capsys):
-    run(session, "cursor")
+def test_cursor_reports_channel_energy_and_counts(session, capsys):
+    run(session, "cursor 20")
     out = capsys.readouterr().out
-    assert "Cursor not enabled" in out
+    counts = session.buffers.active_buffer.spectrum.counts[20]
+    assert "Channel:     20" in out
+    assert "Energy:    100.0 keV" in out  # (20 + first=0) * kevch=5.0 + kev0=0.0
+    assert f"Counts: {counts:10.4f}" in out
 
 
 @needs_data
-def test_cursor_reads_clicked_points_until_stopped(session, monkeypatch, capsys):
-    run(session, "plot 1")
-    points = iter([(20.0, 5.0), (40.0, 1.5), None])
-    monkeypatch.setattr(plotting, "read_cursor_point", lambda figure: next(points))
-    run(session, "cursor")
-    out = capsys.readouterr().out
-    assert "Cursor not enabled" not in out
-    assert out.count("Channel:") == 2
-    assert "Counts:" in out
+def test_cursor_snaps_a_fractional_channel_to_the_nearest_sample(session, capsys):
+    run(session, "cursor 20.4")
+    assert "Channel:     20" in capsys.readouterr().out
+    run(session, "cursor 20.6")
+    assert "Channel:     21" in capsys.readouterr().out
 
 
 @needs_data
-def test_cursor_reports_yield_when_normalized(session, monkeypatch, capsys):
-    run(session, "normalize", "plot 1")
-    points = iter([(20.0, 5.0), None])
-    monkeypatch.setattr(plotting, "read_cursor_point", lambda figure: next(points))
-    run(session, "cursor")
+def test_cursor_rejects_a_channel_outside_the_buffer(session):
+    with pytest.raises(CommandError, match="outside the buffer"):
+        run(session, "cursor -1")
+    with pytest.raises(CommandError, match="outside the buffer"):
+        run(session, "cursor 9999")
+
+
+@needs_data
+def test_cursor_reports_yield_when_normalized(session, capsys):
+    run(session, "normalize", "cursor 20")
     out = capsys.readouterr().out
     assert "Yield:" in out
     assert "/uC/keV/msr" in out

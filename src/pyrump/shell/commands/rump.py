@@ -1353,35 +1353,43 @@ def cmd_profile(session, args: ArgReader) -> None:
 
 
 def cmd_cursor(session, args: ArgReader) -> None:
-    """``CURSOR`` -- read channel/energy/yield by clicking the plot.
+    """``CURSOR <channel>`` -- read the data at the nearest sampled channel.
 
-    ``AN_CURSOR`` (anlytc.c:185-204): with no plot device enabled, print this
-    exact message and do nothing -- still what happens with no PLOT/OVERLAY
-    up yet, since there is no graphics device to speak of until one draws
-    something. With one showing, RbsCursor's own do-while (click to read
-    another point, any other key to stop) becomes a click-to-read loop ended
-    by Enter or closing the window, via :func:`~pyrump.shell.plotting.read_cursor_point`.
+    RUMP's own ``AN_CURSOR`` (anlytc.c:185-204) read whatever point a
+    physical graphics crosshair sat on -- snapped to the data it was
+    hovering, never an arbitrary screen position. pyRUMP has no such device
+    and no reason to fake one with mouse clicks: matplotlib's own toolbar
+    already gives a live x/y readout for free while hovering a plot, and a
+    click-driven version would fight pyRUMP's own choice
+    (:func:`~pyrump.shell.plotting.show`) to leave the terminal, not the plot
+    window, focused after every draw. So CURSOR takes the channel directly
+    and snaps it to the nearest real sample in the active buffer instead --
+    the same "read what's actually there" RUMP's cursor served.
     """
+    channel = args.number("a channel number")
     args.done()
-    if not session.traces:
-        print("Cursor not enabled or illegal device")
-        return
-    plotting.require_matplotlib()
-    figure, _ax = plotting.figure_for(session)
-    calibration = session.buffers.require_active().calibration
-    print("Cursor on. Click a point to read it; press Enter or close the window to stop.")
-    while (point := plotting.read_cursor_point(figure)) is not None:
-        x, y = point
-        if session.plot.energy_axis:
-            energy_keV, channel = x, float(calibration.channel_of(x))
-        else:
-            channel, energy_keV = x, float(calibration.edge_energy(x))
-        kind = "Yield" if session.plot.normalized else "Counts"
-        unit = " /uC/keV/msr" if session.plot.normalized else ""
-        print(
-            f" Channel: {channel:6.1f}    Energy: {energy_keV:8.1f} keV"
-            f"    {kind}: {y:10.4f}{unit}"
+    from ...model.detector import yield_normalisation
+
+    buffer = session.buffers.require_active()
+    counts = buffer.spectrum.counts
+    if not 0 <= channel <= counts.size - 1:
+        raise CommandError(
+            f"cursor: channel {channel:g} is outside the buffer (0-{counts.size - 1})"
         )
+    index = int(round(channel))
+    energy_keV = float(buffer.calibration.edge_energy(index))
+    y = float(counts[index])
+    if session.plot.normalized:
+        factor = yield_normalisation(buffer.measurement)
+        if factor:
+            y /= factor
+        kind, unit = "Yield", " /uC/keV/msr"
+    else:
+        kind, unit = "Counts", ""
+    print(
+        f" Channel: {index:6d}    Energy: {energy_keV:8.1f} keV"
+        f"    {kind}: {y:10.4f}{unit}"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1473,7 +1481,7 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     # Analysis (anlytc.c's own cmlist order; abbreviation lengths from there
     # too, except DISPLAY -- kept at its already-shipped minlen 3 ("DIS"),
     # not the C's 4, to avoid changing already-tested behavior)
-    ("CURSOR", 3, cmd_cursor, "read channel/energy/yield by clicking the plot"),
+    ("CURSOR", 3, cmd_cursor, "read channel/energy/yield at the nearest data point"),
     ("ELEMENT", 2, cmd_element, "expected energy/channel of an element's surface peak"),
     ("MATRIX", 3, cmd_matrix, "expected energy, channel and matrix height"),
     ("WHATISIT", 4, cmd_whatisit, "identify elements near a channel"),
