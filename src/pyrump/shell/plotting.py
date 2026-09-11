@@ -217,6 +217,47 @@ def show(figure) -> None:
         terminal_focus.restore(token)
 
 
+def mark_whatisit(session, candidates, target_keV) -> bool:
+    """Overlay WHATISIT's candidates as ticks along the plot's bottom edge.
+
+    ``RbsMark``'s ``MK_WH1``/``MK_WHL``/``MK_WHR`` (tplot.c:260-292): the best
+    match gets a solid tick, its neighbors dashed ones, each labelled with the
+    element symbol. Skips the C's pixel-exact anti-collision jog -- readability
+    over imitation, the same call this module's ``spectra.py`` sibling already
+    makes -- and only marks a plot that's already on screen, mirroring
+    ``RbsLocate``'s own gate: with no plot device it reports that and draws
+    nothing, rather than opening one.
+
+    Returns ``False`` (having drawn nothing) if there is no active PLOT/OVERLAY
+    to mark.
+    """
+    if not session.traces:
+        return False
+    require_matplotlib()
+    figure, ax = figure_for(session)
+    trans = ax.get_xaxis_transform()
+    low, high = ax.get_xlim()
+    best = min(candidates, key=lambda c: abs(c.energy_keV - target_keV))
+    for row, candidate in enumerate(candidates):
+        x = candidate.energy_keV if session.plot.energy_axis else candidate.channel
+        if x < low or x > high:
+            continue
+        is_best = candidate is best
+        y = 0.05 if is_best else 0.05 + 0.05 * (row % 2)
+        ax.plot(
+            [x, x], [0.0, y], transform=trans, clip_on=False, color="0.15",
+            lw=1.4 if is_best else 1.0, ls="-" if is_best else "--",
+        )
+        ax.annotate(
+            candidate.symbol, (x, y), xycoords=trans,
+            xytext=(0, 3), textcoords="offset points",
+            ha="center", va="bottom", fontsize="small",
+            fontweight="bold" if is_best else "normal",
+        )
+    show(figure)
+    return True
+
+
 def buffer_label(session, buffer, index: int) -> str:
     """The name PLOT/OVERLAY would show for this buffer in a legend.
 

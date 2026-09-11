@@ -21,6 +21,7 @@ from pyrump.shell.commands.rump import Quit  # noqa: E402
 from pyrump.shell.dispatch import CommandError  # noqa: E402
 from pyrump.shell.repl import execute_file, execute_line  # noqa: E402
 from pyrump.shell.session import Buffer, BufferSet, PlotState, Session  # noqa: E402
+from pyrump.shell import plotting  # noqa: E402
 
 
 from conftest import data_dir
@@ -554,6 +555,23 @@ def test_whatisit_finds_candidates_near_a_channel(session, capsys):
     run(session, "whatisit 20")
     out = capsys.readouterr().out
     assert "near channel 20" in out
+
+
+@needs_data
+def test_whatisit_warns_with_no_plot_to_mark(session, capsys):
+    run(session, "whatisit 20")
+    out = capsys.readouterr().out
+    assert "Plot device not enabled" in out
+
+
+@needs_data
+def test_whatisit_marks_an_existing_plot(session, capsys):
+    run(session, "plot 1", "whatisit 20")
+    out = capsys.readouterr().out
+    assert "Plot device not enabled" not in out
+    ax = session.figure.axes[0]
+    assert len(ax.texts) >= 1
+    assert any(len(line.get_xdata()) == 2 for line in ax.lines)
 
 
 @needs_data

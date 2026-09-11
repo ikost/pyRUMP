@@ -1000,7 +1000,8 @@ def cmd_whatisit(session, args: ArgReader) -> None:
     """``WHATISIT <channel>`` -- identify elements near a channel.
 
     ``RbsLocate`` (anlytc.c:1398): the best-matching element by predicted
-    surface-edge energy, plus its 2 neighbors on each side by Z.
+    surface-edge energy, plus its 2 neighbors on each side by Z, marked on
+    the plot the same way if one is showing (see :func:`~pyrump.shell.plotting.mark_whatisit`).
     """
     from ...analysis.elements import locate_candidates
 
@@ -1018,6 +1019,8 @@ def cmd_whatisit(session, args: ArgReader) -> None:
             f"    {candidate.symbol:2s} (Z={candidate.z:2d})"
             f"  {candidate.energy_keV:8.1f} eV  channel {candidate.channel:7.2f}"
         )
+    if not plotting.mark_whatisit(session, candidates, target_keV):
+        print("  Plot device not enabled. (LOCATE)")
 
 
 def cmd_info(session, args: ArgReader) -> None:
