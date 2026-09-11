@@ -1349,14 +1349,35 @@ def cmd_profile(session, args: ArgReader) -> None:
 
 
 def cmd_cursor(session, args: ArgReader) -> None:
-    """``CURSOR`` -- not available in this shell.
+    """``CURSOR`` -- read channel/energy/yield by clicking the plot.
 
-    RUMP's own behavior with no interactive graphics device (anlytc.c:187):
-    print this message and do nothing. There is no keyboard fallback for
-    CURSOR specifically (unlike every other command in this family).
+    ``AN_CURSOR`` (anlytc.c:185-204): with no plot device enabled, print this
+    exact message and do nothing -- still what happens with no PLOT/OVERLAY
+    up yet, since there is no graphics device to speak of until one draws
+    something. With one showing, RbsCursor's own do-while (click to read
+    another point, any other key to stop) becomes a click-to-read loop ended
+    by Enter or closing the window, via :func:`~pyrump.shell.plotting.read_cursor_point`.
     """
     args.done()
-    print("Cursor not enabled or illegal device")
+    if not session.traces:
+        print("Cursor not enabled or illegal device")
+        return
+    plotting.require_matplotlib()
+    figure, _ax = plotting.figure_for(session)
+    calibration = session.buffers.require_active().calibration
+    print("Cursor on. Click a point to read it; press Enter or close the window to stop.")
+    while (point := plotting.read_cursor_point(figure)) is not None:
+        x, y = point
+        if session.plot.energy_axis:
+            energy_keV, channel = x, float(calibration.channel_of(x))
+        else:
+            channel, energy_keV = x, float(calibration.edge_energy(x))
+        kind = "Yield" if session.plot.normalized else "Counts"
+        unit = " /uC/keV/msr" if session.plot.normalized else ""
+        print(
+            f" Channel: {channel:6.1f}    Energy: {energy_keV:8.1f} keV"
+            f"    {kind}: {y:10.4f}{unit}"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -1448,7 +1469,7 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     # Analysis (anlytc.c's own cmlist order; abbreviation lengths from there
     # too, except DISPLAY -- kept at its already-shipped minlen 3 ("DIS"),
     # not the C's 4, to avoid changing already-tested behavior)
-    ("CURSOR", 3, cmd_cursor, "graphics cursor (not available in this shell)"),
+    ("CURSOR", 3, cmd_cursor, "read channel/energy/yield by clicking the plot"),
     ("ELEMENT", 2, cmd_element, "expected energy/channel of an element's surface peak"),
     ("MATRIX", 3, cmd_matrix, "expected energy, channel and matrix height"),
     ("WHATISIT", 4, cmd_whatisit, "identify elements near a channel"),

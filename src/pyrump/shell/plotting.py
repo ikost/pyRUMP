@@ -217,6 +217,20 @@ def show(figure) -> None:
         terminal_focus.restore(token)
 
 
+def read_cursor_point(figure):
+    """One click's data coordinates off ``figure``, or ``None`` to stop.
+
+    Wraps :meth:`~matplotlib.figure.Figure.ginput` -- RUMP's own ``RbsCursor``
+    (a blocking read of one crosshair position, anlytc.c:193) -- as its own
+    function so :func:`~pyrump.shell.commands.rump.cmd_cursor`'s read-click-print
+    loop can be driven by a real click, or by a test double, without either
+    caring which. A real interactive backend blocks here until the user
+    clicks, presses Enter, or closes the window.
+    """
+    picked = figure.ginput(1, timeout=0)
+    return picked[0] if picked else None
+
+
 def mark_whatisit(session, candidates, target_keV) -> bool:
     """Overlay WHATISIT's candidates as ticks along the plot's bottom edge.
 

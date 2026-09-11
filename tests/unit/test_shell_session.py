@@ -847,6 +847,29 @@ def test_cursor_prints_the_verbatim_stub_message(session, capsys):
     assert "Cursor not enabled" in out
 
 
+@needs_data
+def test_cursor_reads_clicked_points_until_stopped(session, monkeypatch, capsys):
+    run(session, "plot 1")
+    points = iter([(20.0, 5.0), (40.0, 1.5), None])
+    monkeypatch.setattr(plotting, "read_cursor_point", lambda figure: next(points))
+    run(session, "cursor")
+    out = capsys.readouterr().out
+    assert "Cursor not enabled" not in out
+    assert out.count("Channel:") == 2
+    assert "Counts:" in out
+
+
+@needs_data
+def test_cursor_reports_yield_when_normalized(session, monkeypatch, capsys):
+    run(session, "normalize", "plot 1")
+    points = iter([(20.0, 5.0), None])
+    monkeypatch.setattr(plotting, "read_cursor_point", lambda figure: next(points))
+    run(session, "cursor")
+    out = capsys.readouterr().out
+    assert "Yield:" in out
+    assert "/uC/keV/msr" in out
+
+
 @pytest.mark.parametrize(
     "abbreviation, expected",
     [
