@@ -296,9 +296,12 @@ def cmd_splot(session, args: ArgReader) -> None:
     token names an element already in the sample, restricting the overlay to
     its contribution summed over every layer it appears in.
 
-    Replaces any simulation trace already on the plot rather than stacking a
-    new one, so repeated SPLOT calls while tweaking the sample update the
-    overlay in place instead of piling up copies.
+    A bare SPLOT replaces any existing buffer-0 trace (PLOT/OVERLAY 0 or an
+    earlier bare SPLOT) the same as before, so repeated calls while tweaking
+    the sample update the theory overlay in place. A *selective* SPLOT gets a
+    key of its own instead, so e.g. SPLOT Ru coexists with an OVERLAY 0 (or a
+    different SPLOT 2) already on the plot rather than replacing it -- while
+    a repeated SPLOT Ru still updates that one trace in place.
     """
     token = args.optional()
     args.done()
@@ -307,6 +310,7 @@ def cmd_splot(session, args: ArgReader) -> None:
     if not session.script.layers:
         raise CommandError("no sample described: use SIM to build one")
 
+    key = 0
     if token is None:
         buffer = session.simulation()
     else:
@@ -325,13 +329,15 @@ def cmd_splot(session, args: ArgReader) -> None:
             buffer = session.selective_simulation(
                 element_z=element.z, label=f"SIM({element.symbol})"
             )
+            key = f"splot:element:{element.symbol}"
         else:
             if not 1 <= layer <= len(session.script.layers):
                 raise CommandError(f"splot: layer {layer} doesn't exist")
             buffer = session.selective_simulation(
                 layer=layer - 1, label=f"SIM(layer {layer})"
             )
-    plotting.add_trace(session, 0, buffer, clear=False, replace=True)
+            key = f"splot:layer:{layer}"
+    plotting.add_trace(session, 0, buffer, clear=False, replace=True, key=key)
     plotting.draw(session)
 
 

@@ -833,6 +833,38 @@ def test_splot_layer_overlays_only_that_layers_contribution(session, tmp_path):
 
 
 @needs_data
+def test_splot_element_does_not_replace_an_existing_full_sim_overlay(session, tmp_path):
+    session.buffers.get(1).spectrum.calibration = Calibration(kevch=50.0, npt=64)
+    sample = tmp_path / "splot_coexist.lcm"
+    sample.write_text(_SPLOT_SAMPLE)
+    run(session, f"sim get {sample}", "plot 1", "ov 0", "sim splot Ru")
+    labels = [t.label for t in session.traces]
+    assert "SIM" in labels
+    assert "SIM(Ru)" in labels
+
+
+@needs_data
+def test_splot_element_updates_in_place_on_repeat(session, tmp_path):
+    session.buffers.get(1).spectrum.calibration = Calibration(kevch=50.0, npt=64)
+    sample = tmp_path / "splot_repeat.lcm"
+    sample.write_text(_SPLOT_SAMPLE)
+    run(session, f"sim get {sample}", "plot 1", "sim splot Ru", "sim splot Ru")
+    labels = [t.label for t in session.traces]
+    assert labels.count("SIM(Ru)") == 1
+
+
+@needs_data
+def test_splot_element_and_layer_coexist(session, tmp_path):
+    session.buffers.get(1).spectrum.calibration = Calibration(kevch=50.0, npt=64)
+    sample = tmp_path / "splot_both.lcm"
+    sample.write_text(_SPLOT_SAMPLE)
+    run(session, f"sim get {sample}", "plot 1", "sim splot Ru", "sim splot 2")
+    labels = [t.label for t in session.traces]
+    assert "SIM(Ru)" in labels
+    assert "SIM(layer 2)" in labels
+
+
+@needs_data
 def test_splot_rejects_unknown_element(session, tmp_path):
     sample = tmp_path / "splot_unknown.lcm"
     sample.write_text(

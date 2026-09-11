@@ -57,6 +57,10 @@ class Trace:
     buffer: object
     label: str
     index: int
+    #: What :func:`add_trace`'s ``replace`` dedupes on -- usually just
+    #: ``index``, but a selective SPLOT overlay uses a key of its own (see
+    #: ``add_trace``) so it doesn't collide with buffer 0's own trace.
+    key: object
 
 
 def _values(buffer, state) -> np.ndarray:
@@ -328,18 +332,30 @@ def buffer_label(session, buffer, index: int) -> str:
     return buffer.name or buffer.identifier or f"buffer {index}"
 
 
-def add_trace(session, index: int, buffer, *, clear: bool, replace: bool = False) -> None:
+def add_trace(
+    session, index: int, buffer, *, clear: bool, replace: bool = False, key: object = None
+) -> None:
     """Add a buffer to the plot; ``clear`` makes it a fresh ``PLOT``.
 
-    ``replace`` drops any existing trace for the same buffer index first, so a
-    command that re-plots the same buffer on every call (SPLOT re-drawing the
-    simulation as the sample changes) updates it in place instead of piling up
-    a fresh copy each time. ``OVERLAY`` leaves this off -- stacking distinct
-    buffers is the point of it.
+    ``replace`` drops any existing trace with the same ``key`` first (default
+    ``index``, i.e. the same buffer slot), so a command that re-plots the same
+    thing on every call updates it in place instead of piling up a fresh copy
+    each time. ``OVERLAY`` leaves this off -- stacking distinct buffers is the
+    point of it.
+
+    A plain re-plot of buffer 0 (PLOT/OVERLAY 0, bare SPLOT) all key on
+    ``index`` and so dedupe against each other, since they show the identical
+    theory spectrum. A *selective* SPLOT (one element or layer's contribution)
+    passes its own ``key`` instead -- distinct from plain ``0`` and from each
+    other -- so it neither collides with a full-simulation OVERLAY 0 already
+    on the plot nor with a different SPLOT selection, while a repeated call
+    for the *same* selection still updates in place.
     """
+    if key is None:
+        key = index
     if clear:
         session.traces = []
     elif replace:
-        session.traces = [t for t in session.traces if t.index != index]
+        session.traces = [t for t in session.traces if t.key != key]
     label = buffer_label(session, buffer, index)
-    session.traces.append(Trace(buffer=buffer, label=label, index=index))
+    session.traces.append(Trace(buffer=buffer, label=label, index=index, key=key))
