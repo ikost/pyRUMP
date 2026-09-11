@@ -848,3 +848,17 @@ def test_analysis_command_abbreviations_resolve_correctly(abbreviation, expected
     matched = TABLE.match(abbreviation)
     assert matched is not None
     assert matched.name == expected
+
+
+def test_compare_shows_its_cmp_synonym_at_every_level():
+    """CMP is registered as its own hidden entry (kept out of the listing to
+    avoid a redundant "synonym for COMPARE" row), so without note_synonym a
+    bare HELP/`?` at any of the three levels would leave it looking
+    undiscoverable."""
+    from pyrump.shell.commands.pert import TABLE as PERT_TABLE
+    from pyrump.shell.commands.rump import TABLE as RUMP_TABLE
+    from pyrump.shell.commands.sim import TABLE as SIM_TABLE
+
+    for table in (RUMP_TABLE, SIM_TABLE, PERT_TABLE):
+        assert table.match("COMPARE").display == "COMPARE / CMP"
+        assert table.match("COMP") is None or table.match("COMP").name != "COMPARE"

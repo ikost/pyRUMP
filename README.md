@@ -29,7 +29,12 @@ surface.
   abbreviation length -- `COMP` even collided with `COMPOSITION` in SIM and
   PERT, silently invoking the wrong command. This is a deliberate departure
   from matching the original's abbreviation rule for this one command, in
-  favor of one unambiguous, consistent behavior.
+  favor of one unambiguous, consistent behavior. Because `CMP` is a full
+  synonym rather than a partial abbreviation, it's registered as its own
+  table entry kept out of the `?`/`HELP` listing (as any synonym is, to
+  avoid a redundant "synonym for COMPARE" row) -- which meant a bare listing
+  showed plain `COMPARE` with no hint `CMP` also works. It now shows
+  `COMPARE / CMP`, at all three levels.
 - `STRUCTLABEL`'s layer structure now renders composition as a compact
   chemical formula (`"Mg 1 O 1"` -> `"MgO"`, `"Si 1 O 2"` -> `"SiO2"`) with
   the count omitted whenever it's exactly 1, and shows the substrate's own

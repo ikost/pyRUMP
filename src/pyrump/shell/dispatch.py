@@ -25,7 +25,7 @@ from __future__ import annotations
 import inspect
 import re
 from collections.abc import Callable, Iterator, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
@@ -65,6 +65,13 @@ class Command:
     minlen: int
     handler: Handler
     help: str = ""
+    synonyms: tuple[str, ...] = ()
+    """Other names that also reach this command, noted in ``display`` (e.g.
+    ``COMPARE / CMP``) via :meth:`CommandTable.note_synonym`. Each synonym is
+    normally its own hidden table entry -- kept out of the listing to avoid a
+    redundant "synonym for X" row -- so without this it would be invisible to
+    anyone reading a bare HELP/``?`` listing rather than already knowing to
+    ask ``HELP <synonym>`` by name."""
 
     @property
     def hidden(self) -> bool:
@@ -85,9 +92,15 @@ class Command:
 
     @property
     def display(self) -> str:
-        """``REgion``: required characters upper-cased, the rest lower."""
+        """``REgion``: required characters upper-cased, the rest lower.
+
+        With ``synonyms`` set, appends them verbatim, e.g. ``COMPARE / CMP``.
+        """
         required = self.min_chars or len(self.name)
-        return self.name[:required].upper() + self.name[required:].lower()
+        rendered = self.name[:required].upper() + self.name[required:].lower()
+        if self.synonyms:
+            rendered += " / " + " / ".join(self.synonyms)
+        return rendered
 
 
 @dataclass(slots=True)
@@ -104,6 +117,21 @@ class CommandTable:
 
     def extend(self, entries: Sequence[Command]) -> None:
         self.commands.extend(entries)
+
+    def note_synonym(self, name: str, *synonyms: str) -> None:
+        """Show ``synonyms`` alongside ``name`` in the listing, e.g.
+        ``COMPARE / CMP``. Each synonym is expected to already be its own
+        (hidden) entry that actually does the matching -- this only changes
+        what ``name`` displays as, so a bare HELP/``?`` listing doesn't leave
+        a hidden synonym looking undiscoverable.
+        """
+        for i, command in enumerate(self.commands):
+            if command.name == name:
+                self.commands[i] = replace(
+                    command, synonyms=command.synonyms + synonyms
+                )
+                return
+        raise KeyError(f"no command named {name!r} to attach a synonym note to")
 
     def match(self, token: str) -> Command | None:
         """The first command matching ``token``, or None."""

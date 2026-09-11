@@ -100,6 +100,48 @@ def test_synonyms_are_matched_but_not_listed(table):
     assert "PARAMETERS" in listed
 
 
+def test_note_synonym_appends_it_to_the_displayed_name():
+    """A hidden synonym (negative minlen) is kept out of the listing on its
+    own -- note_synonym is how it still shows up somewhere, attached to the
+    name that actually gets listed, e.g. "COMPARE / CMP"."""
+    built = CommandTable("t")
+    built.add("COMPARE", 0, _noop, "plot it")
+    built.add("CMP", -3, _noop, "synonym for COMPARE")
+    built.note_synonym("COMPARE", "CMP")
+
+    assert built.match("COMPARE").display == "COMPARE / CMP"
+    assert built.match("CMP").display == "CMP"  # the synonym's own entry is untouched
+
+
+def test_note_synonym_does_not_change_matching():
+    built = CommandTable("t")
+    built.add("COMPARE", 0, _noop)
+    built.add("CMP", -3, _noop)
+    built.note_synonym("COMPARE", "CMP")
+
+    assert built.match("compare").name == "COMPARE"
+    assert built.match("cmp").name == "CMP"
+    assert built.match("comp") is None  # still no partial abbreviation
+
+
+def test_note_synonym_still_hides_the_synonym_from_the_listing():
+    built = CommandTable("t")
+    built.add("COMPARE", 0, _noop)
+    built.add("CMP", -3, _noop)
+    built.note_synonym("COMPARE", "CMP")
+
+    listed = [command.name for command in built.visible()]
+    assert listed == ["COMPARE"]
+    assert "COMPARE / CMP" in built.listing()
+
+
+def test_note_synonym_on_an_unknown_name_raises():
+    built = CommandTable("t")
+    built.add("COMPARE", 0, _noop)
+    with pytest.raises(KeyError, match="no command named"):
+        built.note_synonym("NOPE", "CMP")
+
+
 def test_listing_upper_cases_the_required_characters(table):
     assert "PARAmeters" in table.listing()
     assert "Quit" in table.listing()
