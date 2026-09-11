@@ -1365,11 +1365,16 @@ def cmd_cursor(session, args: ArgReader) -> None:
     window, focused after every draw. So CURSOR takes the channel directly
     and snaps it to the nearest real sample in the active buffer instead --
     the same "read what's actually there" RUMP's cursor served.
+
+    Always reads the *active* buffer, not necessarily whichever trace you're
+    looking at on a plot with several OVERLAY/SPLOT curves on it -- printing
+    which one that is up front (index and name) so that's never a guess.
     """
     channel = args.number("a channel number")
     args.done()
     from ...model.detector import yield_normalisation
 
+    index_no = session.buffers.active
     buffer = session.buffers.require_active()
     counts = buffer.spectrum.counts
     if not 0 <= channel <= counts.size - 1:
@@ -1386,6 +1391,8 @@ def cmd_cursor(session, args: ArgReader) -> None:
         kind, unit = "Yield", " /uC/keV/msr"
     else:
         kind, unit = "Counts", ""
+    name = buffer.name or buffer.identifier
+    print(f" buffer {index_no} ({name}):" if name else f" buffer {index_no}:")
     print(
         f" Channel: {index:6d}    Energy: {energy_keV:8.1f} keV"
         f"    {kind}: {y:10.4f}{unit}"

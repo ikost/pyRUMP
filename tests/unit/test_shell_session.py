@@ -962,9 +962,21 @@ def test_cursor_reports_channel_energy_and_counts(session, capsys):
     run(session, "cursor 20")
     out = capsys.readouterr().out
     counts = session.buffers.active_buffer.spectrum.counts[20]
+    assert "buffer 1 (test)" in out
     assert "Channel:     20" in out
     assert "Energy:    100.0 keV" in out  # (20 + first=0) * kevch=5.0 + kev0=0.0
     assert f"Counts: {counts:10.4f}" in out
+
+
+@needs_data
+def test_cursor_names_whichever_buffer_is_actually_active(session, capsys):
+    """OVERLAY/SPLOT never change the active buffer, so CURSOR keeps reading
+    whatever PLOT last pointed it at -- printing which one that is up front,
+    so a stack of overlays never leaves that a guess."""
+    session.buffers.load(make_buffer(name="second"), 2)
+    run(session, "plot 2", "cursor 5")
+    out = capsys.readouterr().out
+    assert "buffer 2 (second)" in out
 
 
 @needs_data
