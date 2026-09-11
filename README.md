@@ -574,13 +574,30 @@ a simultaneous least-squares fit (`SINGLE` loops one parameter at a time).
 | `EQUATION <layer> <n> [<min> <max>]` | vary equation parameter *n* |
 | `MEV` / `FWHM` / `THETA` / `CORRECTION` / `STRAGGLE` `[<min> <max>]` | vary that beam, detector or sample parameter |
 | `OFFSET` `[new]` `[<min> <max>]` | vary the calibration energy offset alone (e.g. a sample-charging shift) |
+| `FUZZ` | not implemented — raises an error |
+| `COMPARE` `[new]` | active buffer vs. the simulation, with residuals |
 
 Every one of the above takes an optional trailing `<min> <max>` search
 bound -- a real constraint the solver enforces, not just a label. Omit it and
 the parameter keeps its default range; give it and it replaces that default
 outright. `PARMS` echoes any bound in force, and `SAVE`/`GET` round-trip it.
-| `FUZZ` | not implemented — raises an error |
-| `COMPARE` `[new]` | active buffer vs. the simulation, with residuals |
+
+> **Never vary every element's composition in a layer — always leave one
+> fixed.** A layer's composition is stored as raw, unnormalized stoichiometric
+> coefficients (e.g. `Co 1 Mn 0.333197 Si 0.324647`), and it's normalized by
+> its own sum before it ever reaches the physics — both in the slab fill
+> (`fractions = row / total`, `sim/slabs.py`) and in the Bragg mixing rule for
+> matrix density (`ρ = (Σxᵢ/ρᵢ / Σxᵢ)⁻¹`, `atomic/density.py`), which cancels
+> any common scale exactly. So scaling *every* composition in a layer by the
+> same factor changes nothing in the simulated spectrum, for any factor — it's
+> an exactly flat direction in the fit, not just a poorly-conditioned one. For
+> an *N*-element layer, vary at most *N*-1 of its `COMPOSITION` selections and
+> leave one as the fixed reference (conventionally the majority element, at
+> its nominal coefficient); the others then fit as genuine ratios to it.
+> Violating this shows up as a singular Jacobian and unusable uncertainties
+> (`fit/lm.py`'s `_covariance` catches exactly this and reports `None`), or
+> the solver parking on an arbitrary point wherever the bounds happen to stop
+> it.
 
 ```
 PERT Command: window 355 375   /* compare only here                  */
