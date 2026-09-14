@@ -1,0 +1,64 @@
+site_name: pyRUMP
+site_url: https://ikost.github.io/pyRUMP/
+repo_url: https://github.com/ikost/pyRUMP
+repo_name: ikost/pyRUMP
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  palette:
+    - scheme: slate
+      primary: custom
+      accent: custom
+  font:
+    text: IBM Plex Sans
+    code: JetBrains Mono
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.indexes
+    - toc.follow
+    - content.code.copy
+    - search.suggest
+    - search.highlight
+
+extra_css:
+  - stylesheets/extra.css
+
+markdown_extensions:
+  - tables
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.inlinehilite
+  - pymdownx.highlight
+  - pymdownx.arithmatex:
+      generic: true
+  - toc:
+      permalink: true
+
+extra_javascript:
+  - javascripts/mathjax.js
+  - https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js
+
+nav:
+  - Home: index.md
+  - Getting started:
+      - getting-started/index.md
+      - Worked examples: getting-started/examples.md
+  - Physics and simulation:
+      - physics/index.md
+      - Design and validation: physics/validation.md
+  - Manual:
+      - Interactive shell: manual/shell.md
+      - SIM and PERT: manual/sim-pert.md
+      - CLI reference: manual/cli.md
+      - Sample descriptions & depth profiles: manual/samples.md
+      - Things that will catch you out: manual/gotchas.md
+  - Development:
+      - Python API: dev/python-api.md
+      - Contributing: dev/contributing.md
+      - RUMP quirks and defects: dev/rump-quirks.md
+      - About: dev/about.md
+      - Changelog: https://github.com/ikost/pyRUMP/releases

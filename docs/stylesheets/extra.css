@@ -1,0 +1,97 @@
+/* agterm.com-inspired palette: navy background, cream text, cobalt accent */
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: #191d20;
+  --md-primary-fg-color--light: #191d20;
+  --md-primary-fg-color--dark: #191d20;
+  --md-primary-bg-color: #e6e1d7;
+
+  --md-accent-fg-color: #3b5fe0;
+  --md-accent-fg-color--transparent: rgba(30, 64, 216, 0.15);
+  --md-accent-bg-color: #ffffff;
+
+  --md-default-bg-color: #191d20;
+  --md-default-fg-color: #e6e1d7;
+  --md-default-fg-color--light: rgba(230, 225, 215, 0.7);
+  --md-default-fg-color--lighter: rgba(230, 225, 215, 0.45);
+  --md-default-fg-color--lightest: rgba(230, 225, 215, 0.12);
+
+  --md-typeset-color: #e6e1d7;
+  --md-typeset-a-color: #6d8bf5;
+
+  --md-code-bg-color: #14171a;
+  --md-code-fg-color: #e6e1d7;
+
+  --md-footer-bg-color: #14171a;
+  --md-footer-bg-color--dark: #101215;
+}
+
+.md-header {
+  background-color: rgba(25, 29, 32, 0.85);
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.md-tabs {
+  background-color: rgba(25, 29, 32, 0.6);
+}
+
+.md-nav__link--active,
+.md-nav__link:focus,
+.md-nav__link:hover {
+  color: #6d8bf5;
+}
+
+/* Terminal-window ASCII banner (Home page) */
+.term-window {
+  margin: 1.5rem 0 2rem;
+  background: var(--md-code-bg-color);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+.term-titlebar {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.term-dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.term-dot--red { background: #ff5f56; }
+.term-dot--yellow { background: #ffbd2e; }
+.term-dot--green { background: #27c93f; }
+
+.term-body {
+  padding: 1.25rem 1.5rem 1.5rem;
+  overflow-x: auto;
+}
+
+.ascii-banner {
+  margin: 0 0 0.75rem;
+  color: var(--md-accent-fg-color);
+  font-family: var(--md-code-font, "JetBrains Mono", monospace);
+  font-size: 0.6rem;
+  line-height: 1.2;
+  white-space: pre;
+}
+
+.term-prompt {
+  margin: 0;
+  font-family: var(--md-code-font, "JetBrains Mono", monospace);
+  color: var(--md-default-fg-color--light);
+  font-size: 0.85rem;
+}
+
+.term-prompt .term-caret {
+  color: #6d8bf5;
+}
