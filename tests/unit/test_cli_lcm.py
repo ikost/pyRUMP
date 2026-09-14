@@ -383,7 +383,7 @@ def test_cli_fit_recovers_a_thickness(tmp_path, capsys):
 
     assert main([
         "--data", str(DATA), "fit", str(start), str(data),
-        "--vary", "thickness:0", "--window", "190", "226",
+        "--vary", "thickness:0", "--window", "950", "1130",
     ]) == 0
     output = capsys.readouterr().out
     assert "thickness[0]" in output

@@ -9,9 +9,10 @@ The step size is **path-length based, not depth based**:
     maxpath = sample->maxpth / max(|secin|, |secout|)   /* creatr.c:587 */
     num_sublayers = (int)(1 + cm2_thick / maxpath)      /* creatr.c:702 */
 
-so a tilted sample is automatically cut into more, thinner slabs. ``maxpth``
-defaults to 200 (1e15 at/cm^2), which the 1985 paper justifies as the point where
-the third-order energy-loss expansion reaches ~1e-5 fractional error.
+so a tilted sample is automatically cut into more, thinner slabs. RUMP's own
+default for ``maxpth`` is 200 (1e15 at/cm^2), which the 1985 paper justifies as
+the point where the third-order energy-loss expansion reaches ~1e-5 fractional
+error; pyRUMP's default is set higher (see :data:`DEFAULT_MAXPATH`).
 
 Note the ``int()`` truncation: a layer exactly ``maxpath`` thick gets 2 sublayers,
 not 1. Reproduced deliberately.
@@ -29,8 +30,9 @@ from ..profiles.equations import (
     species_fraction,
 )
 
-#: Default ``maxpth`` in 1e15 atoms/cm^2 (sample.h:16).
-DEFAULT_MAXPATH = 200.0
+#: Default ``maxpth`` in 1e15 atoms/cm^2. RUMP's own default is 200 (sample.h:16);
+#: pyRUMP raises it to 1000 for coarser, faster default sublayering.
+DEFAULT_MAXPATH = 1000.0
 
 
 @dataclass(slots=True)

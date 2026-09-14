@@ -28,7 +28,7 @@ import numpy as np
 class Calibration:
     """Linear channel-to-energy mapping."""
 
-    kevch: float = 5.0
+    kevch: float = 1.0
     """keV per channel."""
 
     kev0: float = 0.0
@@ -37,7 +37,7 @@ class Calibration:
     first: float = 0.0
     """Channel number of the first stored data point."""
 
-    npt: int = 1024
+    npt: int = 2048
     """Number of channels."""
 
     def edge_energy(self, channel) -> np.ndarray:

@@ -32,7 +32,7 @@ needs_data = pytest.mark.skipif(DATA is None, reason="legacy data tables unavail
 def make_buffer(total: float = 100.0, channels: int = 64, name: str = "test") -> Buffer:
     counts = np.full(channels, total / channels, dtype=float)
     return Buffer(
-        spectrum=Spectrum(counts=counts, calibration=Calibration(npt=channels)),
+        spectrum=Spectrum(counts=counts, calibration=Calibration(npt=channels, kevch=5.0)),
         name=name,
     )
 

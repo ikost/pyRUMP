@@ -252,32 +252,30 @@ def test_ndtri_matches_the_c(oracle):
 
 def test_absorber_matches_oracle(oracle, registry, table):
     sample = UniformSample(
-        [200.0, 1000.0], [79, 14], [[1, 0], [0, 1]], absorber_layers=1
-    )
-    _compare(oracle, registry, table, sample, Measurement(omega_msr=1.0, charge_uC=10.0))
+        [200.0, 1000.0], [79, 14], [[1, 0], [0, 1]], absorber_layers=1, maxpth=200.0)
+    _compare(oracle, registry, table, sample, Measurement(omega_msr=1.0, charge_uC=10.0, fwhm_keV=0.0, current_nA=0.0))
 
 
 def test_absorber_with_tilt_matches_oracle(oracle, registry, table):
     """The absorber is not tilted with the sample -- exit is normal incidence."""
     sample = UniformSample(
-        [200.0, 1000.0], [79, 14], [[1, 0], [0, 1]], absorber_layers=1
-    )
+        [200.0, 1000.0], [79, 14], [[1, 0], [0, 1]], absorber_layers=1, maxpth=200.0)
     _compare(
         oracle, registry, table, sample,
-        Measurement(omega_msr=1.0, charge_uC=10.0), theta=45.0,
+        Measurement(omega_msr=1.0, charge_uC=10.0, fwhm_keV=0.0, current_nA=0.0), theta=45.0,
     )
 
 
 def test_absorber_attenuates(registry, table):
     """Physical check: an absorber shifts the sample's edge down in energy."""
     geometry = Geometry(theta=0.0, phi=10.0)
-    measurement = Measurement(omega_msr=1.0, charge_uC=10.0)
+    measurement = Measurement(omega_msr=1.0, charge_uC=10.0, fwhm_keV=0.0, current_nA=0.0)
     bare = simulate(
-        UniformSample([1000.0], [14], [[1.0]]), Beam(), geometry, registry, table,
+        UniformSample([1000.0], [14], [[1.0]], maxpth=200.0), Beam(), geometry, registry, table,
         CAL, measurement,
     )
     behind = simulate(
-        UniformSample([200.0, 1000.0], [79, 14], [[1, 0], [0, 1]], absorber_layers=1),
+        UniformSample([200.0, 1000.0], [79, 14], [[1, 0], [0, 1]], absorber_layers=1, maxpth=200.0),
         Beam(), geometry, registry, table, CAL, measurement,
     )
     assert np.flatnonzero(behind.counts).max() < np.flatnonzero(bare.counts).max()
@@ -286,26 +284,24 @@ def test_absorber_attenuates(registry, table):
 @pytest.mark.parametrize("steps", [2, 3, 4, 5, 7])
 def test_fuzz_matches_oracle(oracle, registry, table, steps):
     sample = UniformSample(
-        [1000.0], [14], [[1.0]], fuzz_amounts=[150.0], fuzz_steps=[steps]
-    )
-    _compare(oracle, registry, table, sample, Measurement(omega_msr=1.0, charge_uC=10.0))
+        [1000.0], [14], [[1.0]], fuzz_amounts=[150.0], fuzz_steps=[steps], maxpth=200.0)
+    _compare(oracle, registry, table, sample, Measurement(omega_msr=1.0, charge_uC=10.0, fwhm_keV=0.0, current_nA=0.0))
 
 
 def test_fuzz_with_straggling_matches_oracle(oracle, registry, table):
     sample = UniformSample(
-        [1000.0], [14], [[1.0]], straggle=1.0, fuzz_amounts=[150.0], fuzz_steps=[3]
-    )
-    _compare(oracle, registry, table, sample, Measurement(omega_msr=1.0, charge_uC=10.0))
+        [1000.0], [14], [[1.0]], straggle=1.0, fuzz_amounts=[150.0], fuzz_steps=[3], maxpth=200.0)
+    _compare(oracle, registry, table, sample, Measurement(omega_msr=1.0, charge_uC=10.0, fwhm_keV=0.0, current_nA=0.0))
 
 
 @pytest.mark.parametrize("strength", [1.0, 5.0])
 def test_multiple_scattering_matches_oracle(oracle, registry, table, strength):
-    sample = UniformSample([1000.0], [14], [[1.0]], multiple=strength)
-    _compare(oracle, registry, table, sample, Measurement(omega_msr=1.0, charge_uC=10.0))
+    sample = UniformSample([1000.0], [14], [[1.0]], multiple=strength, maxpth=200.0)
+    _compare(oracle, registry, table, sample, Measurement(omega_msr=1.0, charge_uC=10.0, fwhm_keV=0.0, current_nA=0.0))
 
 
 def test_pileup_matches_oracle(oracle, registry, table):
-    sample = UniformSample([1000.0], [14], [[1.0]])
+    sample = UniformSample([1000.0], [14], [[1.0]], maxpth=200.0)
     measurement = Measurement(
         omega_msr=1.0, charge_uC=10.0, current_nA=20.0, tau_us=5.0
     )
@@ -317,13 +313,13 @@ def test_pileup_matches_oracle(oracle, registry, table):
 def test_fuzz_broadens_an_edge(registry, table):
     """Roughness should soften the back edge without moving the total."""
     geometry = Geometry(theta=0.0, phi=10.0)
-    measurement = Measurement(omega_msr=1.0, charge_uC=10.0)
+    measurement = Measurement(omega_msr=1.0, charge_uC=10.0, fwhm_keV=0.0, current_nA=0.0)
     sharp = simulate(
-        UniformSample([1000.0], [14], [[1.0]]), Beam(), geometry, registry, table,
+        UniformSample([1000.0], [14], [[1.0]], maxpth=200.0), Beam(), geometry, registry, table,
         CAL, measurement,
     )
     rough = simulate(
-        UniformSample([1000.0], [14], [[1.0]], fuzz_amounts=[300.0], fuzz_steps=[5]),
+        UniformSample([1000.0], [14], [[1.0]], fuzz_amounts=[300.0], fuzz_steps=[5], maxpth=200.0),
         Beam(), geometry, registry, table, CAL, measurement,
     )
     assert rough.total() == pytest.approx(sharp.total(), rel=0.02)
@@ -362,7 +358,7 @@ def test_multiple_scattering_grows_with_strength():
 
 def test_pileup_actually_changes_the_spectrum(oracle, registry, table):
     """Guard against the comparison passing because nothing happened."""
-    sample = UniformSample([1000.0], [14], [[1.0]])
+    sample = UniformSample([1000.0], [14], [[1.0]], maxpth=200.0)
     oracle.set_pileup(None)
     _, without = _compare(
         oracle, registry, table, sample,
@@ -380,10 +376,10 @@ def test_pileup_actually_changes_the_spectrum(oracle, registry, table):
 def test_multiple_scattering_actually_changes_the_spectrum(oracle, registry, table):
     measurement = Measurement(omega_msr=1.0, charge_uC=10.0, tau_us=0.0)
     _, plain = _compare(
-        oracle, registry, table, UniformSample([1000.0], [14], [[1.0]]), measurement
+        oracle, registry, table, UniformSample([1000.0], [14], [[1.0]], maxpth=200.0), measurement
     )
     _, tailed = _compare(
         oracle, registry, table,
-        UniformSample([1000.0], [14], [[1.0]], multiple=200.0), measurement,
+        UniformSample([1000.0], [14], [[1.0]], multiple=200.0, maxpth=200.0), measurement,
     )
     assert tailed.sum() > plain.sum() * 1.05

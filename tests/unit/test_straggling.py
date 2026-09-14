@@ -188,11 +188,11 @@ def test_broadening_widens_the_deposit():
 
 
 STRAGGLE_CASES = [
-    ("Si straggle=1", UniformSample([1000.0], [14], [[1.0]], straggle=1.0)),
-    ("Si thick", UniformSample([5000.0], [14], [[1.0]], straggle=1.0)),
-    ("Au film", UniformSample([500.0], [79], [[1.0]], straggle=1.0)),
-    ("Si straggle=3", UniformSample([1000.0], [14], [[1.0]], straggle=3.0)),
-    ("SiO2", UniformSample([1000.0], [14, 8], [[1.0, 2.0]], straggle=1.0)),
+    ("Si straggle=1", UniformSample([1000.0], [14], [[1.0]], straggle=1.0, maxpth=200.0)),
+    ("Si thick", UniformSample([5000.0], [14], [[1.0]], straggle=1.0, maxpth=200.0)),
+    ("Au film", UniformSample([500.0], [79], [[1.0]], straggle=1.0, maxpth=200.0)),
+    ("Si straggle=3", UniformSample([1000.0], [14], [[1.0]], straggle=3.0, maxpth=200.0)),
+    ("SiO2", UniformSample([1000.0], [14, 8], [[1.0, 2.0]], straggle=1.0, maxpth=200.0)),
 ]
 
 
@@ -217,7 +217,7 @@ def registry(table) -> StoppingRegistry:
 @pytest.mark.parametrize("label, sample", STRAGGLE_CASES, ids=[c[0] for c in STRAGGLE_CASES])
 def test_straggled_spectrum_matches_oracle(oracle, registry, table, label, sample):
     geometry = Geometry(theta=0.0, phi=10.0)
-    measurement = Measurement(omega_msr=1.0, charge_uC=10.0)
+    measurement = Measurement(omega_msr=1.0, charge_uC=10.0, fwhm_keV=0.0, current_nA=0.0)
     mine = simulate(sample, Beam(), geometry, registry, table, CAL, measurement)
 
     oracle.set_beam(
@@ -241,10 +241,10 @@ def test_straggling_broadens_the_edge(registry, table):
     """Physical check independent of the oracle: edges soften, counts survive."""
     geometry = Geometry(theta=0.0, phi=10.0)
     sharp = simulate(
-        UniformSample([1000.0], [14], [[1.0]]), Beam(), geometry, registry, table, CAL
+        UniformSample([1000.0], [14], [[1.0]], maxpth=200.0), Beam(), geometry, registry, table, CAL
     )
     broad = simulate(
-        UniformSample([1000.0], [14], [[1.0]], straggle=1.0),
+        UniformSample([1000.0], [14], [[1.0]], straggle=1.0, maxpth=200.0),
         Beam(), geometry, registry, table, CAL,
     )
     assert np.count_nonzero(broad.counts) > np.count_nonzero(sharp.counts)

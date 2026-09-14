@@ -62,13 +62,13 @@ def _simulation_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--geometry", default="cornell", choices=["cornell", "ibm", "general"]
     )
-    parser.add_argument("--kevch", type=float, default=5.0, help="keV per channel")
+    parser.add_argument("--kevch", type=float, default=1.0, help="keV per channel")
     parser.add_argument("--kev0", type=float, default=0.0, help="keV at channel 0")
-    parser.add_argument("--channels", type=int, default=1024)
+    parser.add_argument("--channels", type=int, default=2048)
     parser.add_argument("--fwhm", type=float, default=15.0, help="detector FWHM, keV")
     parser.add_argument("--omega", type=float, default=1.0, help="solid angle, msr")
     parser.add_argument("--charge", type=float, default=10.0, help="uC")
-    parser.add_argument("--current", type=float, default=0.0, help="nA (pile-up)")
+    parser.add_argument("--current", type=float, default=10.0, help="nA (pile-up)")
     parser.add_argument("--tau", type=float, default=0.0, help="shaping time, us")
 
 

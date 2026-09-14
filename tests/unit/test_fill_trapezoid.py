@@ -148,18 +148,18 @@ def oracle() -> ora.Oracle:
 
 
 CASES = [
-    ("bare Si", UniformSample([1000.0], [14], [[1.0]]), Beam(), Geometry(theta=0.0, phi=10.0)),
-    ("thick Si", UniformSample([5000.0], [14], [[1.0]]), Beam(), Geometry(theta=0.0, phi=10.0)),
-    ("Au film", UniformSample([500.0], [79], [[1.0]]), Beam(), Geometry(theta=0.0, phi=10.0)),
-    ("SiO2", UniformSample([1000.0], [14, 8], [[1.0, 2.0]]), Beam(), Geometry(theta=0.0, phi=10.0)),
+    ("bare Si", UniformSample([1000.0], [14], [[1.0]], maxpth=200.0), Beam(), Geometry(theta=0.0, phi=10.0)),
+    ("thick Si", UniformSample([5000.0], [14], [[1.0]], maxpth=200.0), Beam(), Geometry(theta=0.0, phi=10.0)),
+    ("Au film", UniformSample([500.0], [79], [[1.0]], maxpth=200.0), Beam(), Geometry(theta=0.0, phi=10.0)),
+    ("SiO2", UniformSample([1000.0], [14, 8], [[1.0, 2.0]], maxpth=200.0), Beam(), Geometry(theta=0.0, phi=10.0)),
     (
         "Au marker in Si",
-        UniformSample([500.0, 200.0, 1000.0], [14, 79], [[1, 0], [0, 1], [1, 0]], sublayers=[3, 1, 4]),
+        UniformSample([500.0, 200.0, 1000.0], [14, 79], [[1, 0], [0, 1], [1, 0]], sublayers=[3, 1, 4], maxpth=200.0),
         Beam(),
         Geometry(theta=0.0, phi=10.0),
     ),
-    ("tilted Si", UniformSample([1000.0], [14], [[1.0]]), Beam(), Geometry(theta=60.0, phi=10.0)),
-    ("proton beam", UniformSample([2000.0], [14], [[1.0]]), Beam(z=1, mass=1.00797), Geometry(theta=0.0, phi=10.0)),
+    ("tilted Si", UniformSample([1000.0], [14], [[1.0]], maxpth=200.0), Beam(), Geometry(theta=60.0, phi=10.0)),
+    ("proton beam", UniformSample([2000.0], [14], [[1.0]], maxpth=200.0), Beam(z=1, mass=1.00797), Geometry(theta=0.0, phi=10.0)),
 ]
 
 
@@ -205,7 +205,7 @@ def _oracle_spectrum(oracle, sample, beam, geometry, measurement):
 
 @pytest.mark.parametrize("label, sample, beam, geometry", CASES, ids=[c[0] for c in CASES])
 def test_spectrum_matches_oracle(oracle, registry, table, label, sample, beam, geometry):
-    measurement = Measurement(omega_msr=1.0, charge_uC=10.0)
+    measurement = Measurement(omega_msr=1.0, charge_uC=10.0, fwhm_keV=0.0, current_nA=0.0)
     mine = simulate(sample, beam, geometry, registry, table, CAL, measurement)
     theirs = _oracle_spectrum(oracle, sample, beam, geometry, measurement)
 
@@ -230,12 +230,12 @@ def test_spectrum_matches_oracle(oracle, registry, table, label, sample, beam, g
 
 def test_yield_normalisation_is_the_charge_and_solid_angle(oracle, registry, table):
     """counts scale linearly with Q and Omega, inversely with CORR."""
-    sample, beam = UniformSample([1000.0], [14], [[1.0]]), Beam()
+    sample, beam = UniformSample([1000.0], [14], [[1.0]], maxpth=200.0), Beam()
     geometry = Geometry(theta=0.0, phi=10.0)
 
-    base = Measurement(omega_msr=1.0, charge_uC=10.0)
-    doubled = Measurement(omega_msr=2.0, charge_uC=10.0)
-    more_charge = Measurement(omega_msr=1.0, charge_uC=20.0)
+    base = Measurement(omega_msr=1.0, charge_uC=10.0, fwhm_keV=0.0, current_nA=0.0)
+    doubled = Measurement(omega_msr=2.0, charge_uC=10.0, fwhm_keV=0.0, current_nA=0.0)
+    more_charge = Measurement(omega_msr=1.0, charge_uC=20.0, fwhm_keV=0.0, current_nA=0.0)
 
     a = simulate(sample, beam, geometry, registry, table, CAL, base).total()
     b = simulate(sample, beam, geometry, registry, table, CAL, doubled).total()
@@ -254,10 +254,10 @@ def test_fill_routine_is_chosen_by_straggling(registry, table):
     """
     geometry = Geometry(theta=0.0, phi=10.0)
     sharp = simulate(
-        UniformSample([1000.0], [14], [[1.0]]), Beam(), geometry, registry, table, CAL
+        UniformSample([1000.0], [14], [[1.0]], maxpth=200.0), Beam(), geometry, registry, table, CAL
     )
     broad = simulate(
-        UniformSample([1000.0], [14], [[1.0]], straggle=1.0),
+        UniformSample([1000.0], [14], [[1.0]], straggle=1.0, maxpth=200.0),
         Beam(), geometry, registry, table, CAL,
     )
     assert broad.total() == pytest.approx(sharp.total(), rel=1e-3)
@@ -269,8 +269,9 @@ def test_surface_edge_lands_in_the_right_channel(registry, table):
     """The sharpest calibration check: the Au edge must sit at K*E0."""
     from pyrump.physics.kinematics import kinematic_factor
 
-    sample = UniformSample([200.0], [79], [[1.0]])
-    mine = simulate(sample, Beam(), Geometry(theta=0.0, phi=10.0), registry, table, CAL)
+    sample = UniformSample([200.0], [79], [[1.0]], maxpth=200.0)
+    measurement = Measurement(omega_msr=1.0, charge_uC=10.0, fwhm_keV=0.0, current_nA=0.0)
+    mine = simulate(sample, Beam(), Geometry(theta=0.0, phi=10.0), registry, table, CAL, measurement)
     occupied = np.flatnonzero(mine.counts)
 
     # Use the *isotopic* mass, which is what the simulation scatters from --

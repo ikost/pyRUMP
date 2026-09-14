@@ -101,7 +101,7 @@ class Script:
 
     layers: list[LcmLayer] = field(default_factory=list)
     description: str = ""
-    maxpth: float = 200.0
+    maxpth: float = 1000.0
     absorber_layers: int = 0
     straggle: float = 0.0
     multiple: float = 0.0

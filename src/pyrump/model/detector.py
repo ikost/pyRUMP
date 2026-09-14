@@ -21,10 +21,10 @@ class Measurement:
     charge_state: int = 1
     """``cbeam``, the |charge| state of the beam."""
 
-    current_nA: float = 0.0
+    current_nA: float = 10.0
     """Average beam current; only used by the pileup model."""
 
-    fwhm_keV: float = 0.0
+    fwhm_keV: float = 15.0
     """Detector resolution."""
 
     tau_us: float = 5.0

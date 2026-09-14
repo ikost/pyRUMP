@@ -107,7 +107,7 @@ def _assert_bricks_match(mine, theirs, *, straggling: bool = False):
 
 
 def test_bare_silicon(oracle, registry, table):
-    sample = UniformSample([1000.0], [14], [[1.0]])
+    sample = UniformSample([1000.0], [14], [[1.0]], maxpth=200.0)
     mine, theirs = _compare(
         oracle, registry, table, sample, Beam(), Geometry(theta=0.0, phi=10.0)
     )
@@ -116,7 +116,7 @@ def test_bare_silicon(oracle, registry, table):
 
 @pytest.mark.parametrize("thickness", [200.0, 1000.0, 5000.0])
 def test_thickness_sweep(oracle, registry, table, thickness):
-    sample = UniformSample([thickness], [14], [[1.0]])
+    sample = UniformSample([thickness], [14], [[1.0]], maxpth=200.0)
     mine, theirs = _compare(
         oracle, registry, table, sample, Beam(), Geometry(theta=0.0, phi=10.0)
     )
@@ -125,7 +125,7 @@ def test_thickness_sweep(oracle, registry, table, thickness):
 
 @pytest.mark.parametrize("e0", [1.5, 2.0, 3.0])
 def test_beam_energy_sweep(oracle, registry, table, e0):
-    sample = UniformSample([1000.0], [14], [[1.0]])
+    sample = UniformSample([1000.0], [14], [[1.0]], maxpth=200.0)
     mine, theirs = _compare(
         oracle, registry, table, sample, Beam(e0_MeV=e0), Geometry(theta=0.0, phi=10.0)
     )
@@ -135,7 +135,7 @@ def test_beam_energy_sweep(oracle, registry, table, e0):
 @pytest.mark.parametrize("z_target", [6, 8, 22, 47, 79])
 def test_element_sweep(oracle, registry, table, z_target):
     """Different Z exercises different cross-sections and isotope counts."""
-    sample = UniformSample([1000.0], [z_target], [[1.0]])
+    sample = UniformSample([1000.0], [z_target], [[1.0]], maxpth=200.0)
     mine, theirs = _compare(
         oracle, registry, table, sample, Beam(), Geometry(theta=0.0, phi=10.0)
     )
@@ -144,7 +144,7 @@ def test_element_sweep(oracle, registry, table, z_target):
 
 @pytest.mark.parametrize("phi", [5.0, 10.0, 20.0, 30.0])
 def test_detector_angle_sweep(oracle, registry, table, phi):
-    sample = UniformSample([1000.0], [14], [[1.0]])
+    sample = UniformSample([1000.0], [14], [[1.0]], maxpth=200.0)
     mine, theirs = _compare(
         oracle, registry, table, sample, Beam(), Geometry(theta=0.0, phi=phi)
     )
@@ -154,7 +154,7 @@ def test_detector_angle_sweep(oracle, registry, table, phi):
 @pytest.mark.parametrize("theta", [0.0, 30.0, 60.0])
 def test_tilt_sweep_cornell(oracle, registry, table, theta):
     """Tilt changes both path secants and therefore the slab count."""
-    sample = UniformSample([1000.0], [14], [[1.0]])
+    sample = UniformSample([1000.0], [14], [[1.0]], maxpth=200.0)
     mine, theirs = _compare(
         oracle,
         registry,
@@ -167,7 +167,7 @@ def test_tilt_sweep_cornell(oracle, registry, table, theta):
 
 
 def test_ibm_geometry(oracle, registry, table):
-    sample = UniformSample([1000.0], [14], [[1.0]])
+    sample = UniformSample([1000.0], [14], [[1.0]], maxpth=200.0)
     mine, theirs = _compare(
         oracle,
         registry,
@@ -181,7 +181,7 @@ def test_ibm_geometry(oracle, registry, table):
 
 def test_compound_layer(oracle, registry, table):
     """SiO2: Bragg mixing plus two elements' isotopes."""
-    sample = UniformSample([1000.0], [14, 8], [[1.0, 2.0]])
+    sample = UniformSample([1000.0], [14, 8], [[1.0, 2.0]], maxpth=200.0)
     mine, theirs = _compare(
         oracle, registry, table, sample, Beam(), Geometry(theta=0.0, phi=10.0)
     )
@@ -194,8 +194,7 @@ def test_multilayer(oracle, registry, table):
         [500.0, 200.0, 1000.0],
         [14, 79],
         [[1.0, 0.0], [0.0, 1.0], [1.0, 0.0]],
-        sublayers=[3, 1, 4],
-    )
+        sublayers=[3, 1, 4], maxpth=200.0,)
     mine, theirs = _compare(
         oracle, registry, table, sample, Beam(), Geometry(theta=0.0, phi=10.0)
     )
@@ -203,7 +202,7 @@ def test_multilayer(oracle, registry, table):
 
 
 def test_proton_beam(oracle, registry, table):
-    sample = UniformSample([2000.0], [14], [[1.0]])
+    sample = UniformSample([2000.0], [14], [[1.0]], maxpth=200.0)
     mine, theirs = _compare(
         oracle,
         registry,
@@ -216,7 +215,7 @@ def test_proton_beam(oracle, registry, table):
 
 
 def test_straggling_enabled(oracle, registry, table):
-    sample = UniformSample([1000.0], [14], [[1.0]], straggle=1.0)
+    sample = UniformSample([1000.0], [14], [[1.0]], straggle=1.0, maxpth=200.0)
     mine, theirs = _compare(
         oracle, registry, table, sample, Beam(), Geometry(theta=0.0, phi=10.0)
     )
@@ -225,7 +224,7 @@ def test_straggling_enabled(oracle, registry, table):
 
 
 def test_explicit_sublayers(oracle, registry, table):
-    sample = UniformSample([1000.0], [14], [[1.0]], sublayers=[17])
+    sample = UniformSample([1000.0], [14], [[1.0]], sublayers=[17], maxpth=200.0)
     mine, theirs = _compare(
         oracle, registry, table, sample, Beam(), Geometry(theta=0.0, phi=10.0)
     )
@@ -235,7 +234,7 @@ def test_explicit_sublayers(oracle, registry, table):
 
 def test_bricks_tile_without_gaps(oracle, registry, table):
     """Within an isotope block, each back edge is the next front edge."""
-    sample = UniformSample([1000.0], [14], [[1.0]])
+    sample = UniformSample([1000.0], [14], [[1.0]], maxpth=200.0)
     mine = simulate_bricks(
         sample, Beam(), Geometry(theta=0.0, phi=10.0), registry, table
     )

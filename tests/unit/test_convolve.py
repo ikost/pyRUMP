@@ -197,19 +197,19 @@ def oracle() -> ora.Oracle:
 
 
 CASES = [
-    ("Si fwhm=15", UniformSample([1000.0], [14], [[1.0]]), 15.0),
-    ("Si fwhm=30", UniformSample([1000.0], [14], [[1.0]]), 30.0),
-    ("Au fwhm=15", UniformSample([500.0], [79], [[1.0]]), 15.0),
-    ("SiO2 fwhm=20", UniformSample([1000.0], [14, 8], [[1.0, 2.0]]), 20.0),
-    ("straggle + fwhm", UniformSample([1000.0], [14], [[1.0]], straggle=1.0), 15.0),
-    ("thick Si fwhm=25", UniformSample([5000.0], [14], [[1.0]]), 25.0),
+    ("Si fwhm=15", UniformSample([1000.0], [14], [[1.0]], maxpth=200.0), 15.0),
+    ("Si fwhm=30", UniformSample([1000.0], [14], [[1.0]], maxpth=200.0), 30.0),
+    ("Au fwhm=15", UniformSample([500.0], [79], [[1.0]], maxpth=200.0), 15.0),
+    ("SiO2 fwhm=20", UniformSample([1000.0], [14, 8], [[1.0, 2.0]], maxpth=200.0), 20.0),
+    ("straggle + fwhm", UniformSample([1000.0], [14], [[1.0]], straggle=1.0, maxpth=200.0), 15.0),
+    ("thick Si fwhm=25", UniformSample([5000.0], [14], [[1.0]], maxpth=200.0), 25.0),
 ]
 
 
 @pytest.mark.parametrize("label, sample, fwhm", CASES, ids=[c[0] for c in CASES])
 def test_convolved_spectrum_matches_oracle(oracle, registry, table, label, sample, fwhm):
     geometry = Geometry(theta=0.0, phi=10.0)
-    measurement = Measurement(omega_msr=1.0, charge_uC=10.0, fwhm_keV=fwhm)
+    measurement = Measurement(omega_msr=1.0, charge_uC=10.0, fwhm_keV=fwhm, current_nA=0.0)
     mine = simulate(sample, Beam(), geometry, registry, table, CAL, measurement)
 
     oracle.set_beam(
@@ -231,15 +231,15 @@ def test_convolved_spectrum_matches_oracle(oracle, registry, table, label, sampl
 def test_resolution_softens_the_surface_edge(registry, table):
     """A physical check independent of the oracle."""
     geometry = Geometry(theta=0.0, phi=10.0)
-    sample = UniformSample([1000.0], [14], [[1.0]])
+    sample = UniformSample([1000.0], [14], [[1.0]], maxpth=200.0)
 
     sharp = simulate(
         sample, Beam(), geometry, registry, table, CAL,
-        Measurement(omega_msr=1.0, charge_uC=10.0, fwhm_keV=0.0),
+        Measurement(omega_msr=1.0, charge_uC=10.0, fwhm_keV=0.0, current_nA=0.0),
     )
     blurred = simulate(
         sample, Beam(), geometry, registry, table, CAL,
-        Measurement(omega_msr=1.0, charge_uC=10.0, fwhm_keV=30.0),
+        Measurement(omega_msr=1.0, charge_uC=10.0, fwhm_keV=30.0, current_nA=0.0),
     )
 
     assert np.count_nonzero(blurred.counts) > np.count_nonzero(sharp.counts)
