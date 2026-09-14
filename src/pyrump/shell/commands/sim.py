@@ -18,6 +18,7 @@ from pathlib import Path
 from ...script.lcm import (
     EQUATION_NAMES,
     SampleEditor,
+    composition_value,
     normalized_composition,
     read_lcm,
     thickness_label,
@@ -194,7 +195,10 @@ def describe(session, editor: SampleEditor) -> str:
     for index, layer in enumerate(script.layers):
         mark = ">" if index == editor.current else " "
         values = normalized_composition(layer.composition) if fraction else layer.composition
-        composition = " ".join(f"{symbol} {value:g}" for symbol, value in values.items())
+        composition = " ".join(
+            f"{symbol} {composition_value(value, normalize=fraction)}"
+            for symbol, value in values.items()
+        )
         lines.append(
             f" {mark}{index + 1:3d}  {thickness_label(layer.thickness):>12s}"
             f" {layer.unit:<8s} {composition}"

@@ -120,23 +120,27 @@ class Script:
         return seen
 
 
-def _count(value: float) -> str:
-    """One element's stoichiometry count, chemical-notation style.
-
-    A count of exactly 1 is omitted (MgO, not Mg1O1). A count that is
-    exactly whole otherwise renders bare ("3", not "3.00"). Anything else
-    rounds to 2 decimals (nearest 1%) and keeps trailing zeros -- an RBS
-    measurement resolves composition to roughly 0.1 at% for heavy elements
-    and as coarse as 5% for light ones, so a PERT-fitted count has no
-    business showing more digits than that, but a value that merely rounds
-    to a whole number (2.998) must still read as measured, not exact
-    ("3.00", not "3").
+def composition_value(value: float, *, normalize: bool = False) -> str:
+    """One element's composition value for display -- a bare integer when
+    ``value`` is exactly whole ("3", not "3.0000"), otherwise fixed-point
+    with a minimum precision: 4 decimals when ``normalize`` (COMPFRAC's
+    atomic fractions sum to 1, so a 1% step is only 0.01 -- 4 decimals
+    resolves better than 0.1%), 3 when not (raw stoichiometric counts are
+    typically several units wide, so 3 decimals gives comparable relative
+    resolution). A value that merely rounds to a whole number (2.9998) must
+    still read as measured, not exact ("3.000", not "3").
     """
-    if value == 1:
-        return ""
     if value == int(value):
         return _g(value)
-    return f"{value:.2f}"
+    return f"{value:.4f}" if normalize else f"{value:.3f}"
+
+
+def _count(value: float, *, normalize: bool = False) -> str:
+    """:func:`composition_value`, but a count of exactly 1 is omitted
+    (MgO, not Mg1O1) -- the chemical-formula rendering's own convention."""
+    if value == 1:
+        return ""
+    return composition_value(value, normalize=normalize)
 
 
 def normalized_composition(composition: dict[str, float]) -> dict[str, float]:
@@ -163,7 +167,9 @@ def _formula(composition: dict[str, float], *, normalize: bool = False) -> str:
     """
     if normalize:
         composition = normalized_composition(composition)
-    return "".join(f"{symbol}{_count(value)}" for symbol, value in composition.items())
+    return "".join(
+        f"{symbol}{_count(value, normalize=normalize)}" for symbol, value in composition.items()
+    )
 
 
 def thickness_label(value: float) -> str:
