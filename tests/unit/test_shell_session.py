@@ -902,6 +902,22 @@ def test_compfrac_on_shows_atomic_fraction(session, tmp_path):
     assert labels == ["test", "Si [500/cm2] - Mn3Pt [150A]"]
 
 
+def test_compfrac_on_shows_atomic_fraction_in_show(session, tmp_path, capsys):
+    sample = tmp_path / "compfrac_show.lcm"
+    sample.write_text(
+        "Sim Reset\nLayer 1\n Thick 150 A\n Composition Mn 3 Pt 1 /\nMaxpth 200\n"
+    )
+    run(session, f"sim get {sample}", "compfrac on")
+    capsys.readouterr()
+    run(session, "sim show")
+    assert "Mn 0.75 Pt 0.25" in capsys.readouterr().out
+
+    run(session, "compfrac off")
+    capsys.readouterr()
+    run(session, "sim show")
+    assert "Mn 3 Pt 1" in capsys.readouterr().out
+
+
 @needs_data
 def test_plot_and_compare_reuse_the_same_figure(session, tmp_path):
     """PLOT (1 panel) -> COMPARE (2 panels) -> PLOT (1 panel again) must draw

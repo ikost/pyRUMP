@@ -141,9 +141,12 @@ def test_show_rounds_thickness_to_the_nearest_whole_unit():
     """RBS has no depth resolution below roughly an angstrom, so SHOW
     shouldn't display fractional thickness -- unlike write_lcm, which keeps
     full precision so a saved .lcm round-trips exactly."""
+    from types import SimpleNamespace
+
     from pyrump.shell.commands.sim import describe
 
     editor = run("Layer 1", "Thick 150.198 A", "Composition Si 1 /")
-    output = describe(None, editor)
+    session = SimpleNamespace(plot=SimpleNamespace(composition_fraction=False))
+    output = describe(session, editor)
     assert "150" in output
     assert "150.198" not in output

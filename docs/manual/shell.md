@@ -172,7 +172,7 @@ commands.
 | `NORMALIZE` / `RAW` | normalized vs. raw yield units |
 | `LABELS [off]` | axis labels on or off |
 | `STRUCTLABEL [off]` | show the SIM sample's layer structure (substrate first) as the simulation's legend text, instead of "SIM" |
-| `COMPFRAC [off]` `[new]` | within `STRUCTLABEL`, show each layer's composition as atomic fraction (sums to 1) instead of raw stoichiometry |
+| `COMPFRAC [off]` `[new]` | show each layer's composition as atomic fraction (sums to 1) instead of raw stoichiometry, in both `STRUCTLABEL` and SIM/PERT `SHOW` |
 | `ENERGY [off]` | x axis in energy (keV) rather than channel |
 | `PARMS` / `PARAMETERS` | print the current plot settings |
 

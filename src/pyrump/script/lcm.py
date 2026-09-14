@@ -139,24 +139,30 @@ def _count(value: float) -> str:
     return f"{value:.2f}"
 
 
-def _formula(composition: dict[str, float], *, normalize: bool = False) -> str:
-    """Compact chemical-formula rendering: {"Mg": 1, "O": 1} -> "MgO".
-
-    With ``normalize``, counts are first rescaled to sum to 1 within this
-    layer -- {"Mn": 3, "Pt": 1} -> {"Mn": 0.75, "Pt": 0.25} -- showing atomic
-    fraction instead of raw stoichiometry (COMPFRAC). This is purely
-    cosmetic: it never touches ``composition`` itself, so SIM's physics and
-    PERT's fit parameters (which vary the real dict) are unaffected --
-    RUMP's atomic-density mixing rule already normalizes by the same total
+def normalized_composition(composition: dict[str, float]) -> dict[str, float]:
+    """Rescale a layer's raw counts to sum to 1: {"Mn": 3, "Pt": 1} -> {"Mn":
+    0.75, "Pt": 0.25} -- atomic fraction instead of raw stoichiometry
+    (COMPFRAC). Purely cosmetic: the result is a new dict, so it never
+    touches ``composition`` itself -- SIM's physics and PERT's fit
+    parameters (which vary the real dict) are unaffected. RUMP's
+    atomic-density mixing rule already normalizes by the same total
     (:func:`pyrump.atomic.density.layer_atomic_density`), so the two
     representations are physically identical.
     """
+    total = sum(composition.values())
+    if total <= 0:
+        return dict(composition)
+    return {symbol: value / total for symbol, value in composition.items()}
+
+
+def _formula(composition: dict[str, float], *, normalize: bool = False) -> str:
+    """Compact chemical-formula rendering: {"Mg": 1, "O": 1} -> "MgO".
+
+    With ``normalize``, uses :func:`normalized_composition` to show atomic
+    fraction instead of raw stoichiometry (COMPFRAC).
+    """
     if normalize:
-        total = sum(composition.values())
-        if total > 0:
-            composition = {
-                symbol: value / total for symbol, value in composition.items()
-            }
+        composition = normalized_composition(composition)
     return "".join(f"{symbol}{_count(value)}" for symbol, value in composition.items())
 
 

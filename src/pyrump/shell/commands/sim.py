@@ -18,6 +18,7 @@ from pathlib import Path
 from ...script.lcm import (
     EQUATION_NAMES,
     SampleEditor,
+    normalized_composition,
     read_lcm,
     thickness_label,
     write_lcm,
@@ -177,8 +178,14 @@ def cmd_show(session, args: ArgReader) -> None:
 
 
 def describe(session, editor: SampleEditor) -> str:
-    """The ``SHOW`` listing: the sample as RUMP prints it."""
+    """The ``SHOW`` listing: the sample as RUMP prints it.
+
+    Composition renders as atomic fraction instead of raw stoichiometry
+    when ``COMPFRAC`` is on, matching the plot legend (see
+    :func:`pyrump.script.lcm.normalized_composition`).
+    """
     script = editor.script
+    fraction = session.plot.composition_fraction
     lines = []
     if script.description:
         lines.append(f"  {script.description}")
@@ -186,9 +193,8 @@ def describe(session, editor: SampleEditor) -> str:
         lines.append("  (empty space)")
     for index, layer in enumerate(script.layers):
         mark = ">" if index == editor.current else " "
-        composition = " ".join(
-            f"{symbol} {value:g}" for symbol, value in layer.composition.items()
-        )
+        values = normalized_composition(layer.composition) if fraction else layer.composition
+        composition = " ".join(f"{symbol} {value:g}" for symbol, value in values.items())
         lines.append(
             f" {mark}{index + 1:3d}  {thickness_label(layer.thickness):>12s}"
             f" {layer.unit:<8s} {composition}"
