@@ -422,6 +422,12 @@ class Session:
     #: PERT state, populated by :mod:`pyrump.shell.commands.pert`.
     pert: object | None = None
 
+    #: "comp" (classic thickness+stoichiometric ratio) or "atoms" (each
+    #: element's own areal density) -- MODE (:mod:`pyrump.shell.commands.rump`),
+    #: a pyRUMP-only addition not part of legacy RUMP. Gates SIM/PERT's
+    #: THICKNESS/COMPOSITION vs. ATOMS commands.
+    thickness_mode: str = "comp"
+
     figure: object | None = None
     traces: list = field(default_factory=list)
     log_file: object | None = None

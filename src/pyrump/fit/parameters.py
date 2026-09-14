@@ -108,6 +108,34 @@ def composition(layer: int, element: int) -> Parameter:
     return Parameter(f"composition[{layer},{element}]", get, set_, lower=0.0, scale=1.0)
 
 
+def atoms(layer: int, element: int) -> Parameter:
+    """One element's own areal density, 1e15 at/cm^2, other elements fixed.
+
+    Like :func:`composition`, but also re-derives the layer's total
+    thickness as the sum of its composition row on every ``set``. Plain
+    ``composition()`` varies a *stoichiometric* coefficient against a fixed
+    layer thickness, so the split (``fractions = row / row.sum()``,
+    :func:`pyrump.sim.slabs.build_grid`) reallocates the other elements'
+    areal density too. Keeping thickness == sum(row) makes the split an
+    identity instead, so composition values already *are* each element's
+    absolute areal density and varying one leaves the rest untouched. Only
+    meaningful for a layer set up that way -- see ``SIM ATOMS``.
+    """
+
+    def get(inp: FitInputs) -> float:
+        return float(inp.sample.compositions[layer][element])
+
+    def set_(inp: FitInputs, value: float) -> None:
+        rows = [list(r) for r in inp.sample.compositions]
+        rows[layer][element] = value
+        inp.sample.compositions = rows
+        thicknesses = list(inp.sample.thicknesses)
+        thicknesses[layer] = sum(rows[layer])
+        inp.sample.thicknesses = thicknesses
+
+    return Parameter(f"atoms[{layer},{element}]", get, set_, lower=0.0, scale=100.0)
+
+
 def equation_parameter(layer: int, index: int) -> Parameter:
     """One parameter of a layer's depth-profile equation."""
 

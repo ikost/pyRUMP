@@ -40,6 +40,12 @@ Thickness units
 * ``/CM2`` is already 1e15 at/cm^2
 * ``M/CM2`` multiplies by the composition sum (molecules to atoms)
 * a compound name uses that compound's tabulated density
+
+``Atoms`` is a pyRUMP-only shortcut (not part of legacy RUMP) for the common
+case of wanting each element's own areal density directly: ``Atoms Mn 2 Pt
+1`` is exactly ``Composition Mn 2 Pt 1`` followed by ``Thick 3 /CM2`` -- the
+composition values *are* each element's 1e15 at/cm^2, because ``/CM2``
+thickness is unscaled and the stoichiometric split is a plain fraction of it.
 """
 
 from __future__ import annotations
@@ -343,6 +349,12 @@ class SampleEditor:
             self._writable().composition = _element_pairs(rest)
         elif command.startswith("species"):
             self._writable().species = _element_pairs(rest)
+        elif command.startswith("atoms"):
+            layer = self._writable()
+            composition = _element_pairs(rest)
+            layer.composition = composition
+            layer.thickness = sum(composition.values())
+            layer.unit = "/CM2"
         elif command.startswith("eq"):
             name = rest[0].lower()
             if name not in EQUATION_NAMES:
@@ -456,6 +468,68 @@ def to_sample(
         fuzz_amounts=fuzz_amounts if any(fuzz_steps) else None,
         fuzz_steps=fuzz_steps if any(fuzz_steps) else None,
     )
+
+
+def recalculate_thickness_mode(
+    script: Script,
+    periodic_table: PeriodicTable,
+    densities: DensityTable,
+    *,
+    to_atoms: bool,
+) -> int:
+    """Convert every layer between the comp and atoms thickness conventions.
+
+    Comp mode (RUMP's own) is a physical thickness -- normally Angstroms --
+    split across elements by stoichiometric ratio. Atoms mode (pyRUMP-only,
+    see ``SIM ATOMS``) instead holds each element's own areal density
+    directly in ``composition``, with ``thickness`` just their sum in
+    ``/CM2``. Both are genuine unit conversions through the layer's own
+    atomic density (:func:`layer_atomic_density`) -- not a relabelling --
+    so whichever unit a layer started in (A, nm, a compound name, ...),
+    the simulated spectrum is identical before and after. Used by MODE
+    (:mod:`pyrump.shell.commands.rump`).
+
+    ``to_atoms=True`` converts comp -> atoms; ``False`` converts atoms ->
+    comp, landing on Angstroms and renormalising composition back to
+    fractions of 1. A layer with no thickness or composition yet is left
+    alone. Returns how many layers were actually changed.
+    """
+    from ..atomic.density import layer_atomic_density
+
+    symbols = script.elements
+    if not symbols:
+        return 0
+    element_z = [periodic_table.by_symbol(s).z for s in symbols]
+    atomic_densities = [periodic_table.by_z(z).atomic_density for z in element_z]
+
+    changed = 0
+    for layer in script.layers:
+        row = [layer.composition.get(s, 0.0) for s in symbols]
+        total = sum(row)
+        if total <= 0:
+            continue
+        density = layer_atomic_density(row, atomic_densities)
+        areal_total = _to_areal(layer.thickness, layer.unit, density, total, densities)
+        if areal_total <= 0:
+            continue
+        fractions = [value / total for value in row]
+
+        if to_atoms:
+            layer.composition = {
+                symbol: value * areal_total
+                for symbol, value in zip(symbols, fractions)
+                if value
+            }
+            layer.thickness = areal_total
+            layer.unit = "/CM2"
+        else:
+            layer.composition = {
+                symbol: value for symbol, value in zip(symbols, fractions) if value
+            }
+            layer.thickness = areal_total / density
+            layer.unit = "A"
+        changed += 1
+    return changed
 
 
 def _to_areal(

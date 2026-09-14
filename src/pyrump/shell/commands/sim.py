@@ -48,8 +48,18 @@ def _apply(session, verb: str, args: ArgReader) -> None:
     session.touch()
 
 
-def _editor_command(verb: str):
+def _editor_command(verb: str, *, requires_mode: str | None = None):
+    """``requires_mode``, if given, gates this command on ``session.thickness_mode``
+    ("comp" or "atoms") -- see ``MODE`` (:mod:`pyrump.shell.commands.rump`).
+    """
+
     def handler(session, args: ArgReader) -> None:
+        if requires_mode is not None and session.thickness_mode != requires_mode:
+            raise CommandError(
+                f"{verb.upper()} needs MODE {requires_mode.upper()} "
+                f"(currently {session.thickness_mode}) -- switch with "
+                f"MODE {requires_mode.upper()}"
+            )
         _apply(session, verb, args)
 
     return handler
@@ -406,9 +416,13 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("SHOW", 2, cmd_show, "display the sample"),
     ("STATUS", 2, cmd_status, "summarise the SIM parameters"),
     # Layer contents
-    ("THICKNESS", 2, _editor_command("thick"), "set this layer's thickness"),
-    ("COMPOSITION", 1, _editor_command("composition"),
-     "set this layer's composition, e.g. In 2 O 3 /"),
+    ("THICKNESS", 2, _editor_command("thick", requires_mode="comp"),
+     "set this layer's thickness (needs MODE COMP)"),
+    ("COMPOSITION", 1, _editor_command("composition", requires_mode="comp"),
+     "set this layer's composition, e.g. In 2 O 3 / (needs MODE COMP)"),
+    ("ATOMS", 3, _editor_command("atoms", requires_mode="atoms"),
+     "set composition+thickness at once, in 1e15 at/cm^2 per element, "
+     "e.g. Mn 2 Pt 1 / (needs MODE ATOMS)"),
     ("SPECIES", 2, _editor_command("species"), "impurity species for EQUATION"),
     ("EQUATION", 2, _editor_command("equation"), "impurity distribution equation"),
     ("EQLIST", 3, cmd_equation_help, "list the known equations"),

@@ -941,6 +941,49 @@ def cmd_intset(session, args: ArgReader) -> None:
         raise CommandError(f"intset: unrecognized mode {token!r}; use INTSET ? for help")
 
 
+def cmd_mode(session, args: ArgReader) -> None:
+    """``MODE [Comp|Atoms]`` -- how SIM/PERT describe a layer's thickness.
+
+    A pyRUMP-only addition, not part of legacy RUMP. ``Comp`` is RUMP's own
+    convention: a physical thickness (normally Angstroms) split across
+    elements by stoichiometric ratio -- SIM/PERT's THICKNESS and COMPOSITION.
+    ``Atoms`` instead holds each element's own areal density directly in
+    COMPOSITION, with THICKNESS just their sum in ``/CM2`` -- SIM/PERT's
+    ATOMS (see ``SIM ATOMS``). Only one set of commands is usable at a time,
+    gated by this setting, so a fit can never mix the two conventions on the
+    same layer.
+
+    Switching actually recalculates every layer between the two conventions
+    (:func:`pyrump.script.lcm.recalculate_thickness_mode`), through each
+    layer's own atomic density -- not a relabelling -- so the simulated
+    spectrum is unchanged either way. With no argument, prints the current
+    mode.
+    """
+    token = args.optional()
+    args.done()
+    if token is None:
+        print(f"  mode: {session.thickness_mode}")
+        return
+    choice = token.strip().lower()
+    if choice not in ("comp", "atoms"):
+        raise CommandError(f"mode: unrecognized mode {token!r}; use COMP or ATOMS")
+    if choice == session.thickness_mode:
+        print(f"  mode: {choice} (unchanged)")
+        return
+
+    from ...script.lcm import recalculate_thickness_mode
+
+    changed = recalculate_thickness_mode(
+        session.script, session.table, session.densities, to_atoms=(choice == "atoms")
+    )
+    session.thickness_mode = choice
+    session.touch()
+    if changed:
+        target = "atoms/cm^2" if choice == "atoms" else "Angstroms"
+        print(f"  recalculated {changed} layer(s) to {target} (density-based)")
+    print(f"  mode: {choice}")
+
+
 def cmd_element(session, args: ArgReader) -> None:
     """``ELEMENT el [el ...]`` -- expected energy/channel of each surface edge.
 
@@ -1500,6 +1543,8 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("WIDTH_THICK", 3, cmd_width_thick, "thickness from a peak's half-height width"),
     ("PROFILE", 3, cmd_profile, "not implemented -- never was, in the original"),
     ("INTSET", 6, cmd_intset, "change INTEGRAL/THICKNESS rounding and alpha mode"),
+    ("MODE", 4, cmd_mode,
+     "SIM/PERT thickness convention, COMP or ATOMS -- see MODE with no argument"),
     ("CALIBRATE", 3, cmd_calibrate, "energy-calibrate from two known peaks"),
     ("DISPLAY", 3, cmd_display, "plot the sample composition against depth"),
     ("FFT", 3, cmd_fft, "FFT smooth (same as SMOOTH -FFT -RANGE)"),

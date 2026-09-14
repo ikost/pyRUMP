@@ -32,6 +32,7 @@ import numpy as np
 
 from ...fit.parameters import (
     FitInputs,
+    atoms,
     composition,
     equation_parameter,
     parameter,
@@ -73,6 +74,8 @@ def _vary_command(entry: Vary) -> str:
         base = f"thickness {entry.layer + 1}"
     elif entry.kind == "composition":
         base = f"composition {entry.layer + 1} {entry.symbol}"
+    elif entry.kind == "atoms":
+        base = f"atoms {entry.layer + 1} {entry.symbol}"
     elif entry.kind == "species":
         base = f"species {entry.layer + 1} {entry.symbol}"
     elif entry.kind == "equation":
@@ -117,7 +120,7 @@ class Vary:
     """
 
     parameter: object
-    kind: str                 # thickness | composition | equation | simple | sample
+    kind: str                 # thickness | composition | atoms | equation | simple | sample
     layer: int = -1
     index: int = -1
     symbol: str = ""
@@ -209,7 +212,19 @@ def _add(session, entry: Vary) -> None:
 # ---------------------------------------------------------------------------
 
 
+def _require_mode(session, mode: str, command: str) -> None:
+    """Gate a PERT selector on ``session.thickness_mode`` -- see ``MODE``
+    (:mod:`pyrump.shell.commands.rump`).
+    """
+    if session.thickness_mode != mode:
+        raise CommandError(
+            f"{command} needs MODE {mode.upper()} "
+            f"(currently {session.thickness_mode}) -- switch with MODE {mode.upper()}"
+        )
+
+
 def cmd_thickness(session, args: ArgReader) -> None:
+    _require_mode(session, "comp", "THICKNESS")
     layer = _layer_argument(session, args)
     bound = _optional_bounds(args)
     args.done()
@@ -254,6 +269,7 @@ def _layer_element(session, layer: int, symbol: str, kind: str) -> str:
 
 
 def cmd_composition(session, args: ArgReader) -> None:
+    _require_mode(session, "comp", "COMPOSITION")
     layer = _layer_argument(session, args)
     symbol = args.token("an element symbol")
     bound = _optional_bounds(args)
@@ -272,6 +288,40 @@ def cmd_composition(session, args: ArgReader) -> None:
             index=index,
             symbol=canonical,
             name=f"layer {layer + 1} composition {canonical}",
+            bounds=bound,
+        ),
+    )
+
+
+def cmd_atoms(session, args: ArgReader) -> None:
+    """``ATOMS layer element`` -- vary one element's own areal density.
+
+    Unlike ``COMPOSITION``, the layer's total thickness is re-derived as the
+    sum of its composition row on every trial, so the other elements' own
+    areal density stays fixed instead of being reallocated (see
+    :func:`pyrump.fit.parameters.atoms`). Only meaningful for a layer whose
+    composition values are already each element's 1e15 at/cm^2 -- set up
+    with ``SIM ATOMS``.
+    """
+    _require_mode(session, "atoms", "ATOMS")
+    layer = _layer_argument(session, args)
+    symbol = args.token("an element symbol")
+    bound = _optional_bounds(args)
+    args.done()
+    index = _element_index(session, symbol)
+    canonical = _layer_element(session, layer, symbol, "composition")
+    param = atoms(layer, index)
+    if bound is not None:
+        param = replace(param, lower=bound[0], upper=bound[1])
+    _add(
+        session,
+        Vary(
+            parameter=param,
+            kind="atoms",
+            layer=layer,
+            index=index,
+            symbol=canonical,
+            name=f"layer {layer + 1} atoms {canonical}",
             bounds=bound,
         ),
     )
@@ -592,7 +642,7 @@ def _write_back(session, entry: Vary, inputs: FitInputs, before: float) -> None:
         # by the ratio is exact whatever the unit.
         if before > 0:
             layers[entry.layer].thickness *= value / before
-    elif entry.kind in ("composition", "species"):
+    elif entry.kind in ("composition", "species", "atoms"):
         target = (
             layers[entry.layer].species
             if entry.kind == "species"
@@ -600,6 +650,12 @@ def _write_back(session, entry: Vary, inputs: FitInputs, before: float) -> None:
         )
         symbol = entry.symbol or session.script.elements[entry.index]
         target[symbol] = value
+        if entry.kind == "atoms":
+            # composition values are each element's own 1e15 at/cm^2 here
+            # (SIM ATOMS's convention), so the layer's total is their sum.
+            layer = layers[entry.layer]
+            layer.thickness = sum(layer.composition.values())
+            layer.unit = "/CM2"
     elif entry.kind == "equation":
         profile = layers[entry.layer].profile
         params = list(profile.parameters)
@@ -740,8 +796,13 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("VOLUME", 3, cmd_volume, "verbose progress messages"),
     ("AUTOCMP", 4, cmd_autocmp, "run COMPARE automatically at the end of GO"),
     # Parameters -- all take an optional trailing "<min> <max>" search bound
-    ("THICKNESS", 2, cmd_thickness, "vary a layer thickness, e.g. THICKNESS <layer> [<min> <max>]"),
-    ("COMPOSITION", 3, cmd_composition, "vary an element in a layer [<min> <max>]"),
+    ("THICKNESS", 2, cmd_thickness,
+     "vary a layer thickness, e.g. THICKNESS <layer> [<min> <max>] (needs MODE COMP)"),
+    ("COMPOSITION", 3, cmd_composition,
+     "vary an element in a layer [<min> <max>] (needs MODE COMP)"),
+    ("ATOMS", 3, cmd_atoms,
+     "vary one element's areal density, others held fixed [<min> <max>] "
+     "(needs MODE ATOMS)"),
     ("SPECIES", 2, cmd_species, "vary the species composition [<min> <max>]"),
     ("EQUATION", 2, cmd_equation, "vary an equation parameter [<min> <max>]"),
     ("MEV", 3, _simple("mev"), "vary the beam energy [<min> <max>]"),
