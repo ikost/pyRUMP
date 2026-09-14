@@ -769,7 +769,8 @@ def cmd_go(session, args: ArgReader) -> None:
             line += f"  +/- {sigma:.4g}"
         print(line + f"   (was {before_text})")
     sample_id = plotting.buffer_label(session, data_buffer, session.buffers.active)
-    print(f"\n  {sample_id} {structure_label(session.script)}")
+    label = structure_label(session.script, normalize=session.plot.composition_fraction)
+    print(f"\n  {sample_id} {label}")
 
     if state.autocmp:
         cmd_compare(session, ArgReader([], command="compare"))
