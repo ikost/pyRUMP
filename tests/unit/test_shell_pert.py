@@ -387,6 +387,25 @@ def test_a_simple_parameter_accepts_a_bound(session):
 
 
 @needs_data
+def test_slope_is_a_synonym_for_kevch(session):
+    """SLOPE and KEV/CH must select the same underlying parameter, so
+    picking one after the other is rejected as a duplicate, and either one
+    accepts the usual trailing bound."""
+    run(session, "pert", "kev/ch")
+    assert session.pert.varying[0].name == "kev/ch"
+    with pytest.raises(CommandError, match="already being varied"):
+        run(session, "pert", "slope")
+
+
+@needs_data
+def test_slope_accepts_a_bound(session):
+    run(session, "pert", "slope 1.0 2.0")
+    entry = session.pert.varying[0]
+    assert entry.name == "kev/ch"
+    assert entry.bounds == (1.0, 2.0)
+
+
+@needs_data
 def test_composition_accepts_a_bound(session):
     run(session, "pert", "composition 1 Au 0.5 1.0")
     entry = session.pert.varying[0]
@@ -734,6 +753,57 @@ def test_offset_recovers_a_calibration_shift_and_writes_it_back(tmp_path, capsys
 
     output = capsys.readouterr().out
     assert "kev(0)" in output
+
+
+@needs_data
+def test_kevch_recovers_a_calibration_slope_and_writes_it_back(tmp_path, capsys):
+    """Same idea as OFFSET's own recovery test, but for the slope: KEV/CH
+    feeds the same channel binning inside simulate(), so a genuine kevch
+    mismatch is what a miscalibrated gain looks like."""
+    from pyrump.model.spectrum import Spectrum
+
+    true_kevch = 5.2
+    true_calibration = Calibration(kevch=true_kevch, kev0=0.0, npt=512)
+    geometry = Geometry(theta=0.0, phi=10.0, kind=GeometryKind.CORNELL)
+    measurement = Measurement(omega_msr=1.0, charge_uC=10.0, fwhm_keV=15.0)
+    beam = Beam(e0_MeV=2.0, z=2, mass=4.0026)
+    truth = UniformSample(
+        thicknesses=[TRUTH, 5000.0],
+        element_z=[79, 14],
+        compositions=[[1.0, 0.0], [0.0, 1.0]],
+    )
+
+    session = Session.create(str(DATA))
+    clean = simulate(
+        truth, beam, geometry, session.registry, session.table,
+        true_calibration, measurement,
+    )
+    counts = np.random.default_rng(13).poisson(
+        np.clip(clean.counts, 0, None)
+    ).astype(float)
+
+    # The buffer starts out at the wrong gain for this data.
+    guess_calibration = Calibration(kevch=5.0, kev0=0.0, npt=512)
+    session.buffers.load(
+        Buffer(
+            spectrum=Spectrum(counts=counts, calibration=guess_calibration),
+            beam=beam, geometry=geometry, measurement=measurement, name="au",
+        ),
+        1,
+    )
+    session.buffers.active = 1
+    sample = tmp_path / "au.lcm"
+    sample.write_text(SAMPLE.format(guess=TRUTH))
+    run(session, f"sim get {sample}")
+
+    run(session, "pert", "window 355 375", "norm 140 200", "kev/ch", "go")
+
+    fitted = session.buffers[1].calibration.kevch
+    assert fitted == pytest.approx(true_kevch, abs=0.05)
+    assert fitted != 5.0
+
+    output = capsys.readouterr().out
+    assert "kev/ch" in output
 
 
 @needs_data

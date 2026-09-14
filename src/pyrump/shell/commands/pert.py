@@ -812,6 +812,9 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("FUZZ", 2, cmd_fuzz, "vary the fuzz parameter (not implemented)"),
     ("CORRECTION", 3, _simple("correction"), "vary the normalization correction [<min> <max>]"),
     ("THETA", 4, _simple("theta"), "vary the sample tilt [<min> <max>]"),
+    ("KEV/CH", 4, _simple("kev/ch"),
+     "vary the calibration slope, keV per channel [<min> <max>]"),
+    ("SLOPE", -5, _simple("kev/ch"), "synonym for KEV/CH"),
     ("OFFSET", 3, _simple("kev(0)"),
      "vary the calibration energy offset (e.g. a sample-charging shift) [<min> <max>]"),
     ("COMPARE", 0, cmd_compare, "plot the active buffer against the simulation"),
@@ -820,4 +823,5 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
 
 for _name, _minlen, _handler, _help in _ENTRIES:
     TABLE.add(_name, _minlen, _handler, _help)
+TABLE.note_synonym("KEV/CH", "SLOPE")
 TABLE.note_synonym("COMPARE", "CMP")
