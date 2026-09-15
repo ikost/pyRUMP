@@ -140,6 +140,17 @@ priority order:
 Note the order: **for ⁴He on silicon — the most common RBS measurement there is
 — Ziegler is not used.** Konac wins, and the two differ by up to ~10%.
 
+**This matches field practice, not just the port's inertia.** SIMNRA — the most
+widely used RBS simulator — recommends the identical combination as its
+default: Ziegler-Biersack over the older Andersen-Ziegler data ("generally
+more accurate and reliable than the Andersen-Ziegler data", per its manual),
+with the same Konac et al. data overriding it for H/D/³He/⁴He on C and Si
+(SIMNRA calls this combination "ZB+KKK"). NIST's PSTAR/ASTAR — dedicated
+proton/helium evaluations — were evaluated as an alternative and not adopted:
+SIMNRA doesn't offer them either, and they only cover ~25 of the 92 elements,
+which would mix accuracy levels within a single multi-element sample rather
+than improve it uniformly.
+
 Then the step that surprises everyone:
 
 > **RUMP never evaluates the stopping model during a simulation.** At the start
