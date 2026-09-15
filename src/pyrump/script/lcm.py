@@ -122,17 +122,17 @@ class Script:
 
 def composition_value(value: float, *, normalize: bool = False) -> str:
     """One element's composition value for display -- a bare integer when
-    ``value`` is exactly whole ("3", not "3.0000"), otherwise fixed-point
-    with a minimum precision: 4 decimals when ``normalize`` (COMPFRAC's
-    atomic fractions sum to 1, so a 1% step is only 0.01 -- 4 decimals
-    resolves better than 0.1%), 3 when not (raw stoichiometric counts are
-    typically several units wide, so 3 decimals gives comparable relative
-    resolution). A value that merely rounds to a whole number (2.9998) must
-    still read as measured, not exact ("3.000", not "3").
+    ``value`` is exactly whole ("3", not "3.000"), otherwise fixed-point
+    with a minimum precision: 3 decimals when ``normalize`` (COMPFRAC's
+    atomic fractions sum to 1, so a 1% step is only 0.01 -- 3 decimals
+    resolves better than 0.1%), 2 when not (raw stoichiometric counts are
+    typically several units wide, so 2 decimals gives comparable relative
+    resolution). A value that merely rounds to a whole number (2.998) must
+    still read as measured, not exact ("3.00", not "3").
     """
     if value == int(value):
         return _g(value)
-    return f"{value:.4f}" if normalize else f"{value:.3f}"
+    return f"{value:.3f}" if normalize else f"{value:.2f}"
 
 
 def _count(value: float, *, normalize: bool = False) -> str:

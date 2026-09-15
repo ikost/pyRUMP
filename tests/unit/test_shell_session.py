@@ -1008,7 +1008,7 @@ def test_compfrac_on_shows_atomic_fraction(session, tmp_path):
     run(session, f"sim get {sample}", "structlabel on", "compfrac on", "compare")
 
     labels = session.figure.axes[0].get_legend_handles_labels()[1]
-    assert labels == ["test", "Si [500/cm2] - Mn0.7500 Pt0.2500 [150A]"]
+    assert labels == ["test", "Si [500/cm2] - Mn0.750 Pt0.250 [150A]"]
 
     run(session, "compfrac off", "compare")
     labels = session.figure.axes[0].get_legend_handles_labels()[1]
@@ -1023,7 +1023,7 @@ def test_compfrac_on_shows_atomic_fraction_in_show(session, tmp_path, capsys):
     run(session, f"sim get {sample}", "compfrac on")
     capsys.readouterr()
     run(session, "sim show")
-    assert "Mn 0.7500 Pt 0.2500" in capsys.readouterr().out
+    assert "Mn 0.750 Pt 0.250" in capsys.readouterr().out
 
     run(session, "compfrac off")
     capsys.readouterr()

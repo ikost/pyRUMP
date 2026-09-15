@@ -116,20 +116,20 @@ def test_structure_label_renders_a_compact_chemical_formula():
     assert structure_label(script) == "SiO2 [500/cm2] - MgO [100A]"
 
 
-def test_structure_label_rounds_fractional_counts_to_3_decimals():
+def test_structure_label_rounds_fractional_counts_to_2_decimals():
     script = parse_lcm(
         "Sim Reset\nLayer 1\n Thick 150 A\n Composition Mn 2.7341 Pt 1 /\n"
         "Next\n Thick 500 /cm2\n Composition Si 1 /\n"
     )
-    assert structure_label(script) == "Si [500/cm2] - Mn2.734Pt [150A]"
+    assert structure_label(script) == "Si [500/cm2] - Mn2.73Pt [150A]"
 
 
 def test_structure_label_keeps_trailing_zeros_for_a_near_whole_count():
     script = parse_lcm(
-        "Sim Reset\nLayer 1\n Thick 150 A\n Composition Mn 2.9998 Pt 1 /\n"
+        "Sim Reset\nLayer 1\n Thick 150 A\n Composition Mn 2.998 Pt 1 /\n"
         "Next\n Thick 500 /cm2\n Composition Si 1 /\n"
     )
-    assert structure_label(script) == "Si [500/cm2] - Mn3.000Pt [150A]"
+    assert structure_label(script) == "Si [500/cm2] - Mn3.00Pt [150A]"
 
 
 def test_structure_label_shows_a_bare_whole_count_with_no_decimals():
@@ -157,7 +157,7 @@ def test_structure_label_normalize_shows_atomic_fraction():
     )
     assert (
         structure_label(script, normalize=True)
-        == "Si [500/cm2] - Mn0.7500 Pt0.2500 [150A]"
+        == "Si [500/cm2] - Mn0.750 Pt0.250 [150A]"
     )
 
 
