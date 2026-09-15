@@ -769,6 +769,45 @@ def test_compare_goodness_of_fit_uses_pert_error_window(session, tmp_path):
     assert any("reduced chi-square" in t and "(9 dof)" in t for t in texts)
 
 
+def test_figsave_with_nothing_plotted_is_rejected(session):
+    with pytest.raises(CommandError, match="nothing plotted yet"):
+        run(session, "figsave out.png")
+
+
+@needs_data
+def test_figsave_writes_an_image_file(session, tmp_path):
+    sample = tmp_path / "figsave.lcm"
+    sample.write_text(
+        "Sim Reset\nLayer 1\n Thick 500 /cm2\n Composition Si 1 /\nMaxpth 200\n"
+    )
+    out = tmp_path / "out.png"
+    run(session, f"sim get {sample}", "compare", f"figsave {out}")
+    assert out.exists()
+    assert out.stat().st_size > 0
+
+
+@needs_data
+def test_figsave_defaults_to_png_with_no_extension(session, tmp_path):
+    sample = tmp_path / "figsave_noext.lcm"
+    sample.write_text(
+        "Sim Reset\nLayer 1\n Thick 500 /cm2\n Composition Si 1 /\nMaxpth 200\n"
+    )
+    out = tmp_path / "out"
+    run(session, f"sim get {sample}", "compare", f"figsave {out}")
+    assert out.with_suffix(".png").exists()
+
+
+@needs_data
+def test_hcopy_is_a_synonym_for_figsave(session, tmp_path):
+    sample = tmp_path / "hcopy.lcm"
+    sample.write_text(
+        "Sim Reset\nLayer 1\n Thick 500 /cm2\n Composition Si 1 /\nMaxpth 200\n"
+    )
+    out = tmp_path / "hc.png"
+    run(session, f"sim get {sample}", "compare", f"hcopy {out}")
+    assert out.exists()
+
+
 @needs_data
 def test_compare_legend_shows_buffer_names_not_generic_labels(session, tmp_path):
     """PLOT's legend shows the buffer's own name; COMPARE should match

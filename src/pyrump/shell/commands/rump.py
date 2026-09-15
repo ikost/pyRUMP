@@ -687,6 +687,27 @@ def cmd_compare(session, args: ArgReader) -> None:
     plotting.show(figure)
 
 
+def cmd_figsave(session, args: ArgReader) -> None:
+    """``FIGSAVE <file>`` (synonym ``HCOPY``) -- save the current plot to an
+    image file.
+
+    A pyRUMP-only addition: original RUMP drove a real plotter/GENPLOT
+    hardcopy device for this, but matplotlib is already a pyRUMP-only
+    substitution for that whole display layer (see the module docstring),
+    so there is no legacy command to match. The image format is whatever
+    matplotlib infers from the extension (``.png`` default, also ``.pdf``,
+    ``.svg``, ...).
+    """
+    path = Path(args.token("an output image file"))
+    args.done()
+    if session.figure is None:
+        raise CommandError("nothing plotted yet -- PLOT or COMPARE first")
+    if not path.suffix:
+        path = path.with_suffix(".png")
+    session.figure.savefig(path)
+    print(f"wrote {path}")
+
+
 def cmd_display(session, args: ArgReader) -> None:
     """Plot the composition of the SIM sample against depth."""
     args.done()
@@ -1494,6 +1515,8 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("REPLOT", 3, cmd_replot, "redraw the current plot"),
     ("COMPARE", 0, cmd_compare, "plot the active buffer against the simulation"),
     ("CMP", -3, cmd_compare, "synonym for COMPARE"),
+    ("FIGSAVE", 4, cmd_figsave, "save the current plot to an image file, e.g. FIGSAVE out.png"),
+    ("HCOPY", -5, cmd_figsave, "synonym for FIGSAVE"),
     ("AXIS", 2, cmd_axis, "draw axes only"),
     ("BLOWUP", 2, cmd_blowup, "expand the vertical scale"),
     ("EXPAND", 2, cmd_expand, "narrow the region and replot"),
@@ -1580,3 +1603,4 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
 for _name, _minlen, _handler, _help in _ENTRIES:
     TABLE.add(_name, _minlen, _handler, _help)
 TABLE.note_synonym("COMPARE", "CMP")
+TABLE.note_synonym("FIGSAVE", "HCOPY")
