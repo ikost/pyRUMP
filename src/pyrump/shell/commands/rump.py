@@ -151,9 +151,12 @@ def cmd_help(session, args: ArgReader) -> None:
     from .system import TABLE as SYSTEM_TABLE
 
     if topic is None:
-        print(TABLE.grouped_help_text(_HELP_GROUPS))
+        leftover = TABLE.uncovered(_HELP_GROUPS)
+        groups = [*_HELP_GROUPS, ("Other", leftover)] if leftover else _HELP_GROUPS
+        print(TABLE.grouped_help_text(groups[:1]))
         print()
         print(SYSTEM_TABLE.help_text())
+        print(TABLE.grouped_help_text(groups[1:], show_title=False))
         return
     text = TABLE.describe(topic) or SYSTEM_TABLE.describe(topic)
     if text is None:

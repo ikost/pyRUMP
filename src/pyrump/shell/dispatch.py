@@ -181,29 +181,38 @@ class CommandTable:
         )
         return "\n".join(lines)
 
-    def grouped_help_text(self, groups: Sequence[tuple[str, Sequence[str]]]) -> str:
+    def uncovered(self, groups: Sequence[tuple[str, Sequence[str]]]) -> list[str]:
+        """Visible command names named in none of ``groups``.
+
+        Feed this back in as a trailing ``("Other", ...)`` group so a command
+        added later without updating the grouping is never silently dropped
+        from the ``?``/``HELP`` listing.
+        """
+        named = {name for _, names in groups for name in names}
+        return [c.name for c in self.visible() if c.name not in named]
+
+    def grouped_help_text(
+        self, groups: Sequence[tuple[str, Sequence[str]]], *, show_title: bool = True
+    ) -> str:
         """Like :meth:`help_text`, but under named sections in a given order.
 
         ``groups`` is a list of ``(heading, [command names...])`` pairs, most
-        important section first. This only changes how the listing is
-        *displayed* -- matching still runs over ``commands`` in its original
-        (significant) order, so abbreviation resolution is untouched. Any
-        visible command not named in any group still appears, under a
-        trailing "Other" section, so a command added later without updating
-        ``groups`` is never silently dropped from the listing.
+        important section first -- see :meth:`uncovered` for a catch-all
+        trailing group. This only changes how the listing is *displayed*;
+        matching still runs over ``commands`` in its original (significant)
+        order, so abbreviation resolution is untouched.
+
+        ``show_title`` can be turned off to omit the leading table title, for
+        a caller making several of these calls in a row to interleave another
+        table's own section in between (only the first call needs a title).
         """
         entries = list(self.visible())
         if not entries:
-            return self.title
+            return self.title if show_title else ""
         by_name = {c.name: c for c in entries}
         column = max(len(c.display) for c in entries)
-        lines = [self.title]
-        sections = list(groups)
-        named = {name for _, names in sections for name in names}
-        leftover = [c.name for c in entries if c.name not in named]
-        if leftover:
-            sections = [*sections, ("Other", leftover)]
-        for heading, names in sections:
+        lines = [self.title] if show_title else []
+        for heading, names in groups:
             rows = [by_name[name] for name in names if name in by_name]
             if not rows:
                 continue
