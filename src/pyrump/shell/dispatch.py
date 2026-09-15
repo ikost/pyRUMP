@@ -200,12 +200,22 @@ class CommandTable:
         return "\n".join(lines)
 
 
+def _is_number(token: str) -> bool:
+    try:
+        float(token)
+    except ValueError:
+        return False
+    return True
+
+
 def tokenize(line: str) -> list[str]:
     """Split a command line into tokens.
 
     Quoted strings are kept whole. ``/`` -- RUMP's "no more arguments"
     terminator, used by ``COMPOSITION`` and friends (script/lcm.py) -- is always
-    its own token even when written flush against the previous one.
+    its own token even when written flush against a number, e.g. ``3/``. A
+    trailing ``/`` on anything else (a directory path from tab completion,
+    say) is left alone, so ``CD Documents/`` stays one token.
 
     An unterminated quote is not an error: RUMP's own lexer just takes
     everything to end of line as the token (lexp.c:506, "If quotes did not
@@ -232,8 +242,9 @@ def tokenize(line: str) -> list[str]:
             while index < length and not line[index].isspace():
                 index += 1
             token = line[start:index]
-        # "3/" -> ["3", "/"], so the terminator need not be spaced off.
-        if token != "/" and token.endswith("/"):
+        # "3/" -> ["3", "/"], so the terminator need not be spaced off a
+        # number. Anything else ending in "/" (a path) stays one token.
+        if token != "/" and token.endswith("/") and _is_number(token[:-1]):
             tokens.append(token[:-1])
             tokens.append("/")
         else:
