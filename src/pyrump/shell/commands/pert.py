@@ -772,7 +772,7 @@ def cmd_go(session, args: ArgReader) -> None:
     initial_structure = structure_label(
         session.script, normalize=session.plot.composition_fraction
     )
-    header_lines = [f"  Fitting {sample_id}", f"  {initial_structure}"]
+    header_lines = [f"  Fitting {sample_id}: {initial_structure}"]
     for line in header_lines:
         print(line)
     report_lines = list(header_lines)
@@ -861,8 +861,7 @@ def cmd_go(session, args: ArgReader) -> None:
             line += f"  +/- {sigma:.4g}"
         report_lines.append(line + f"   (was {before_text})")
     new_structure = structure_label(session.script, normalize=session.plot.composition_fraction)
-    report_lines.append(f"\n  {sample_id}")
-    report_lines.append(f"  {new_structure}")
+    report_lines.append(f"\n  {sample_id}: {new_structure}")
 
     for line in report_lines[len(header_lines):]:
         print(line)

@@ -619,15 +619,15 @@ def test_go_recovers_the_thickness_and_writes_it_back(session, capsys):
 
 @needs_data
 def test_go_output_is_bookended_by_the_initial_and_final_structure(session, capsys):
-    """"Fitting <ID>" plus the pre-fit structure open the output, the usual
-    fit report follows, and the post-fit structure (behind a bare ID line,
-    not the messy buffer label) closes it."""
+    """"Fitting <ID>: <structure>" opens the output on one line, the usual
+    fit report follows, and "<ID>: <structure>" (not the messy buffer label)
+    closes it, also on one line."""
     run(session, "pert", "window 355 375", "norm 140 200", "thick 1", "go")
     output = capsys.readouterr().out
 
     # "layer 1 thickness" also appears earlier, in the "varying ..."
     # selection echo -- rindex to land on the fitted-result line instead.
-    fitting_at = output.index("Fitting au")
+    fitting_at = output.index("Fitting au: ")
     took_at = output.index("fit took")
     result_at = output.rindex("layer 1 thickness")
     assert fitting_at < took_at < result_at
@@ -637,11 +637,11 @@ def test_go_output_is_bookended_by_the_initial_and_final_structure(session, caps
     assert output.count("Si [5000/cm2] - Au [") == 2
     assert "Au [200/cm2]" in output
 
-    # The closing ID line stands alone -- no structure text glued onto it.
+    # The closing line pairs the bare ID with the final structure, together.
     lines = output.splitlines()
-    id_lines = [i for i, line in enumerate(lines) if line.strip() == "au"]
-    assert id_lines, "expected a bare 'au' line before the final structure"
-    assert lines[id_lines[-1] + 1].strip().startswith("Si [5000/cm2]")
+    closing = [line.strip() for line in lines if line.strip().startswith("au: ")]
+    assert closing, "expected an 'au: <structure>' line closing the output"
+    assert closing[-1].startswith("au: Si [5000/cm2]")
 
 
 @needs_data
@@ -655,9 +655,9 @@ def test_go_uses_a_sanitized_id_not_the_raw_buffer_label(session, capsys):
     run(session, "pert", "window 355 375", "norm 140 200", "thick 1", "go")
     output = capsys.readouterr().out
     assert r"c:\RBS" not in output
-    assert "Fitting MA8410" in output
+    assert "Fitting MA8410: " in output
     lines = [line.strip() for line in output.splitlines()]
-    assert "MA8410" in lines
+    assert any(line.startswith("MA8410: ") for line in lines)
 
 
 @needs_data

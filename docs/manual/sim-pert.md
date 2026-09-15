@@ -72,8 +72,7 @@ PERT Command: go
 ```
 
 ```
-  Fitting SC0338
-  Si [5000/cm2] - Au [200/cm2]
+  Fitting SC0338: Si [5000/cm2] - Au [200/cm2]
 
   fit took 0.34 s
   reduced chi-square 1.2849 on 20 dof
@@ -81,15 +80,14 @@ PERT Command: go
   data scaled by 0.99441 over the norm window
   layer 1 thickness                    299  +/- 0.3801   (was 200)
 
-  SC0338
-  Si [5000/cm2] - Au [299/cm2]
+  SC0338: Si [5000/cm2] - Au [299/cm2]
 ```
 
-`GO` now opens with "Fitting `<ID>`" and the sample's structure *before* the
-fit, and closes with the same `<ID>` (bare, never the buffer's raw path/label)
-and the structure *after* -- `<ID>` is the active data buffer's own file stem
-(see `REPORT`), so it's stable even if a WRASCII macro stamped a full path
-into the buffer's name via `FILENAME`.
+`GO` now opens with "Fitting `<ID>`: `<structure>`" *before* the fit, and
+closes with the same `<ID>` (bare, never the buffer's raw path/label) and the
+structure *after* -- `<ID>` is the active data buffer's own file stem (see
+`REPORT`), so it's stable even if a WRASCII macro stamped a full path into the
+buffer's name via `FILENAME`.
 
 Fitted values are written back into the sample description, so `SIM SHOW` and
 `SIM SAVE` reflect them. Two differences from the original: the data may be in
