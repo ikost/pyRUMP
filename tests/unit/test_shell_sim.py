@@ -78,28 +78,28 @@ def test_open_inserts_above_the_current_layer():
     assert list(script.layers[1].composition) == ["C"]
 
 
-def test_delete_removes_the_current_layer():
+def test_close_removes_the_current_layer():
     editor = run(
         "Layer 1", "Thick 100 A", "Composition Si 1 /",
         "Next", "Thick 200 A", "Composition Au 1 /",
-        "Layer 1", "Delete",
+        "Layer 1", "Close",
     )
     script = editor.finish()
     assert [layer.thickness for layer in script.layers] == [200.0]
     assert list(script.layers[0].composition) == ["Au"]
 
 
-def test_close_is_a_synonym_for_delete():
+def test_delete_is_a_synonym_for_close():
     editor = run(
         "Layer 1", "Thick 100 A", "Composition Si 1 /",
         "Next", "Thick 200 A", "Composition Au 1 /",
-        "Layer 1", "Close",
+        "Layer 1", "Delete",
     )
     assert [layer.thickness for layer in editor.finish().layers] == [200.0]
 
 
-def test_delete_on_the_blank_layer_is_a_no_op():
-    editor = run("Layer 1", "Thick 100 A", "Composition Si 1 /", "Next", "Delete")
+def test_close_on_the_blank_layer_is_a_no_op():
+    editor = run("Layer 1", "Thick 100 A", "Composition Si 1 /", "Next", "Close")
     assert [layer.thickness for layer in editor.finish().layers] == [100.0]
 
 
@@ -150,3 +150,20 @@ def test_show_rounds_thickness_to_the_nearest_whole_unit():
     output = describe(session, editor)
     assert "150" in output
     assert "150.198" not in output
+
+
+def test_insert_is_a_synonym_for_open_in_the_shell_table():
+    """Unlike the .lcm line parser above (which only ever recognised OPEN),
+    the interactive SIM command table also accepts INSERT for the same
+    handler -- see sim.py's TABLE and its OPEN/INSERT note_synonym."""
+    from pyrump.shell.commands.sim import TABLE, cmd_open
+
+    assert TABLE.match("insert").handler is cmd_open
+
+
+def test_clear_and_delete_are_synonyms_for_close_in_the_shell_table():
+    from pyrump.shell.commands.sim import TABLE, cmd_delete
+
+    assert TABLE.match("close").handler is cmd_delete
+    assert TABLE.match("delete").handler is cmd_delete
+    assert TABLE.match("clear").handler is cmd_delete

@@ -131,7 +131,7 @@ def cmd_open(session, args: ArgReader) -> None:
 
 
 def cmd_delete(session, args: ArgReader) -> None:
-    """DELETE (or CLOSE): remove the current layer, or DELETE n a chosen one.
+    """CLOSE (or DELETE/CLEAR): remove the current layer, or CLOSE n a chosen one.
 
     sim.htm's DELETE takes no argument; pyRUMP additionally lets you name a
     layer number, so you don't have to LAYER there first.
@@ -423,8 +423,10 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("LAYER", 2, cmd_layer, "move to a layer by number"),
     ("NEXT", 2, cmd_next, "move to the next layer"),
     ("OPEN", 2, cmd_open, "insert a blank layer above this one"),
-    ("DELETE", 3, cmd_delete, "remove this layer, or DELETE n a chosen layer"),
-    ("CLOSE", -5, cmd_delete, "synonym for DELETE"),
+    ("INSERT", -3, cmd_open, "synonym for OPEN"),
+    ("CLOSE", 3, cmd_delete, "remove this layer, or CLOSE n a chosen layer"),
+    ("DELETE", -3, cmd_delete, "synonym for CLOSE"),
+    ("CLEAR", -3, cmd_delete, "synonym for CLOSE"),
     ("RESET", 5, cmd_reset, "reset the sample to empty space"),
     ("SHOW", 2, cmd_show, "display the sample"),
     ("STATUS", 2, cmd_status, "summarise the SIM parameters"),
@@ -459,4 +461,6 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
 for _name, _minlen, _handler, _help in _ENTRIES:
     TABLE.add(_name, _minlen, _handler, _help)
 TABLE.note_synonym("RETURN", "QUIT", "Q")
+TABLE.note_synonym("OPEN", "INSERT")
+TABLE.note_synonym("CLOSE", "DELETE", "CLEAR")
 TABLE.note_synonym("COMPARE", "CMP")

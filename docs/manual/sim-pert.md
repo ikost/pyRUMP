@@ -31,8 +31,8 @@ holds cannot drift apart. `SIM SAVE` writes RUMP's own format.
 | `RETURN` / `QUIT` / `Q` / `ABORT` | return to the RUMP level |
 | `LAYER <n>` | move to layer *n* |
 | `NEXT` | move to the next layer, opening one if needed |
-| `OPEN` | insert a blank layer above the current one |
-| `DELETE` / `CLOSE` | remove the current layer |
+| `OPEN` / `INSERT` | insert a blank layer above the current one |
+| `CLOSE` / `DELETE` / `CLEAR` | remove the current layer |
 | `RESET` | reset the sample to empty space |
 | `SHOW` | display the sample description |
 | `STATUS` | summarize layers, maxpth, straggle, multiple |
