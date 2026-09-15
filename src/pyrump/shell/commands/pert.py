@@ -886,7 +886,8 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("?", 1, cmd_help, "list the PERT commands"),
     ("HELP", 1, cmd_help, "list the PERT commands"),
     ("RETURN", 1, cmd_return, "return to the RUMP level"),
-    ("QUIT", 1, cmd_return, "return to the RUMP level (not exit pyRUMP)"),
+    ("QUIT", -1, cmd_return, "synonym for RETURN (not exit pyRUMP)"),
+    ("Q", -1, cmd_return, "synonym for RETURN"),
     ("GO", 2, cmd_go, "run the search"),
     ("PARMS", 2, cmd_parms, "display the current settings"),
     ("SHOW", 2, cmd_show, "display the sample description (same as SIM SHOW)"),
@@ -930,6 +931,7 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
 
 for _name, _minlen, _handler, _help in _ENTRIES:
     TABLE.add(_name, _minlen, _handler, _help)
+TABLE.note_synonym("RETURN", "QUIT", "Q")
 TABLE.note_synonym("SLOPE", "KEV/CH")
 TABLE.note_synonym("OFFSET", "KEV(0)")
 TABLE.note_synonym("COMPARE", "CMP")

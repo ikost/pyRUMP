@@ -28,7 +28,7 @@ holds cannot drift apart. `SIM SAVE` writes RUMP's own format.
 | Command | Effect |
 | --- | --- |
 | `?` / `HELP` | list the SIM commands |
-| `RETURN` / `ABORT` / `QUIT` | return to the RUMP level |
+| `RETURN` / `QUIT` / `Q` / `ABORT` | return to the RUMP level |
 | `LAYER <n>` | move to layer *n* |
 | `NEXT` | move to the next layer, opening one if needed |
 | `OPEN` | insert a blank layer above the current one |
@@ -125,7 +125,7 @@ values or narrow the window rather than trust the numbers as a settled fit.
 | Command | Effect |
 | --- | --- |
 | `?` / `HELP` | list the PERT commands |
-| `RETURN` / `QUIT` | return to the RUMP level |
+| `RETURN` / `QUIT` / `Q` | return to the RUMP level |
 | `GO` | run the fit |
 | `PARMS` | display the current selection and windows |
 | `SHOW` | display the sample description (same as `SIM SHOW`) |

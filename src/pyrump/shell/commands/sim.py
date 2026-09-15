@@ -417,7 +417,8 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("HELP", 2, cmd_help, "list the SIM commands"),
     ("RETURN", 3, cmd_return, "return to the RUMP level"),
     ("ABORT", 5, cmd_abort, "return to the RUMP level"),
-    ("QUIT", 1, cmd_return, "return to the RUMP level (not exit pyRUMP)"),
+    ("QUIT", -1, cmd_return, "synonym for RETURN (not exit pyRUMP)"),
+    ("Q", -1, cmd_return, "synonym for RETURN"),
     # Layer navigation
     ("LAYER", 2, cmd_layer, "move to a layer by number"),
     ("NEXT", 2, cmd_next, "move to the next layer"),
@@ -457,4 +458,5 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
 
 for _name, _minlen, _handler, _help in _ENTRIES:
     TABLE.add(_name, _minlen, _handler, _help)
+TABLE.note_synonym("RETURN", "QUIT", "Q")
 TABLE.note_synonym("COMPARE", "CMP")
