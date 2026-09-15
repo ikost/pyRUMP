@@ -23,9 +23,11 @@ Divergences from the original, both noted in the plan:
 
 from __future__ import annotations
 
+import re
 import time
 import warnings
 from dataclasses import dataclass, field, replace
+from datetime import datetime
 from pathlib import Path
 
 import numpy as np
@@ -137,10 +139,12 @@ class PertState:
     multi: bool = True
     verbose: bool = False
     autocmp: bool = False
+    report: bool = False
 
     def describe(self) -> str:
         lines = [f"  mode        {'multiple' if self.multi else 'single'} variable"]
         lines.append(f"  autocmp     {'on' if self.autocmp else 'off'}")
+        lines.append(f"  report      {'on' if self.report else 'off'}")
         lines.append(f"  error win   {_format_windows(self.windows.error)}")
         norm = self.windows.normalisation
         lines.append(
@@ -516,10 +520,11 @@ def cmd_get(session, args: ArgReader) -> None:
         path = path.with_suffix(".pert")
     if not path.exists():
         raise CommandError(f"no such file: {path}")
-    # autocmp is a standing preference (typically set once from .pyrumprc),
-    # not part of the file-specific selection GET replaces -- carry it over
-    # so a fresh GET doesn't silently turn it back off.
-    session.pert = PertState(autocmp=state_for(session).autocmp)
+    # autocmp/report are standing preferences (typically set once from
+    # .pyrumprc), not part of the file-specific selection GET replaces --
+    # carry them over so a fresh GET doesn't silently turn them back off.
+    state = state_for(session)
+    session.pert = PertState(autocmp=state.autocmp, report=state.report)
     execute_file(session, path, stack=["rump", "pert"])
     print(f"read {path}")
     print(state_for(session).describe())
@@ -541,7 +546,8 @@ def cmd_save(session, args: ArgReader) -> None:
 def cmd_clear(session, args: ArgReader) -> None:
     if not args:
         # Same standing-preference carve-out as GET (see cmd_get).
-        session.pert = PertState(autocmp=state_for(session).autocmp)
+        state = state_for(session)
+        session.pert = PertState(autocmp=state.autocmp, report=state.report)
         print("  PERT settings cleared")
         return
     n = args.integer("a parameter number")
@@ -583,6 +589,28 @@ def cmd_autocmp(session, args: ArgReader) -> None:
     state = state_for(session)
     state.autocmp = token is None or token.lower() not in ("off", "no", "0")
     print(f"  autocmp {'on' if state.autocmp else 'off'}")
+
+
+def cmd_report(session, args: ArgReader) -> None:
+    """``REPORT [off]`` -- append every ``GO``'s result to a file named after
+    the sample being fit (default off).
+
+    A pyRUMP-only addition, not part of legacy RUMP. Once on, no further
+    action is needed per sample: each ``GO`` appends its fitted values,
+    uncertainties and chi-square to ``<sample>.report`` in the current
+    directory, where ``<sample>`` is the active data buffer's own file stem
+    (e.g. data loaded from ``MA8410.RBS`` writes ``MA8410.report``) -- so
+    switching samples with ``XEQ``/``GET`` naturally routes later fits to a
+    different file with no filename to remember. ``GO`` echoes "updated
+    <path>" at the end of its own output, so the write is never silent. A
+    standing preference like ``AUTOCMP``: survives ``GET``/``CLEAR``, not
+    saved by ``SAVE``.
+    """
+    token = args.optional()
+    args.done()
+    state = state_for(session)
+    state.report = token is None or token.lower() not in ("off", "no", "0")
+    print(f"  report {'on' if state.report else 'off'}")
 
 
 def cmd_help(session, args: ArgReader) -> None:
@@ -673,6 +701,46 @@ def _write_back(session, entry: Vary, inputs: FitInputs, before: float) -> None:
         buffer.spectrum.calibration = inputs.calibration
 
 
+def _sanitize_stem(text: str) -> str:
+    """The last path-like segment of ``text``, reduced to a bare stem.
+
+    Defends against a buffer's name/identifier holding a full path rather
+    than a bare filename -- e.g. a WRASCII macro's own ``FILENAME`` line
+    stamping a Windows path (``C:\\RBS\\data\\...\\MA8410.RBS``) straight into
+    ``buffer.name``. Splits on both slash conventions regardless of host
+    OS (``Path.stem`` alone only understands the platform's own separator),
+    then keeps just the first whitespace-separated token, so a descriptive
+    trailing comment (``"MA8410.RBS  170 Degree RBS LT = ..."``) doesn't
+    leak into the filename either.
+    """
+    if not text:
+        return ""
+    tail = re.split(r"[\\/]", text.strip())[-1]
+    tail = tail.split()[0] if tail.split() else tail
+    return Path(tail).stem
+
+
+def _report_path(buffer) -> Path:
+    """``<sample>.report``, where ``<sample>`` is a short, filesystem-safe
+    name for this buffer's spectrum -- see :func:`_sanitize_stem`."""
+    stem = _sanitize_stem(buffer.name) or _sanitize_stem(buffer.identifier) or "buffer"
+    return Path(f"{stem}.report")
+
+
+def _append_report(buffer, lines: list[str]) -> Path:
+    """Append one GO's report block to :func:`_report_path`, timestamped.
+
+    Returns the path written, so the caller can echo it back to the user --
+    a silent file write is easy to forget is even happening.
+    """
+    path = _report_path(buffer)
+    timestamp = datetime.now().isoformat(timespec="seconds")
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(f"--- {timestamp} ---\n")
+        handle.write("\n".join(lines) + "\n\n")
+    return path
+
+
 def cmd_go(session, args: ArgReader) -> None:
     args.done()
     from ...fit.lm import fit
@@ -745,13 +813,17 @@ def cmd_go(session, args: ArgReader) -> None:
     session.editor = None
     session.touch()
 
-    print(f"  fit took {elapsed:.2f} s")
-    print(f"\n  reduced chi-square {result.reduced_chi_square:.4f} on {result.dof} dof")
-    print(f"  {result.n_evaluations} evaluations, {result.message}")
+    report_lines = [f"  fit took {elapsed:.2f} s"]
+    report_lines.append(
+        f"\n  reduced chi-square {result.reduced_chi_square:.4f} on {result.dof} dof"
+    )
+    report_lines.append(f"  {result.n_evaluations} evaluations, {result.message}")
     if result.normalisation != 1.0:
-        print(f"  data scaled by {result.normalisation:.5f} over the norm window")
+        report_lines.append(
+            f"  data scaled by {result.normalisation:.5f} over the norm window"
+        )
     if result.n_invalid:
-        print(
+        report_lines.append(
             f"  warning: {result.n_invalid} windowed channels had "
             "no predicted counts"
         )
@@ -767,10 +839,16 @@ def cmd_go(session, args: ArgReader) -> None:
         line = f"  {entry.name:26s} {value_text:>14s}"
         if sigma:
             line += f"  +/- {sigma:.4g}"
-        print(line + f"   (was {before_text})")
+        report_lines.append(line + f"   (was {before_text})")
     sample_id = plotting.buffer_label(session, data_buffer, session.buffers.active)
     label = structure_label(session.script, normalize=session.plot.composition_fraction)
-    print(f"\n  {sample_id} {label}")
+    report_lines.append(f"\n  {sample_id} {label}")
+
+    for line in report_lines:
+        print(line)
+    if state.report:
+        report_path = _append_report(data_buffer, report_lines)
+        print(f"\n  updated {report_path}")
 
     if state.autocmp:
         cmd_compare(session, ArgReader([], command="compare"))
@@ -796,6 +874,8 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("MULTI", 3, cmd_multi, "vary all parameters together (default)"),
     ("VOLUME", 3, cmd_volume, "verbose progress messages"),
     ("AUTOCMP", 4, cmd_autocmp, "run COMPARE automatically at the end of GO"),
+    ("REPORT", 3, cmd_report,
+     "append every GO's result to <sample>.report (REPORT OFF to stop)"),
     # Parameters -- all take an optional trailing "<min> <max>" search bound
     ("THICKNESS", 2, cmd_thickness,
      "vary a layer thickness, e.g. THICKNESS <layer> [<min> <max>] (needs MODE COMP)"),

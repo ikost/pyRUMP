@@ -688,6 +688,101 @@ def test_autocmp_still_plots_after_get_go(session, tmp_path):
 
 
 @needs_data
+def test_report_survives_get(session, tmp_path):
+    pert_file = tmp_path / "usual.pert"
+    run(session, "pert", "thick 1", f"save {pert_file}")
+    run(session, "pert", "report", f"get {pert_file}")
+    assert session.pert.report is True
+
+
+@needs_data
+def test_report_survives_clear(session):
+    run(session, "pert", "report", "clear")
+    assert session.pert.report is True
+
+
+@needs_data
+def test_report_off_by_default_writes_no_file(session, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    run(session, "pert", "window 355 375", "norm 140 200", "thick 1", "go")
+    assert not (tmp_path / "au.report").exists()
+
+
+@pytest.mark.parametrize(
+    "name, identifier, expected",
+    [
+        ("MA8410.RBS", "", "MA8410"),
+        ("", "MA8410.RBS", "MA8410"),
+        (r"c:\RBS\data\2026\08\MA8410.RBS", "", "MA8410"),
+        ("/home/user/data/MA8410.RBS", "", "MA8410"),
+        ("", "MA8410.RBS  170 Degree RBS LT =  1890.547 RT  1894.26 Gain  2", "MA8410"),
+        ("", "", "buffer"),
+    ],
+)
+def test_report_path_sanitizes_a_messy_name_or_identifier(name, identifier, expected):
+    """A WRASCII macro's own FILENAME line can stamp a full Windows path
+    straight into buffer.name (see cmd_filename) -- REPORT must still land
+    on a bare, safe filename."""
+    from types import SimpleNamespace
+
+    from pyrump.shell.commands.pert import _report_path
+
+    buffer = SimpleNamespace(name=name, identifier=identifier)
+    assert _report_path(buffer) == Path(f"{expected}.report")
+
+
+@needs_data
+def test_report_on_appends_each_go_to_a_sample_named_file(session, tmp_path, monkeypatch):
+    """The buffer in the ``session`` fixture is named "au" (see the module's
+    own ``session`` fixture), so its report file is au.report -- no filename
+    ever typed."""
+    monkeypatch.chdir(tmp_path)
+    run(session, "pert", "window 355 375", "norm 140 200", "thick 1", "report", "go")
+    report = tmp_path / "au.report"
+    assert report.exists()
+    text = report.read_text()
+    assert "reduced chi-square" in text
+    assert "layer 1 thickness" in text
+
+    run(session, "pert", "go")
+    assert report.read_text().count("reduced chi-square") == 2
+
+
+@needs_data
+def test_report_on_prints_a_confirmation_line(session, tmp_path, monkeypatch, capsys):
+    """A silent file write is easy to forget is even happening -- GO's own
+    output should say so, not just the report file itself."""
+    monkeypatch.chdir(tmp_path)
+    run(session, "pert", "window 355 375", "norm 140 200", "thick 1", "report", "go")
+    output = capsys.readouterr().out
+    assert "updated au.report" in output
+
+
+@needs_data
+def test_report_off_stops_further_writes(session, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    run(
+        session, "pert", "window 355 375", "norm 140 200", "thick 1",
+        "report", "go", "report off", "go",
+    )
+    report = tmp_path / "au.report"
+    assert report.read_text().count("reduced chi-square") == 1
+
+
+@needs_data
+def test_report_sanitizes_a_filename_command_stamping_a_windows_path(session, tmp_path, monkeypatch):
+    """Reproduces a WRASCII macro's own FILENAME line (RC43's convention)
+    stamping a full Windows path into buffer.name -- REPORT must still
+    land on a clean MA8410.report, not fail or write somewhere bogus."""
+    monkeypatch.chdir(tmp_path)
+    run(
+        session, r"filename c:\RBS\data\2026\08\MA8410.RBS",
+        "pert", "window 355 375", "norm 140 200", "thick 1", "report", "go",
+    )
+    assert (tmp_path / "MA8410.report").exists()
+
+
+@needs_data
 def test_go_prints_the_fitted_thickness_rounded_to_a_whole_unit(session, capsys):
     """Sub-angstrom precision is meaningless for RBS, so both the fitted
     value and the "(was ...)" comparison should be whole numbers -- unlike
