@@ -36,6 +36,9 @@ The original RUMP ecosystem included **RUMPX**, an X-Window GUI popular among Wi
 users two decades ago. pyRUMP doesn't have a GUI counterpart yet — the author prefers
 CLI tools — but a Python equivalent could be added later if there's real demand for it.
 
+![Measured spectrum compared against a pyRUMP simulation, showing a Pt/MnGeN/Pt stack on Si](assets/spectrum-compare.png)
+*Measured data (black) vs. a pyRUMP simulation (red) of a Si / Pt / Mn<sub>0.77</sub>Ge<sub>0.23</sub> / Pt stack.*
+
 ## Where to go next
 
 - **[Getting started](getting-started/index.md)** — install pyRUMP and run your first simulation
