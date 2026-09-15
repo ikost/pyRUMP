@@ -8,9 +8,9 @@ formulas from scratch.
 Two deliberate reuse decisions worth knowing:
 
 * :func:`cross_section_barns` calls :func:`~pyrump.physics.xsec.rutherford.setup_scatter`
-  with ``screening=False``. ``anlytc.c``'s own local ``RbsSigma`` (line 1277) is the
-  plain Rutherford formula with no L'Ecuyer screening term, unlike the public
-  ``sigma.c`` that ``setup_scatter`` normally ports with screening on.
+  with ``screening=ScreeningModel.NONE``. ``anlytc.c``'s own local ``RbsSigma``
+  (line 1277) is the plain Rutherford formula with no screening term, unlike the
+  public ``sigma.c`` that ``setup_scatter`` normally ports with L'Ecuyer on.
 * :func:`stopper` converts :class:`~pyrump.stopping.registry.StoppingRegistry`'s
   eV/(1e15 atoms/cm^2) convention to RUMP's raw eV*cm^2/atom via ``* 1e-15``,
   matching ``RbsStoper``'s own comment about where that factor is applied.
@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from ..atomic.tables import PeriodicTable
 from ..model.geometry import Geometry
 from ..physics.kinematics import kinematic_factor
-from ..physics.xsec.rutherford import setup_scatter
+from ..physics.xsec.rutherford import ScreeningModel, setup_scatter
 
 #: RUMP's own literal constant (particles/uC), anlytc.c:274/321 -- kept as the
 #: rounded value the C uses, not a more precise recomputation, so output
@@ -85,7 +85,9 @@ def cross_section_barns(
     z1: int, m1: float, z2: int, mass: float, scattering_angle_deg: float, energy_keV: float
 ) -> float:
     """``RbsSigma`` (anlytc.c's own, local, UNSCREENED) -- barns/sr, == 1e-24 cm^2/sr."""
-    cross_section = setup_scatter(z1, m1, z2, mass, scattering_angle_deg, screening=False)
+    cross_section = setup_scatter(
+        z1, m1, z2, mass, scattering_angle_deg, screening=ScreeningModel.NONE
+    )
     return float(cross_section(energy_keV)[0])
 
 

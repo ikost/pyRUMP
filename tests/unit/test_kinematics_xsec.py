@@ -24,6 +24,7 @@ from pyrump.physics.xsec.rutherford import (
     E2_OVER_2_SQUARED,
     E2_OVER_4_SQUARED,
     CrossSectionKind,
+    ScreeningModel,
     setup_recoil,
     setup_scatter,
 )
@@ -161,19 +162,55 @@ def test_vectorised_kinematic_factors_match_scalar():
 
 
 def test_rutherford_scales_as_inverse_energy_squared():
-    xsec = setup_scatter(2, 4.0026, 79, 196.97, 170.0, screening=False)
+    xsec = setup_scatter(2, 4.0026, 79, 196.97, 170.0, screening=ScreeningModel.NONE)
     values = xsec([1000.0, 2000.0])
     assert values[0] / values[1] == pytest.approx(4.0, rel=RTOL)
 
 
 def test_screening_reduces_the_cross_section():
     screened = setup_scatter(2, 4.0026, 79, 196.97, 170.0)
-    bare = setup_scatter(2, 4.0026, 79, 196.97, 170.0, screening=False)
+    bare = setup_scatter(2, 4.0026, 79, 196.97, 170.0, screening=ScreeningModel.NONE)
     assert screened.kind is CrossSectionKind.RUTHERFORD_SCREENED
     assert screened(1000.0)[0] < bare(1000.0)[0]
     # L'Ecuyer: sigma *= (1 - 0.049 Z1 Z2^{4/3} / E)
     factor = 1.0 - (0.049 * 2 * 79**1.3333) / 1000.0
     assert screened(1000.0)[0] == pytest.approx(bare(1000.0)[0] * factor, rel=RTOL)
+
+
+def test_andersen_screening_selects_the_kind():
+    xsec = setup_scatter(2, 4.0026, 79, 196.97, 170.0, screening=ScreeningModel.ANDERSEN)
+    assert xsec.kind is CrossSectionKind.RUTHERFORD_ANDERSEN
+
+
+def test_andersen_reduces_the_cross_section():
+    andersen = setup_scatter(2, 4.0026, 79, 196.97, 170.0, screening=ScreeningModel.ANDERSEN)
+    bare = setup_scatter(2, 4.0026, 79, 196.97, 170.0, screening=ScreeningModel.NONE)
+    assert andersen(1000.0)[0] < bare(1000.0)[0]
+
+
+def test_andersen_agrees_with_lecuyer_at_backscattering():
+    """SIMNRA's manual: at large angles the two corrections are 'near to
+    unity and similar'."""
+    andersen = setup_scatter(2, 4.0026, 79, 196.97, 170.0, screening=ScreeningModel.ANDERSEN)
+    lecuyer = setup_scatter(2, 4.0026, 79, 196.97, 170.0, screening=ScreeningModel.LECUYER)
+    energies = np.array([1000.0, 2000.0, 3000.0])
+    relative = np.abs(andersen(energies) - lecuyer(energies)) / lecuyer(energies)
+    assert np.all(relative < 0.01)
+
+
+def test_andersen_correction_grows_at_forward_angles():
+    """The literature's own claim: unlike L'Ecuyer's angle-independent term,
+    Andersen's correction grows large at small scattering angles."""
+    energies = np.array([1000.0])
+
+    def deviation(model, angle):
+        bare = setup_scatter(2, 4.0026, 79, 196.97, angle, screening=ScreeningModel.NONE)
+        screened = setup_scatter(2, 4.0026, 79, 196.97, angle, screening=model)
+        return abs(screened(energies)[0] - bare(energies)[0]) / bare(energies)[0]
+
+    for angle in (30.0, 10.0):
+        assert deviation(ScreeningModel.ANDERSEN, angle) > deviation(ScreeningModel.LECUYER, angle)
+    assert deviation(ScreeningModel.ANDERSEN, 10.0) > deviation(ScreeningModel.ANDERSEN, 30.0)
 
 
 def test_cross_section_constants_are_the_documented_values():

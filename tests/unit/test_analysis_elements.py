@@ -15,7 +15,7 @@ from pyrump.analysis.elements import (
 from pyrump.model.detector import Measurement
 from pyrump.model.geometry import Geometry
 from pyrump.model.spectrum import Calibration, Spectrum
-from pyrump.physics.xsec.rutherford import setup_scatter
+from pyrump.physics.xsec.rutherford import ScreeningModel, setup_scatter
 from pyrump.shell.session import Buffer
 from pyrump.sim.engine import Beam
 
@@ -54,8 +54,12 @@ def test_cosines_from_geometry():
 def test_cross_section_barns_is_unscreened():
     """anlytc.c's local RbsSigma has no L'Ecuyer screening term."""
     unscreened = cross_section_barns(2, 4.0026, 14, 28.086, 170.0, 500.0)
-    screened = float(setup_scatter(2, 4.0026, 14, 28.086, 170.0, screening=True)(500.0)[0])
-    plain = float(setup_scatter(2, 4.0026, 14, 28.086, 170.0, screening=False)(500.0)[0])
+    screened = float(
+        setup_scatter(2, 4.0026, 14, 28.086, 170.0, screening=ScreeningModel.LECUYER)(500.0)[0]
+    )
+    plain = float(
+        setup_scatter(2, 4.0026, 14, 28.086, 170.0, screening=ScreeningModel.NONE)(500.0)[0]
+    )
     assert unscreened == pytest.approx(plain)
     assert unscreened != pytest.approx(screened)
 

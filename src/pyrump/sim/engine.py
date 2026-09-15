@@ -22,7 +22,7 @@ from ..model.detector import Measurement, yield_normalisation
 from ..model.geometry import Geometry
 from ..model.spectrum import Calibration, Spectrum
 from ..physics.kinematics import kinematic_factor
-from ..physics.xsec.rutherford import setup_scatter
+from ..physics.xsec.rutherford import ScreeningModel, setup_scatter
 from ..stopping.bragg import bragg_coefficients
 from ..stopping.registry import StoppingRegistry
 from ..stopping.table import StoppingTable
@@ -152,7 +152,7 @@ def simulate_bricks(
     registry: StoppingRegistry,
     periodic_table: PeriodicTable,
     *,
-    screening: bool = True,
+    screening: ScreeningModel = ScreeningModel.LECUYER,
     element_filter: int | None = None,
     layer_filter: int | None = None,
 ) -> Bricks:
@@ -259,7 +259,7 @@ def simulate(
     calibration: Calibration,
     measurement: Measurement | None = None,
     *,
-    screening: bool = True,
+    screening: ScreeningModel = ScreeningModel.LECUYER,
     convolve_edge: str = "rump",
     element_filter: int | None = None,
     layer_filter: int | None = None,

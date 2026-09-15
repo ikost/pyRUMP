@@ -17,6 +17,7 @@ matplotlib.use("Agg")
 
 from pyrump.io.ascii import write_ascii  # noqa: E402
 from pyrump.model.spectrum import Calibration, Spectrum  # noqa: E402
+from pyrump.physics.xsec.rutherford import ScreeningModel  # noqa: E402
 from pyrump.shell.commands.rump import Quit  # noqa: E402
 from pyrump.shell.dispatch import CommandError  # noqa: E402
 from pyrump.shell.repl import execute_file, execute_line  # noqa: E402
@@ -187,6 +188,43 @@ def test_faithful_persists_through_a_pyrumprc_style_macro(session, tmp_path):
     fresh = Session.create(str(DATA))
     execute_file(fresh, rc)
     assert fresh.settings.faithful is False
+
+
+@needs_data
+def test_screening_select(session, capsys):
+    assert session.settings.screening is ScreeningModel.LECUYER
+    run(session, "screening andersen")
+    assert session.settings.screening is ScreeningModel.ANDERSEN
+    assert "screening is ANDERSEN" in capsys.readouterr().out
+    run(session, "screening none")
+    assert session.settings.screening is ScreeningModel.NONE
+    run(session, "screening lecuyer")
+    assert session.settings.screening is ScreeningModel.LECUYER
+
+
+@needs_data
+def test_screening_with_no_argument_shows_the_current_value(session, capsys):
+    capsys.readouterr()
+    run(session, "screening")
+    assert "screening is LECUYER" in capsys.readouterr().out
+
+
+@needs_data
+def test_screening_rejects_an_unknown_model(session):
+    with pytest.raises(CommandError, match="unknown screening model"):
+        run(session, "screening bogus")
+
+
+@needs_data
+def test_screening_persists_through_a_pyrumprc_style_macro(session, tmp_path):
+    rc = tmp_path / ".pyrumprc"
+    rc.write_text("screening andersen\n")
+    execute_file(session, rc)
+    assert session.settings.screening is ScreeningModel.ANDERSEN
+
+    fresh = Session.create(str(DATA))
+    execute_file(fresh, rc)
+    assert fresh.settings.screening is ScreeningModel.ANDERSEN
 
 
 _SIM_SAMPLE = (

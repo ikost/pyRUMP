@@ -31,6 +31,7 @@ import numpy as np
 from ..model.detector import Measurement
 from ..model.geometry import Geometry
 from ..model.spectrum import Calibration, Spectrum
+from ..physics.xsec.rutherford import ScreeningModel
 from ..script.lcm import Script
 from ..sim.engine import Beam
 
@@ -381,6 +382,10 @@ class Settings:
 
     faithful: bool = True
 
+    #: Rutherford screening correction. LECUYER matches RUMP's own and only
+    #: behaviour; ANDERSEN is a pyRUMP-only addition with no C oracle.
+    screening: ScreeningModel = ScreeningModel.LECUYER
+
     #: Beam/geometry/measurement/calibration to fall back on when no real
     #: buffer is active yet -- lets MEV/THETA/etc. be set from ``~/.pyrumprc``
     #: before any GET, for exploring SIM alone, and lets a metadata-less
@@ -520,6 +525,7 @@ class Session:
             self.table,
             reference.calibration,
             reference.measurement,
+            screening=self.settings.screening,
         )
         buffer = Buffer(
             spectrum=spectrum,
@@ -566,6 +572,7 @@ class Session:
             self.table,
             reference.calibration,
             reference.measurement,
+            screening=self.settings.screening,
             element_filter=element_z,
             layer_filter=layer,
         )

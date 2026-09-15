@@ -15,6 +15,7 @@ import numpy as np
 
 from ...model.geometry import GeometryKind
 from ...model.spectrum import Calibration, Spectrum
+from ...physics.xsec.rutherford import ScreeningModel
 from ..dispatch import ArgReader, CommandError, CommandTable
 from ..session import Buffer
 from .. import plotting
@@ -851,6 +852,26 @@ def cmd_faithful(session, args: ArgReader) -> None:
     print(f"faithful mode is {'on' if session.settings.faithful else 'off'}")
 
 
+def cmd_screening(session, args: ArgReader) -> None:
+    """SCREENING [NONE|LECUYER|ANDERSEN]: select the Rutherford screening
+    correction. LECUYER is RUMP's own and the default. ANDERSEN is a pyRUMP
+    addition (Andersen et al., Phys. Rev. A 21 (1980) 1891) -- more accurate
+    at forward angles, but with no RUMP oracle to validate it against, and
+    per its own literature, may be inaccurate below a few hundred keV or at
+    small scattering angles."""
+    token = args.optional()
+    args.done()
+    if token is not None:
+        try:
+            session.settings.screening = ScreeningModel[token.upper()]
+        except KeyError:
+            names = ", ".join(m.name for m in ScreeningModel)
+            raise CommandError(
+                f"unknown screening model {token!r}; choose from {names}"
+            ) from None
+    print(f"screening is {session.settings.screening.name}")
+
+
 def cmd_parms(session, args: ArgReader) -> None:
     args.done()
     print(session.plot.describe())
@@ -1505,6 +1526,8 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("DATA", 4, cmd_data, "show or change the atomic data directory"),
     ("FAITHFUL", 4, cmd_faithful,
      "toggle faithful (bug-for-bug) vs corrected physics (FAITHFUL OFF to correct)"),
+    ("SCREENING", 4, cmd_screening,
+     "select the Rutherford screening correction: NONE, LECUYER (default) or ANDERSEN"),
     # Sub-processors
     ("SIM", 3, cmd_sim, "enter the sample-description editor"),
     ("PERT", 3, cmd_pert, "enter the fitting sub-processor"),

@@ -777,6 +777,7 @@ def cmd_go(session, args: ArgReader) -> None:
             session.table,
             current.calibration,
             current.measurement,
+            screening=session.settings.screening,
         ).counts
 
     starting = {v.name: v.parameter.get(inputs) for v in state.varying}

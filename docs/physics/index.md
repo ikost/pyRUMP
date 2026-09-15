@@ -50,8 +50,13 @@ The **Z₂²** dependence is why RBS is sensitive to heavy elements in a light
 matrix and nearly blind the other way round. The **1/E²** means yield rises with
 depth as the beam slows.
 
-A screening correction (L'Ecuyer) reduces this slightly at low energy. RUMP has
-no relativistic correction and does not implement Andersen screening.
+A screening correction reduces this slightly at low energy -- **L'Ecuyer** by
+default, matching RUMP's own and only behaviour. **Andersen** screening
+(Phys. Rev. A 21 (1980) 1891) is a pyRUMP-only addition, angle- and
+energy-dependent rather than L'Ecuyer's flat rolloff, selectable with the
+`SCREENING` command; RUMP itself never had it, so there is no C oracle to
+validate it against -- see [Design and validation](validation.md). RUMP has
+no relativistic correction either way.
 
 ### The brick
 
@@ -247,7 +252,7 @@ Worth knowing before trusting a result.
 | | |
 |---|---|
 | Straggling | Bohr only, **off by default**. The in/out paths are combined *linearly* rather than as `K²σ²_in + σ²_out` — an approximation, not the correct combination. No Chu correction. |
-| Screening | L'Ecuyer only; no Andersen. |
+| Screening | L'Ecuyer by default, matching RUMP. Andersen available via `SCREENING`, but pyRUMP-only, with no C oracle. |
 | Relativity | No correction anywhere. |
 | Multiple scattering | Empirical tail with no physical basis. |
 | Channelling | Not modelled at all. |
