@@ -85,6 +85,16 @@ def test_buffer_zero_cannot_be_released():
         BufferSet().release(0)
 
 
+def test_clear_also_blanks_buffer_zero():
+    buffers = BufferSet()
+    buffers.set(0, make_buffer())
+    buffers.load(make_buffer(), 1)
+    buffers.active = 1
+    buffers.clear()
+    assert buffers.get(0) is None
+    assert buffers.active == 0
+
+
 def test_find_path_matches_a_resolved_path(tmp_path):
     buffers = BufferSet()
     target = tmp_path / "a.rbs"
@@ -794,6 +804,19 @@ def test_compare_goodness_of_fit_uses_pert_error_window(session, tmp_path):
     texts = [t.get_text() for t in bottom.texts]
     # 10 channels (10..19 inclusive) minus 1 varying parameter.
     assert any("reduced chi-square" in t and "(9 dof)" in t for t in texts)
+
+
+def test_newall_leaves_no_active_buffer_for_a_following_pert_go(session, tmp_path):
+    """NEWALL must blank buffer 0 too, so a stale simulation left over from
+    before the reset can't masquerade as PERT GO's "observed" data."""
+    sample = tmp_path / "reset.lcm"
+    sample.write_text(
+        "Sim Reset\nLayer 1\n Thick 500 /cm2\n Composition Si 1 /\nMaxpth 200\n"
+    )
+    run(session, f"sim get {sample}", "pert", "thick 1", "return", "compare", "newall")
+    assert session.buffers.get(0) is None
+    with pytest.raises(CommandError, match="no active buffer"):
+        run(session, "pert go")
 
 
 def test_figsave_with_nothing_plotted_is_rejected(session):

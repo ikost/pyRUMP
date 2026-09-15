@@ -279,7 +279,7 @@ class BufferSet:
             )
 
     def clear(self) -> None:
-        self.slots = [self.slots[0] if self.slots else None]
+        self.slots = [None]
         self.active = 0
 
     def listing(self) -> str:
