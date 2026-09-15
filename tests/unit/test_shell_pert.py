@@ -218,33 +218,33 @@ def test_single_and_multi_modes(session):
     assert session.pert.multi is True
 
 
-# -- numbering, WINDOW REMOVE, CLEAR <n> ------------------------------------
+# -- numbering, WINDOW CLEAR <n>, CLEAR <n> ---------------------------------
 
 
 @needs_data
-def test_window_remove_deletes_the_numbered_window(session):
-    run(session, "pert", "window 100 200", "window 300 400", "window remove 1")
+def test_window_clear_n_deletes_the_numbered_window(session):
+    run(session, "pert", "window 100 200", "window 300 400", "window clear 1")
     assert [(w.low, w.high) for w in session.pert.windows.error] == [(300, 400)]
 
 
 @needs_data
-def test_window_remove_out_of_range_is_rejected(session):
+def test_window_clear_n_out_of_range_is_rejected(session):
     run(session, "pert", "window 100 200")
     with pytest.raises(CommandError, match="outside 1-1"):
-        run(session, "pert", "window remove 5")
+        run(session, "pert", "window clear 5")
 
 
 @needs_data
-def test_window_remove_with_no_windows_is_rejected(session):
+def test_window_clear_n_with_no_windows_is_rejected(session):
     with pytest.raises(CommandError, match="no error windows are set"):
-        run(session, "pert", "window remove 1")
+        run(session, "pert", "window clear 1")
 
 
 @needs_data
-def test_window_remove_prints_the_resulting_numbered_list(session, capsys):
+def test_window_clear_n_prints_the_resulting_numbered_list(session, capsys):
     run(session, "pert", "window 100 200", "window 300 400")
     capsys.readouterr()
-    run(session, "pert", "window remove 1")
+    run(session, "pert", "window clear 1")
     output = capsys.readouterr().out
     assert "[1] 300-400" in output
     assert "100-200" not in output

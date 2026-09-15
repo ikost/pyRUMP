@@ -132,8 +132,8 @@ values or narrow the window rather than trust the numbers as a settled fit.
 | `GET <file>` / `GET <file> GO` | replay a saved selection from a `.pert` file, replacing the current one, and optionally run the fit right after |
 | `SAVE <file>` | save the current selection (windows + varying parameters) to a `.pert` file |
 | `CLEAR` / `CLEAR <n>` | forget everything, or just the *n*th varying parameter (1-based, as numbered by `PARMS`) |
-| `WINDOW lo hi` / `WINDOW clear` / `WINDOW remove <n>` | add / clear all / remove the *n*th error window, in channels (up to 10) |
-| `NORMALIZE lo hi` / `NORMALIZE off` | set / clear the normalisation window |
+| `WINDOW lo hi` / `WINDOW clear` / `WINDOW clear <n>` | add / clear all / clear the *n*th error window, in channels (up to 10) |
+| `NORMALIZE lo hi` / `NORMALIZE clear` | set / clear the normalisation window |
 | `SINGLE` / `MULTI` | fit one parameter at a time / all together (default) |
 | `VOLUME [off]` | print a line per model evaluation during `GO` |
 | `AUTOCMP [off]` | run `COMPARE` automatically at the end of `GO` (default off) |

@@ -422,12 +422,11 @@ def cmd_window(session, args: ArgReader) -> None:
     token = args.peek()
     if token is not None and token.lower() in ("clear", "none", "reset"):
         args.token()
-        args.done()
-        state.windows.error = []
-        print("  error windows cleared")
-        return
-    if token is not None and token.lower() == "remove":
-        args.token()
+        if not args:
+            args.done()
+            state.windows.error = []
+            print("  error windows cleared")
+            return
         n = args.integer("a window number")
         args.done()
         windows = state.windows.error
@@ -895,8 +894,8 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("SAVE", 2, cmd_save, "save the current PERT selection to a .pert file"),
     ("CLEAR", 2, cmd_clear, "forget every selected parameter and window, or CLEAR <n> one parameter"),
     # Windows and mode
-    ("WINDOW", 2, cmd_window, "set an error window in channels, or WINDOW REMOVE <n>"),
-    ("NORMALIZE", 2, cmd_normalize, "set the normalisation window"),
+    ("WINDOW", 2, cmd_window, "set an error window in channels, or WINDOW CLEAR [<n>]"),
+    ("NORMALIZE", 2, cmd_normalize, "set the normalisation window, or NORMALIZE CLEAR"),
     ("SINGLE", 2, cmd_single, "vary one parameter at a time"),
     ("MULTI", 3, cmd_multi, "vary all parameters together (default)"),
     ("VOLUME", 3, cmd_volume, "verbose progress messages"),
