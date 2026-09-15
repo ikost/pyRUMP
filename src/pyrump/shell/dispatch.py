@@ -181,6 +181,39 @@ class CommandTable:
         )
         return "\n".join(lines)
 
+    def grouped_help_text(self, groups: Sequence[tuple[str, Sequence[str]]]) -> str:
+        """Like :meth:`help_text`, but under named sections in a given order.
+
+        ``groups`` is a list of ``(heading, [command names...])`` pairs, most
+        important section first. This only changes how the listing is
+        *displayed* -- matching still runs over ``commands`` in its original
+        (significant) order, so abbreviation resolution is untouched. Any
+        visible command not named in any group still appears, under a
+        trailing "Other" section, so a command added later without updating
+        ``groups`` is never silently dropped from the listing.
+        """
+        entries = list(self.visible())
+        if not entries:
+            return self.title
+        by_name = {c.name: c for c in entries}
+        column = max(len(c.display) for c in entries)
+        lines = [self.title]
+        sections = list(groups)
+        named = {name for _, names in sections for name in names}
+        leftover = [c.name for c in entries if c.name not in named]
+        if leftover:
+            sections = [*sections, ("Other", leftover)]
+        for heading, names in sections:
+            rows = [by_name[name] for name in names if name in by_name]
+            if not rows:
+                continue
+            lines.append("")
+            lines.append(f"  {heading}")
+            lines.extend(
+                f"    {c.display.ljust(column)}  {c.help}".rstrip() for c in rows
+            )
+        return "\n".join(lines)
+
     def describe(self, token: str) -> str | None:
         """The full entry for a single command, for ``HELP <name>``.
 

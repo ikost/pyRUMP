@@ -151,7 +151,7 @@ def cmd_help(session, args: ArgReader) -> None:
     from .system import TABLE as SYSTEM_TABLE
 
     if topic is None:
-        print(TABLE.help_text())
+        print(TABLE.grouped_help_text(_HELP_GROUPS))
         print()
         print(SYSTEM_TABLE.help_text())
         return
@@ -1627,3 +1627,31 @@ for _name, _minlen, _handler, _help in _ENTRIES:
     TABLE.add(_name, _minlen, _handler, _help)
 TABLE.note_synonym("COMPARE", "CMP")
 TABLE.note_synonym("FIGSAVE", "HCOPY")
+
+# ---------------------------------------------------------------------------
+# Sections for the ``?``/``HELP`` listing, most important first. Display only
+# -- matching still runs over _ENTRIES in the order above, so this has no
+# effect on abbreviation resolution (see dispatch.py's CommandTable docstring).
+# ---------------------------------------------------------------------------
+
+_HELP_GROUPS: list[tuple[str, list[str]]] = [
+    ("Getting started", ["?", "HELP", "QUIT"]),
+    ("Core workflow",
+     ["GET", "SIM", "PERT", "COMPARE", "PLOT", "RECALCULATE", "RETURN"]),
+    ("Plotting & display",
+     ["OVERLAY", "REPLOT", "FIGSAVE", "REGION", "COUNTS", "LINEAR", "SQRT",
+      "LOG", "NORMALIZE", "RAW", "LABELS", "STRUCTLABEL", "COMPFRAC",
+      "ENERGY", "AXIS", "BLOWUP", "EXPAND", "PARAMETERS", "DISPLAY"]),
+    ("Buffers",
+     ["BUFFERS", "READ", "POINTAT", "RELEASE", "EMPTY", "NEWALL", "COPY",
+      "MOVE", "WRITE", "WRASCII"]),
+    ("Sample & instrument parameters",
+     ["ACTIVE", "BEAM", "MEV", "THETA", "PHI", "PSI", "GEOMETRY",
+      "CONVERSION", "OFFSET", "CORRECTION", "CHARGE", "CURRENT", "CHOFF",
+      "FWHM", "OMEGA", "TAU", "IDENTIFIER", "DATE", "FILENAME", "SWALLOW"]),
+    ("Analysis tools",
+     ["CURSOR", "ELEMENT", "MATRIX", "WHATISIT", "INFO", "INTEGRAL",
+      "THICKNESS", "BACKGROUND", "SMOOTH", "FFT", "WIDTH_THICK",
+      "CALIBRATE", "INTSET"]),
+    ("Settings", ["DATA", "FAITHFUL", "SCREENING", "MODE", "PROFILE"]),
+]
