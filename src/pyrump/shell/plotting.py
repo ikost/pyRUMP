@@ -275,7 +275,11 @@ def mark_matrix(session, buffer, energy_keV: float, channel: float, height: floa
 
     Draws nothing (and RUMP's own C prints no warning for it either,
     anlytc.c:274's silent ``if (PlotSystem...)``) when there is no active
-    PLOT/OVERLAY, or when the point falls outside the current x range.
+    PLOT/OVERLAY, or when the point falls outside the current x range. The
+    y range, unlike x, is expanded to fit the marker when it's taller than
+    the current view -- ``draw()`` freezes it via ``set_ylim`` on every
+    PLOT/OVERLAY, so without this a tall prediction would be silently
+    clipped -- unless YLOW/YHIGH pinned it explicitly, which still wins.
     """
     if not session.traces:
         return False
@@ -291,6 +295,12 @@ def mark_matrix(session, buffer, energy_keV: float, channel: float, height: floa
         symbol, (x, y), xytext=(0, 8), textcoords="offset points",
         ha="center", va="bottom", fontsize="small", fontweight="bold",
     )
+    state = session.plot
+    ylow, yhigh = ax.get_ylim()
+    if state.yhigh is None and y > yhigh:
+        ax.set_ylim(top=y * 1.1)
+    if state.ylow is None and y < ylow:
+        ax.set_ylim(bottom=y * 1.1 if y < 0 else 0)
     show(figure)
     return True
 

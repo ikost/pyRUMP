@@ -563,6 +563,33 @@ def test_matrix_marks_an_existing_plot(session):
 
 
 @needs_data
+def test_matrix_expands_y_range_to_fit_a_tall_marker(session):
+    # Au's predicted height dwarfs this buffer's flat, low-count trace, so
+    # draw()'s frozen y range (set by PLOT, which disables autoscale) would
+    # clip the marker unless mark_matrix() expands it to fit.
+    wide = make_buffer(total=1.0, channels=64)
+    wide.spectrum.calibration = Calibration(kevch=50.0, npt=64)
+    session.buffers.load(wide, 2)
+    run(session, "plot 2")
+    _, before_top = session.figure.axes[0].get_ylim()
+    run(session, "matrix Au")
+    ax = session.figure.axes[0]
+    marker_y = next(line.get_ydata()[0] for line in ax.lines if line.get_marker() == "+")
+    assert marker_y > before_top
+    assert ax.get_ylim()[1] >= marker_y
+
+
+@needs_data
+def test_matrix_respects_an_explicit_yhigh(session):
+    wide = make_buffer(total=1.0, channels=64)
+    wide.spectrum.calibration = Calibration(kevch=50.0, npt=64)
+    session.buffers.load(wide, 2)
+    run(session, "plot 2", "blowup 10")
+    run(session, "matrix Au")
+    assert session.figure.axes[0].get_ylim()[1] == pytest.approx(10.0)
+
+
+@needs_data
 def test_matrix_does_not_mark_with_no_plot_up(session, capsys):
     run(session, "matrix Au")
     assert session.figure is None
