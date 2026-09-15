@@ -918,9 +918,9 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("FUZZ", 2, cmd_fuzz, "vary the fuzz parameter (not implemented)"),
     ("CORRECTION", 3, _simple("correction"), "vary the normalization correction [<min> <max>]"),
     ("THETA", 4, _simple("theta"), "vary the sample tilt [<min> <max>]"),
-    ("KEV/CH", 4, _simple("kev/ch"),
+    ("SLOPE", 5, _simple("kev/ch"),
      "vary the calibration slope, keV per channel [<min> <max>]"),
-    ("SLOPE", -5, _simple("kev/ch"), "synonym for KEV/CH"),
+    ("KEV/CH", -4, _simple("kev/ch"), "synonym for SLOPE"),
     ("OFFSET", 3, _simple("kev(0)"),
      "vary the calibration energy offset (e.g. a sample-charging shift) [<min> <max>]"),
     ("KEV(0)", -6, _simple("kev(0)"), "synonym for OFFSET"),
@@ -930,6 +930,6 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
 
 for _name, _minlen, _handler, _help in _ENTRIES:
     TABLE.add(_name, _minlen, _handler, _help)
-TABLE.note_synonym("KEV/CH", "SLOPE")
+TABLE.note_synonym("SLOPE", "KEV/CH")
 TABLE.note_synonym("OFFSET", "KEV(0)")
 TABLE.note_synonym("COMPARE", "CMP")
