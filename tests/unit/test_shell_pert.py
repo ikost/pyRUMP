@@ -180,9 +180,26 @@ def test_composition_needs_an_element_in_the_sample(session):
 
 
 @needs_data
-def test_the_same_parameter_cannot_be_selected_twice(session):
-    with pytest.raises(CommandError, match="already being varied"):
-        run(session, "pert", "thick 1", "thick 1")
+def test_reselecting_a_parameter_replaces_it_rather_than_duplicating(session):
+    """RUMP's own PertAddVar "adds or modifies" -- a repeated selection
+    resets the search bound instead of being rejected as a duplicate, and
+    without a new bound it reverts to the default (unbounded) range."""
+    run(session, "pert", "thick 1 100 500", "thick 1")
+    assert len(session.pert.varying) == 1
+    entry = session.pert.varying[0]
+    assert entry.bounds is None
+    assert entry.parameter.lower == 0.0
+    assert entry.parameter.upper == np.inf
+
+
+@needs_data
+def test_reselecting_a_parameter_with_new_bounds_overwrites_the_old_ones(session):
+    run(session, "pert", "thick 1 100 500", "thick 1 200 400")
+    assert len(session.pert.varying) == 1
+    entry = session.pert.varying[0]
+    assert entry.bounds == (200.0, 400.0)
+    assert entry.parameter.lower == 200.0
+    assert entry.parameter.upper == 400.0
 
 
 @needs_data
@@ -389,12 +406,13 @@ def test_a_simple_parameter_accepts_a_bound(session):
 @needs_data
 def test_slope_is_a_synonym_for_kevch(session):
     """SLOPE and KEV/CH must select the same underlying parameter, so
-    picking one after the other is rejected as a duplicate, and either one
-    accepts the usual trailing bound."""
+    picking one after the other replaces the same selection instead of
+    adding a second one, and either one accepts the usual trailing bound."""
     run(session, "pert", "kev/ch")
     assert session.pert.varying[0].name == "kev/ch"
-    with pytest.raises(CommandError, match="already being varied"):
-        run(session, "pert", "slope")
+    run(session, "pert", "slope")
+    assert len(session.pert.varying) == 1
+    assert session.pert.varying[0].name == "kev/ch"
 
 
 @needs_data
@@ -408,12 +426,13 @@ def test_slope_accepts_a_bound(session):
 @needs_data
 def test_kev0_is_a_synonym_for_offset(session):
     """KEV(0) and OFFSET must select the same underlying parameter, so
-    picking one after the other is rejected as a duplicate, and either one
-    accepts the usual trailing bound."""
+    picking one after the other replaces the same selection instead of
+    adding a second one, and either one accepts the usual trailing bound."""
     run(session, "pert", "offset")
     assert session.pert.varying[0].name == "kev(0)"
-    with pytest.raises(CommandError, match="already being varied"):
-        run(session, "pert", "kev(0)")
+    run(session, "pert", "kev(0)")
+    assert len(session.pert.varying) == 1
+    assert session.pert.varying[0].name == "kev(0)"
 
 
 @needs_data

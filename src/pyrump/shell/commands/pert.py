@@ -199,9 +199,14 @@ def _optional_bounds(args: ArgReader) -> tuple[float, float] | None:
 
 
 def _add(session, entry: Vary) -> None:
+    """Add ``entry`` to what PERT varies, or replace it in place if the same
+    parameter is already selected -- RUMP's own semantics (pert.c's
+    ``PertAddVar``, "Gets name and adds (or modifies) a variable"): reselecting
+    a parameter resets its search bound to whatever this call gave (or the
+    default range, if none), rather than being rejected as a duplicate.
+    """
     state = state_for(session)
-    if any(v.name == entry.name for v in state.varying):
-        raise CommandError(f"{entry.name} is already being varied")
+    state.varying = [v for v in state.varying if v.name != entry.name]
     state.varying.append(entry)
     print(f"  varying {entry.name}")
 
