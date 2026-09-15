@@ -255,6 +255,8 @@ def cmd_get(session, args: ArgReader) -> None:
     session.editor = SampleEditor(session.script)
     session.touch()
     print(f"read {path}: {len(session.script.layers)} layers")
+    for line in session.script.ignored:
+        print(f"  warning: unrecognized SIM sub-command, skipped: {line!r}")
 
 
 def cmd_save(session, args: ArgReader) -> None:

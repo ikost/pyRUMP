@@ -31,6 +31,8 @@ def _build(args, table, registry, densities):
     from pyrump.sim.engine import Beam
 
     script = read_lcm(args.sample)
+    for line in script.ignored:
+        print(f"warning: unrecognized SIM sub-command, skipped: {line!r}", file=sys.stderr)
     sample = to_sample(script, table, densities)
 
     z, mass = resolve_beam(table, args.beam)
