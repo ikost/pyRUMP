@@ -34,6 +34,24 @@ Neither revision is large enough to affect RBS simulation results; noted here fo
 rather than patched, since patching isotope fractions risks subtly breaking the parser's
 assumptions about the table's internal normalization.
 
+### Elemental densities (`atomic_density`, atoms/cm^3)
+
+Checked (September 2026) against NIST's X-Ray Mass Attenuation Coefficients reference
+densities (Hubbell & Seltzer, NISTIR 5632,
+<https://physics.nist.gov/PhysRefData/XrayMassCoef/tab1.html>), Z=1-92. Converting
+`atomic_density` back to g/cm^3 via each element's mass and Avogadro's number and comparing
+against that table: **median relative difference 0.3%** across the 75 elements with a
+comparable (non-gas, non-zero) reference density.
+
+Four elements differed by more than 5%. Three are allotrope-convention mismatches, not
+errors — carbon (atom4.dat's 2.267 g/cm^3 is graphite's crystallographic density; NIST's
+reference table uses a lower bulk value), phosphorus (atom4.dat uses white phosphorus,
+1.82 g/cm^3; NIST uses red, ~2.2), and selenium (atom4.dat uses the stable grey allotrope,
+4.79 g/cm^3; NIST's is lower). **Calcium had no such explanation** — atom4.dat carried
+1.34 g/cm^3 against NIST's 1.55 g/cm^3 and multiple other literature sources in the same
+1.54-1.59 g/cm^3 range — and has been corrected to match NIST's reference value
+(`atomic_density` 2.0144e22 -> 2.3289e22 at/cm^3).
+
 ## `density.tab` — compound densities for thin-film thickness units
 
 Bulk/theoretical densities, "compliments of Prof. Chris Palmstrom" per the file's own header.

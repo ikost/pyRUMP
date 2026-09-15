@@ -74,3 +74,29 @@ of the beam falls below the stopping cutoff.
 
 Full bibliography in [References](../dev/about.md#references).
 
+### Atomic data provenance
+
+The stage-by-stage agreement above is *internal* — pyRUMP against the shipped C, both
+consuming the same bundled tables. It says nothing about whether those tables' underlying
+physical constants are still correct. That's checked separately, against external reference
+sources, and re-verified periodically rather than assumed from the tables' 1990s origin.
+
+**Atomic masses and isotope abundances** (`atom4.dat`) — checked against CIAAW (Commission on
+Isotopic Abundances and Atomic Weights) current standard atomic weights, Z=1-92. Every sampled
+mass matches within <0.1% relative. Two elements have isotope-abundance intervals CIAAW has
+revised since the table's origin — magnesium (post-2011 remeasurement) and zirconium (revised
+2024) — but the effect on each element's average mass is negligible (<0.03% and <0.1%
+respectively) and was left as-is rather than patched, to avoid disturbing the isotope table's
+internal normalization.
+
+**Elemental densities** (`atomic_density`) — checked against NIST's X-Ray Mass Attenuation
+Coefficients reference densities (Hubbell & Seltzer, NISTIR 5632). Median relative difference
+**0.3%** across 75 comparable elements. Three of the four elements differing by more than 5% are
+allotrope-convention mismatches rather than errors (carbon: graphite vs. a lower bulk value;
+phosphorus: white vs. red; selenium: grey vs. an amorphous form) — both values are individually
+defensible, they just describe different physical forms of the element. The fourth, **calcium**,
+had no such explanation and was corrected to NIST's reference value.
+
+Full detail, including per-element figures, in [`SOURCES.md`](https://github.com/ikost/pyRUMP/blob/main/src/pyrump/data/SOURCES.md)
+alongside the tables themselves.
+
