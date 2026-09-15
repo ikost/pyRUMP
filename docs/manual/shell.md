@@ -161,7 +161,7 @@ commands.
 | `OVERLAY [buffer\|file]` | add another trace to the current plot |
 | `REPLOT` | redraw the current plot, unchanged |
 | `AXIS` | draw empty axes, with no data |
-| `COMPARE` | active buffer vs. the simulation, with Poisson residuals |
+| `COMPARE` | active buffer vs. the simulation, with Poisson residuals and a reduced chi-square readout (over PERT's error windows if set, else the visible REGION) |
 | `CMP` | synonym for `COMPARE`, at the RUMP, SIM, and PERT levels alike |
 | `DISPLAY` | sample composition vs. depth (from the SIM description) |
 | `REGION lo hi` | channel range shown |

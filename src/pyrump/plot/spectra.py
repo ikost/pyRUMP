@@ -58,6 +58,7 @@ def plot_comparison(
     figure=None,
     data_label: str = "data",
     simulation_label: str = "simulation",
+    goodness_of_fit: str | None = None,
 ):
     """Measured data with a simulation over it, and optionally residuals.
 
@@ -81,6 +82,12 @@ def plot_comparison(
     "simulation" but are meant to be the buffers' own names -- the same
     :func:`~pyrump.shell.plotting.buffer_label` convention PLOT/OVERLAY use --
     so COMPARE's legend identifies which file and which sample it's showing.
+
+    ``goodness_of_fit``, if given, is drawn verbatim in the top panel's
+    upper-right corner -- a pre-formatted string (e.g. "reduced chi-square
+    8.97 (400 dof)") rather than a number, since computing it needs PERT's
+    error windows and varying-parameter count, which this module has no
+    access to; the caller (COMPARE) builds the text.
     """
     import matplotlib.pyplot as plt
 
@@ -128,8 +135,17 @@ def plot_comparison(
         bottom.set_xlabel("Energy (keV)" if energy_axis else "Channel")
         limit = max(3.0, float(np.abs(values[shown]).max()) if shown.any() else 3.0)
         bottom.set_ylim(-limit, limit)
+        gof_axes = bottom
     else:
         top.set_xlabel("Energy (keV)" if energy_axis else "Channel")
+        gof_axes = top
+
+    if goodness_of_fit:
+        gof_axes.text(
+            0.98, 0.95, goodness_of_fit, transform=gof_axes.transAxes,
+            ha="right", va="top", fontsize="small",
+            bbox={"boxstyle": "round", "facecolor": "white", "alpha": 0.7, "edgecolor": "none"},
+        )
 
     top.set_xlim(x.min(), x.max())
     return figure

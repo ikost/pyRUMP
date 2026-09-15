@@ -738,6 +738,38 @@ def test_compare_respects_region(session, tmp_path):
 
 
 @needs_data
+def test_compare_shows_goodness_of_fit_over_region_with_no_pert_window(session, tmp_path):
+    """With nothing selected in PERT, the chi-square text should fall back
+    to the plot's own REGION -- 21 channels (20..40 inclusive) here."""
+    sample = tmp_path / "gof_region.lcm"
+    sample.write_text(
+        "Sim Reset\nLayer 1\n Thick 500 /cm2\n Composition Si 1 /\nMaxpth 200\n"
+    )
+    run(session, f"sim get {sample}", "region 20 40", "compare")
+
+    bottom = session.figure.axes[1]
+    texts = [t.get_text() for t in bottom.texts]
+    assert any("reduced chi-square" in t and "(21 dof)" in t for t in texts)
+
+
+@needs_data
+def test_compare_goodness_of_fit_uses_pert_error_window(session, tmp_path):
+    """With a PERT error window set, the chi-square text should match what
+    GO itself would report: dof = the window's channel count minus however
+    many parameters are currently selected to vary."""
+    sample = tmp_path / "gof_window.lcm"
+    sample.write_text(
+        "Sim Reset\nLayer 1\n Thick 500 /cm2\n Composition Si 1 /\nMaxpth 200\n"
+    )
+    run(session, f"sim get {sample}", "pert", "window 10 19", "thick 1", "return", "compare")
+
+    bottom = session.figure.axes[1]
+    texts = [t.get_text() for t in bottom.texts]
+    # 10 channels (10..19 inclusive) minus 1 varying parameter.
+    assert any("reduced chi-square" in t and "(9 dof)" in t for t in texts)
+
+
+@needs_data
 def test_compare_legend_shows_buffer_names_not_generic_labels(session, tmp_path):
     """PLOT's legend shows the buffer's own name; COMPARE should match
     instead of hard-coding "data"/"simulation"."""
