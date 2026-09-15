@@ -785,8 +785,14 @@ def cmd_go(session, args: ArgReader) -> None:
         [state.varying] if state.multi else [[v] for v in state.varying]
     )
 
+    initial_reduced = None
+
     def _progress(evaluation: int, reduced: float) -> None:
-        print(f"    eval {evaluation:3d}   chi2/dof {reduced:.4f}")
+        nonlocal initial_reduced
+        if initial_reduced is None:
+            initial_reduced = reduced
+        if state.verbose:
+            print(f"    eval {evaluation:3d}   chi2/dof {reduced:.4f}")
 
     result = None
     started = time.perf_counter()
@@ -800,7 +806,7 @@ def cmd_go(session, args: ArgReader) -> None:
                     inputs,
                     [v.parameter for v in group],
                     windows=state.windows,
-                    progress=_progress if state.verbose else None,
+                    progress=_progress,
                 )
                 if not state.multi:
                     print(
@@ -817,10 +823,12 @@ def cmd_go(session, args: ArgReader) -> None:
     session.touch()
 
     report_lines.append(f"\n  fit took {elapsed:.2f} s")
-    report_lines.append(
-        f"\n  reduced chi-square {result.reduced_chi_square:.4f} on {result.dof} dof"
-    )
-    report_lines.append(f"  {result.n_evaluations} evaluations, {result.message}")
+    chi_line = f"\n  reduced chi-square {result.reduced_chi_square:.4f} on {result.dof} dof"
+    if initial_reduced is not None:
+        chi_line += f"   (was {initial_reduced:.4f})"
+    report_lines.append(chi_line)
+    status = "converged" if result.success else "did not converge"
+    report_lines.append(f"  {result.n_evaluations} evaluations, {status}")
     if result.normalisation != 1.0:
         report_lines.append(
             f"  data scaled by {result.normalisation:.5f} over the norm window"

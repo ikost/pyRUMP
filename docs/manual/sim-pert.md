@@ -112,17 +112,13 @@ real Poisson statistics. A residual plot with structure (a slope, a bump the
 model tracks smoothly through) rather than a flat scatter around zero is
 normally where the mismatch actually is.
 
-`N evaluations, <message>` reports how many full spectrum simulations `GO`
-ran, and `<message>` is `scipy.optimize.least_squares`'s own termination
-string verbatim (`fit/lm.py`) -- naming whichever convergence tolerance was
-satisfied first. `xtol` means successive parameter steps became small
-relative to the fitted values; `ftol` means chi-square itself stopped
-improving; both are set to the same tolerance here, so either alone (or
-"Both ... are satisfied") means the fit genuinely settled on a minimum, not
-that it ran out of patience. If the solver instead hits its evaluation cap
-without converging, the same line reports that plainly (e.g. "the maximum
-number of function evaluations is exceeded") rather than the fit silently
-returning a wrong answer.
+`N evaluations, <status>` reports how many full spectrum simulations `GO`
+ran, and whether the fit `converged` -- one of `scipy.optimize.least_squares`'s
+tolerances (`xtol` or `ftol`, both set to RUMP's `EpsCrit`) was satisfied and
+the solver settled on a minimum -- or `did not converge`, meaning it hit its
+evaluation cap first. Either way the reported parameters are whatever the
+solver last tried, so `did not converge` is a signal to check the starting
+values or narrow the window rather than trust the numbers as a settled fit.
 
 #### PERT commands
 
