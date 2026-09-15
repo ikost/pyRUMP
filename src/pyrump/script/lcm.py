@@ -163,11 +163,17 @@ def _formula(composition: dict[str, float], *, normalize: bool = False) -> str:
     """Compact chemical-formula rendering: {"Mg": 1, "O": 1} -> "MgO".
 
     With ``normalize``, uses :func:`normalized_composition` to show atomic
-    fraction instead of raw stoichiometry (COMPFRAC).
+    fraction instead of raw stoichiometry (COMPFRAC). Atomic fractions run
+    several dense decimal digits per element (0.7280, not 3), so unlike raw
+    stoichiometry -- kept glued together as real chemical notation would be
+    (Mn3Pt) -- normalized elements are joined with a space to keep each
+    element's digits from reading as one another's (Mn0.7280 Pt0.2720, not
+    Mn0.7280Pt0.2720).
     """
     if normalize:
         composition = normalized_composition(composition)
-    return "".join(
+    separator = " " if normalize else ""
+    return separator.join(
         f"{symbol}{_count(value, normalize=normalize)}" for symbol, value in composition.items()
     )
 

@@ -157,8 +157,19 @@ def test_structure_label_normalize_shows_atomic_fraction():
     )
     assert (
         structure_label(script, normalize=True)
-        == "Si [500/cm2] - Mn0.7500Pt0.2500 [150A]"
+        == "Si [500/cm2] - Mn0.7500 Pt0.2500 [150A]"
     )
+
+
+def test_structure_label_raw_stoichiometry_stays_glued_together():
+    """Unlike normalize's dense per-element decimals (see
+    test_structure_label_normalize_shows_atomic_fraction), raw stoichiometry
+    is compact enough to read as real chemical notation -- no separating
+    space, matching MgO rather than Mg O."""
+    script = parse_lcm(
+        "Sim Reset\nLayer 1\n Thick 150 A\n Composition Mn 3 Pt 1 /\n"
+    )
+    assert structure_label(script) == "Mn3Pt [150A]"
 
 
 def test_equation_and_species():
