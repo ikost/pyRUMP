@@ -200,7 +200,15 @@ def _setup_readline(session, stack: list[str]) -> None:
 
     readline.set_completer(complete)
     readline.set_completer_delims(" \t\n")
-    readline.parse_and_bind("tab: complete")
+    is_libedit = getattr(readline, "backend", None) == "editline" or "libedit" in (
+        readline.__doc__ or ""
+    )
+    if is_libedit:
+        # macOS ships Python's readline module backed by libedit, which uses
+        # editline's bind syntax instead of GNU readline's "tab: complete".
+        readline.parse_and_bind("bind ^I rl_complete")
+    else:
+        readline.parse_and_bind("tab: complete")
 
 
 def _path_completions(text: str) -> list[str]:
