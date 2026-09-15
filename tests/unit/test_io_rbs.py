@@ -267,6 +267,18 @@ def test_non_rump_file_is_rejected(tmp_path):
         read_rbs(path)
 
 
+def test_rc43_text_macro_points_at_xeq(tmp_path):
+    """RC43 writes an EMPTY/SWALLOW text macro under a .RBS extension; GET
+    should say so plainly rather than surface the word-framing parser's
+    confusing "declares N words" error."""
+    path = tmp_path / "Sample1.RBS"
+    path.write_text(
+        "Empty File 'Sample1.RBS'\r\nIdentifier 'Sample1  170 Degree'\r\n"
+    )
+    with pytest.raises(RbsFormatError, match="use XEQ, not GET"):
+        read_rbs(path)
+
+
 # -------------------------------------------------------------------- ASCII
 
 

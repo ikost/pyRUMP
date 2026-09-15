@@ -90,6 +90,20 @@ class RbsFormatError(ValueError):
     """The file is not a well-formed RUMP binary spectrum."""
 
 
+def _looks_like_text_macro(blob: bytes) -> bool:
+    """True if every byte is printable ASCII or plain whitespace.
+
+    Some RBS acquisition software (e.g. NEC's RC43) writes its output as a
+    plain-text ``EMPTY``/``SWALLOW`` command macro under a ``.RBS`` extension,
+    despite the name suggesting real spectrum data (see repl.py's
+    ``MACRO_EXTENSIONS``). A genuine binary record -- packed floats and a
+    checksum -- reliably contains bytes outside this range, so this is enough
+    to catch the mistake before the word-framing parser below produces a
+    confusing "declares N words" error.
+    """
+    return bool(blob) and all(32 <= byte < 127 or byte in (9, 10, 13) for byte in blob)
+
+
 @dataclass(slots=True)
 class RbsSpectrum:
     """A spectrum plus the metadata the format carries."""
@@ -248,7 +262,14 @@ def _read_differential(reader: _Reader, wanted: int) -> list[float]:
 
 def read_rbs(path: str | Path) -> RbsSpectrum:
     """Read a ``.RBS`` binary spectrum."""
-    blob = Path(path).read_bytes()
+    path = Path(path)
+    blob = path.read_bytes()
+    if _looks_like_text_macro(blob):
+        raise RbsFormatError(
+            f"{path} is a text command macro (RC43's EMPTY/SWALLOW "
+            "convention), not a binary RUMP spectrum -- use XEQ, not GET, "
+            "to load it"
+        )
 
     counts: list[float] = []
     npt = nspectra = 0
