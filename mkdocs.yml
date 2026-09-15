@@ -46,7 +46,6 @@ nav:
   - Home: index.md
   - Getting started:
       - getting-started/index.md
-      - Worked examples: getting-started/examples.md
   - Physics and simulation:
       - physics/index.md
       - Design and validation: physics/validation.md

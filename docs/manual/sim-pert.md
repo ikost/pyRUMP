@@ -94,6 +94,36 @@ Fitted values are written back into the sample description, so `SIM SHOW` and
 any buffer, not just buffer 1, and `MULTI` is the default because the solver is
 a simultaneous least-squares fit (`SINGLE` loops one parameter at a time).
 
+#### Reading the fit report
+
+`reduced chi-square 1.2849 on 20 dof` is the standard Pearson chi-square per
+degree of freedom for Poisson-counting data. `dof` is the number of channels
+inside the active error `WINDOW`(s) minus the number of varying parameters,
+floored at 1 (`chi_square()`, `fit/objective.py`); the reduced value is just
+`chi-square / dof`. As a rule of thumb: close to 1 means the model explains
+the data about as well as counting statistics allow; **much greater than 1**
+points at a systematic mismatch the solver cannot fit away — a missing
+layer, a bad calibration or geometry value, or a window that includes
+non-Rutherford scattering (not modeled here — see the
+[known-limitations note](../dev/about.md#milestones)) — rather than noise,
+since noise alone averages out over hundreds of channels; **much less than
+1** usually means the error window is too narrow or otherwise not exercising
+real Poisson statistics. A residual plot with structure (a slope, a bump the
+model tracks smoothly through) rather than a flat scatter around zero is
+normally where the mismatch actually is.
+
+`N evaluations, <message>` reports how many full spectrum simulations `GO`
+ran, and `<message>` is `scipy.optimize.least_squares`'s own termination
+string verbatim (`fit/lm.py`) -- naming whichever convergence tolerance was
+satisfied first. `xtol` means successive parameter steps became small
+relative to the fitted values; `ftol` means chi-square itself stopped
+improving; both are set to the same tolerance here, so either alone (or
+"Both ... are satisfied") means the fit genuinely settled on a minimum, not
+that it ran out of patience. If the solver instead hits its evaluation cap
+without converging, the same line reports that plainly (e.g. "the maximum
+number of function evaluations is exceeded") rather than the fit silently
+returning a wrong answer.
+
 #### PERT commands
 
 | Command | Effect |
