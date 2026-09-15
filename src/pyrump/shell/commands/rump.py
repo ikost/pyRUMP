@@ -151,11 +151,20 @@ def cmd_help(session, args: ArgReader) -> None:
     from .system import TABLE as SYSTEM_TABLE
 
     if topic is None:
-        leftover = TABLE.uncovered(_HELP_GROUPS)
-        groups = [*_HELP_GROUPS, ("Other", leftover)] if leftover else _HELP_GROUPS
+        # XEQ actually lives in SYSTEM_TABLE (system.c in the original, not
+        # rump.c), but it loads data as often as it runs a macro -- cross-
+        # reference it into Core workflow, right under GET, rather than
+        # leaving it stranded in General System Commands.
+        xeq = SYSTEM_TABLE.match("XEQ")
+        help_groups = [
+            (heading, [names[0], xeq, *names[1:]] if heading == "Core workflow" else names)
+            for heading, names in _HELP_GROUPS
+        ] if xeq else _HELP_GROUPS
+        leftover = TABLE.uncovered(help_groups)
+        groups = [*help_groups, ("Other", leftover)] if leftover else help_groups
         print(TABLE.grouped_help_text(groups[:1]))
         print()
-        print(SYSTEM_TABLE.help_text())
+        print(SYSTEM_TABLE.help_text(exclude={"XEQ"} if xeq else ()))
         print(TABLE.grouped_help_text(groups[1:], show_title=False))
         return
     text = TABLE.describe(topic) or SYSTEM_TABLE.describe(topic)

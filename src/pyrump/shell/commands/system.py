@@ -330,7 +330,7 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("MORE", -4, cmd_type, "display a text file"),
     ("CLS", 3, cmd_cls, "clear the screen"),
     # Macros
-    ("XEQ", 2, cmd_xeq, "execute a command file"),
+    ("XEQ", 2, cmd_xeq, "read RC43 .RBS file or execute a command file"),
     ("CALL", -4, cmd_xeq, "execute a command file"),
     ("EXECUTE", -3, cmd_xeq, "execute a command file"),
     ("ECHO", 4, cmd_echo, "echo commands as they run"),

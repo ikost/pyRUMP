@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import inspect
 import re
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Collection, Iterator, Sequence
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING
 
@@ -143,9 +143,14 @@ class CommandTable:
                 return command
         return None
 
-    def visible(self) -> Iterator[Command]:
-        """Commands that appear in the help listing, in table order."""
-        return (c for c in self.commands if not c.hidden)
+    def visible(self, exclude: Collection[str] = ()) -> Iterator[Command]:
+        """Commands that appear in the help listing, in table order.
+
+        ``exclude`` leaves a command out of *this* table's own listing without
+        touching matching -- e.g. a command cross-referenced into another
+        table's grouped display instead (see :meth:`grouped_help_text`).
+        """
+        return (c for c in self.commands if not c.hidden and c.name not in exclude)
 
     def completions(self, prefix: str) -> list[str]:
         """Command names for tab-completion (visible entries only)."""
@@ -169,9 +174,9 @@ class CommandTable:
             lines.append("  " + "".join(c.display.ljust(column) for c in row).rstrip())
         return "\n".join(lines)
 
-    def help_text(self) -> str:
+    def help_text(self, exclude: Collection[str] = ()) -> str:
         """One command per line with its description, for ``HELP``."""
-        entries = list(self.visible())
+        entries = list(self.visible(exclude))
         if not entries:
             return self.title
         column = max(len(c.display) for c in entries)
@@ -181,18 +186,24 @@ class CommandTable:
         )
         return "\n".join(lines)
 
-    def uncovered(self, groups: Sequence[tuple[str, Sequence[str]]]) -> list[str]:
+    def uncovered(self, groups: Sequence[tuple[str, Sequence[str | Command]]]) -> list[str]:
         """Visible command names named in none of ``groups``.
 
         Feed this back in as a trailing ``("Other", ...)`` group so a command
         added later without updating the grouping is never silently dropped
-        from the ``?``/``HELP`` listing.
+        from the ``?``/``HELP`` listing. A ``Command`` entry (cross-referenced
+        from another table, see :meth:`grouped_help_text`) is never one of
+        *this* table's own visible commands, so it can't cover anything here
+        and is ignored.
         """
-        named = {name for _, names in groups for name in names}
+        named = {item for _, items in groups for item in items if isinstance(item, str)}
         return [c.name for c in self.visible() if c.name not in named]
 
     def grouped_help_text(
-        self, groups: Sequence[tuple[str, Sequence[str]]], *, show_title: bool = True
+        self,
+        groups: Sequence[tuple[str, Sequence[str | Command]]],
+        *,
+        show_title: bool = True,
     ) -> str:
         """Like :meth:`help_text`, but under named sections in a given order.
 
@@ -201,6 +212,12 @@ class CommandTable:
         trailing group. This only changes how the listing is *displayed*;
         matching still runs over ``commands`` in its original (significant)
         order, so abbreviation resolution is untouched.
+
+        An item may also be an actual :class:`Command`, e.g. one looked up
+        from a different table with ``match()`` -- lets a caller cross-
+        reference one command into a more useful section elsewhere (pair
+        this with ``exclude`` on the owning table's own listing, so it isn't
+        shown twice).
 
         ``show_title`` can be turned off to omit the leading table title, for
         a caller making several of these calls in a row to interleave another
@@ -212,8 +229,12 @@ class CommandTable:
         by_name = {c.name: c for c in entries}
         column = max(len(c.display) for c in entries)
         lines = [self.title] if show_title else []
-        for heading, names in groups:
-            rows = [by_name[name] for name in names if name in by_name]
+        for heading, items in groups:
+            rows = [
+                item if isinstance(item, Command) else by_name[item]
+                for item in items
+                if isinstance(item, Command) or item in by_name
+            ]
             if not rows:
                 continue
             lines.append("")
