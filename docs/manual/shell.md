@@ -124,6 +124,7 @@ RUMP's own `WRASCII` output writes it back.
 | `PSI <deg>` | exit angle (GENERAL geometry only) |
 | `GEOMETRY cornell\|ibm\|general` | detector geometry convention |
 | `CONVERSION <keV/ch> [keV(0)]` | energy calibration |
+| `SLOPE <keV/ch>` `[new]` | calibration slope alone, independent of `CONVERSION`'s offset |
 | `OFFSET <keV(0)>` `[new]` | calibration offset alone, independent of `CONVERSION` |
 | `CORRECTION <factor>` | normalization fudge factor |
 | `CHARGE <uC>` | integrated beam dose |

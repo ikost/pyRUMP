@@ -798,6 +798,29 @@ def test_offset_chains_into_a_further_command(session):
 
 
 @needs_data
+def test_slope_changes_only_kevch(session, capsys):
+    run(session, "slope 4.5")
+    calibration = session.buffers[1].calibration
+    assert calibration.kevch == 4.5
+    assert calibration.kev0 == 0.0  # untouched -- CONVERSION's job, not SLOPE's
+    assert "slope = 4.5" in capsys.readouterr().out
+
+
+@needs_data
+def test_slope_with_no_argument_reports_the_current_value(session, capsys):
+    run(session, "slope")
+    assert "slope = 5" in capsys.readouterr().out
+
+
+@needs_data
+def test_slope_chains_into_a_further_command(session):
+    run(session, "slope 4.5 fwhm 20")
+    buffer = session.buffers[1]
+    assert buffer.calibration.kevch == 4.5
+    assert buffer.measurement.fwhm_keV == 20.0
+
+
+@needs_data
 def test_compare_respects_region(session, tmp_path):
     """COMPARE = ``PLOT NOW ... OV THEORY`` in the original (cmds.htm), so it
     should inherit REGION the same way PLOT/OVERLAY do."""
