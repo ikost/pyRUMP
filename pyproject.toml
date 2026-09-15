@@ -36,6 +36,9 @@ dev = [
     "pexpect>=4.9",
     "cffi>=1.16",
 ]
+docs = [
+    "mkdocs-material>=9.7,<10",
+]
 
 [project.urls]
 Homepage = "https://github.com/ikost/pyRUMP"
