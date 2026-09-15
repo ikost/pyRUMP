@@ -863,6 +863,21 @@ def test_structlabel_off_by_default_keeps_sim_label(session, tmp_path):
 
 
 @needs_data
+def test_plot_legend_shows_a_sanitized_id_not_the_raw_buffer_label(session, tmp_path):
+    """Reproduces a WRASCII macro's FILENAME line stamping a full path into
+    buffer.name (see cmd_filename, and GO's own header/footer) -- the legend
+    must show the same clean ID, not that path."""
+    sample = tmp_path / "labels_filename.lcm"
+    sample.write_text(
+        "Sim Reset\nLayer 1\n Thick 500 /cm2\n Composition Si 1 /\nMaxpth 200\n"
+    )
+    run(session, r"filename c:\RBS\data\2026\08\MA8410.RBS", f"sim get {sample}", "compare")
+
+    labels = session.figure.axes[0].get_legend_handles_labels()[1]
+    assert labels == ["MA8410", "SIM"]
+
+
+@needs_data
 def test_structlabel_on_shows_the_sample_structure(session, tmp_path):
     sample = tmp_path / "structlabel_on.lcm"
     sample.write_text(

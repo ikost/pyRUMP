@@ -119,3 +119,31 @@ def test_show_hands_focus_back_on_an_interactive_backend(session, monkeypatch):
     plotting.show(figure)
 
     assert calls == ["capture", ("restore", "token")]
+
+
+def test_buffer_stem_strips_a_windows_path_stamped_into_the_name():
+    """A WRASCII macro's own FILENAME line can stamp a full Windows path
+    straight into buffer.name (see cmd_filename) -- the stem must still be
+    bare."""
+    from types import SimpleNamespace
+
+    buffer = SimpleNamespace(name=r"c:\RBS\data\2026\08\MA8410.RBS", identifier="")
+    assert plotting.buffer_stem(buffer) == "MA8410"
+
+
+def test_buffer_label_sanitizes_a_data_buffers_messy_name(session):
+    from types import SimpleNamespace
+
+    buffer = SimpleNamespace(name=r"c:\RBS\data\2026\08\MA8410.RBS", identifier="")
+    assert plotting.buffer_label(session, buffer, 1) == "MA8410"
+
+
+def test_buffer_label_keeps_a_synthetic_splot_label_untouched(session):
+    """Buffer 0 is always a simulation (Session.selective_simulation's own
+    "SIM(layer 2)" style caption), never data read off disk -- it must not
+    run through buffer_stem's path/comment stripping, which would mangle the
+    space in "layer 2" into a lost token."""
+    from types import SimpleNamespace
+
+    buffer = SimpleNamespace(name="SIM(layer 2)", identifier="")
+    assert plotting.buffer_label(session, buffer, 0) == "SIM(layer 2)"

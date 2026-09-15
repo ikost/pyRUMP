@@ -16,7 +16,9 @@ whole-figure products -- ``COMPARE`` and ``DISPLAY`` -- do reuse
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 
@@ -305,6 +307,30 @@ def mark_matrix(session, buffer, energy_keV: float, channel: float, height: floa
     return True
 
 
+def buffer_stem(buffer) -> str:
+    """A short, filesystem- and legend-safe name for this buffer's spectrum.
+
+    Defends against a buffer's name/identifier holding a full path rather
+    than a bare filename -- e.g. a WRASCII macro's own ``FILENAME`` line
+    stamping a Windows path (``C:\\RBS\\data\\...\\MA8410.RBS``) straight into
+    ``buffer.name``. Splits on both slash conventions regardless of host
+    OS (``Path.stem`` alone only understands the platform's own separator),
+    then keeps just the first whitespace-separated token, so a descriptive
+    trailing comment (``"MA8410.RBS  170 Degree RBS LT = ..."``) doesn't
+    leak in either. Falls back from ``name`` to ``identifier``; ``""`` if
+    neither yields anything usable, leaving the fallback to the caller.
+    """
+
+    def sanitize(text: str) -> str:
+        if not text:
+            return ""
+        tail = re.split(r"[\\/]", text.strip())[-1]
+        tail = tail.split()[0] if tail.split() else tail
+        return Path(tail).stem
+
+    return sanitize(buffer.name) or sanitize(buffer.identifier)
+
+
 def buffer_label(session, buffer, index: int) -> str:
     """The name PLOT/OVERLAY would show for this buffer in a legend.
 
@@ -325,7 +351,13 @@ def buffer_label(session, buffer, index: int) -> str:
         )
         if label:
             return label
-    return buffer.name or buffer.identifier or f"buffer {index}"
+    if index == 0:
+        # Buffer 0 is always a simulation (full or a selective SPLOT), never
+        # data read off disk, so its name is already a clean, purpose-built
+        # caption ("SIM", "SIM(Ru)", "SIM(layer 2)") -- not a filename in
+        # need of buffer_stem's path/comment stripping.
+        return buffer.name or buffer.identifier or f"buffer {index}"
+    return buffer_stem(buffer) or f"buffer {index}"
 
 
 def add_trace(

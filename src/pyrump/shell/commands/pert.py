@@ -23,7 +23,6 @@ Divergences from the original, both noted in the plan:
 
 from __future__ import annotations
 
-import re
 import time
 import warnings
 from dataclasses import dataclass, field, replace
@@ -42,6 +41,7 @@ from ...fit.parameters import (
 )
 from ...fit.windows import MAX_ERROR_WINDOWS, Window, WindowSet
 from ..dispatch import ArgReader, CommandError, CommandTable
+from .. import plotting
 from .rump import Return, cmd_compare
 from .sim import describe as _describe_sample
 from .sim import editor_for
@@ -704,29 +704,11 @@ def _write_back(session, entry: Vary, inputs: FitInputs, before: float) -> None:
         buffer.spectrum.calibration = inputs.calibration
 
 
-def _sanitize_stem(text: str) -> str:
-    """The last path-like segment of ``text``, reduced to a bare stem.
-
-    Defends against a buffer's name/identifier holding a full path rather
-    than a bare filename -- e.g. a WRASCII macro's own ``FILENAME`` line
-    stamping a Windows path (``C:\\RBS\\data\\...\\MA8410.RBS``) straight into
-    ``buffer.name``. Splits on both slash conventions regardless of host
-    OS (``Path.stem`` alone only understands the platform's own separator),
-    then keeps just the first whitespace-separated token, so a descriptive
-    trailing comment (``"MA8410.RBS  170 Degree RBS LT = ..."``) doesn't
-    leak into the filename either.
-    """
-    if not text:
-        return ""
-    tail = re.split(r"[\\/]", text.strip())[-1]
-    tail = tail.split()[0] if tail.split() else tail
-    return Path(tail).stem
-
-
 def _report_stem(buffer) -> str:
     """A short, filesystem-safe name for this buffer's spectrum, shared by
-    every file ``REPORT`` writes -- see :func:`_sanitize_stem`."""
-    return _sanitize_stem(buffer.name) or _sanitize_stem(buffer.identifier) or "buffer"
+    every file ``REPORT`` writes and by the plot legend -- see
+    :func:`~pyrump.shell.plotting.buffer_stem`."""
+    return plotting.buffer_stem(buffer) or "buffer"
 
 
 def _report_path(buffer) -> Path:
