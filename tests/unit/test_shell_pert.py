@@ -406,6 +406,25 @@ def test_slope_accepts_a_bound(session):
 
 
 @needs_data
+def test_kev0_is_a_synonym_for_offset(session):
+    """KEV(0) and OFFSET must select the same underlying parameter, so
+    picking one after the other is rejected as a duplicate, and either one
+    accepts the usual trailing bound."""
+    run(session, "pert", "offset")
+    assert session.pert.varying[0].name == "kev(0)"
+    with pytest.raises(CommandError, match="already being varied"):
+        run(session, "pert", "kev(0)")
+
+
+@needs_data
+def test_kev0_accepts_a_bound(session):
+    run(session, "pert", "kev(0) -10 10")
+    entry = session.pert.varying[0]
+    assert entry.name == "kev(0)"
+    assert entry.bounds == (-10.0, 10.0)
+
+
+@needs_data
 def test_composition_accepts_a_bound(session):
     run(session, "pert", "composition 1 Au 0.5 1.0")
     entry = session.pert.varying[0]
@@ -919,6 +938,21 @@ def test_offset_recovers_a_calibration_shift_and_writes_it_back(tmp_path, capsys
 
     output = capsys.readouterr().out
     assert "kev(0)" in output
+
+
+@needs_data
+def test_offset_saves_as_kev0_not_offset(session, tmp_path):
+    """PARMS/GO already show the RUMP name 'kev(0)' for this parameter (see
+    test_offset_recovers_a_calibration_shift_and_writes_it_back) -- SAVE must
+    round-trip the same word, not the pyRUMP-only command spelling 'offset',
+    so a saved .pert file reads back as the same selection either way."""
+    pert_file = tmp_path / "usual.pert"
+    run(session, "pert", "offset", f"save {pert_file}")
+    assert "kev(0)" in pert_file.read_text()
+    assert "offset" not in pert_file.read_text()
+
+    run(session, "pert", "clear", f"get {pert_file}")
+    assert session.pert.varying[0].name == "kev(0)"
 
 
 @needs_data

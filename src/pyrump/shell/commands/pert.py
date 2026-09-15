@@ -65,11 +65,6 @@ def _format_varying(varying: list[Vary]) -> list[str]:
     return lines
 
 
-#: The few simple-parameter rump-names whose command word differs (pert.py's
-#: OFFSET adds ``kev(0)``, the only one where the two aren't the same string).
-_SIMPLE_PARAMETER_COMMANDS = {"kev(0)": "offset"}
-
-
 def _vary_command(entry: Vary) -> str:
     """The PERT command line that would recreate this one selection."""
     if entry.kind == "thickness":
@@ -83,7 +78,7 @@ def _vary_command(entry: Vary) -> str:
     elif entry.kind == "equation":
         base = f"equation {entry.layer + 1} {entry.index + 1}"
     else:
-        base = _SIMPLE_PARAMETER_COMMANDS.get(entry.name, entry.name)
+        base = entry.name
     if entry.bounds is not None:
         base += f" {entry.bounds[0]:g} {entry.bounds[1]:g}"
     return base
@@ -933,6 +928,7 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("SLOPE", -5, _simple("kev/ch"), "synonym for KEV/CH"),
     ("OFFSET", 3, _simple("kev(0)"),
      "vary the calibration energy offset (e.g. a sample-charging shift) [<min> <max>]"),
+    ("KEV(0)", -6, _simple("kev(0)"), "synonym for OFFSET"),
     ("COMPARE", 0, cmd_compare, "plot the active buffer against the simulation"),
     ("CMP", -3, cmd_compare, "synonym for COMPARE"),
 ]
@@ -940,4 +936,5 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
 for _name, _minlen, _handler, _help in _ENTRIES:
     TABLE.add(_name, _minlen, _handler, _help)
 TABLE.note_synonym("KEV/CH", "SLOPE")
+TABLE.note_synonym("OFFSET", "KEV(0)")
 TABLE.note_synonym("COMPARE", "CMP")

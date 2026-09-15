@@ -118,7 +118,7 @@ a simultaneous least-squares fit (`SINGLE` loops one parameter at a time).
 | `EQUATION <layer> <n> [<min> <max>]` | vary equation parameter *n* |
 | `MEV` / `FWHM` / `THETA` / `CORRECTION` / `STRAGGLE` `[<min> <max>]` | vary that beam, detector or sample parameter |
 | `KEV/CH` / `SLOPE` `[<min> <max>]` | vary the calibration slope, keV per channel |
-| `OFFSET` `[new]` `[<min> <max>]` | vary the calibration energy offset alone (e.g. a sample-charging shift) |
+| `OFFSET` / `KEV(0)` `[<min> <max>]` | vary the calibration energy offset alone (e.g. a sample-charging shift) |
 | `FUZZ` | not implemented — raises an error |
 | `COMPARE` `[new]` | active buffer vs. the simulation, with residuals |
 
