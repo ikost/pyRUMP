@@ -1,40 +1,36 @@
-# pyRUMP
+# [pyRUMP](https://ikost.github.io/pyRUMP/)
 
 [![PyPI](https://img.shields.io/pypi/v/pyrump.svg)](https://pypi.org/project/pyrump/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
+![Measured spectrum compared against a pyRUMP simulation, showing a Si / Ru / Mn2.74Pt1 / Ru stack](docs/assets/mnpt-fit.png)
+*Measured data (black) vs. a pyRUMP simulation (red) of a Si / Ru / Mn<sub>2.74</sub>Pt<sub>1</sub> / Ru stack.*
+
 A clean Python reimplementation of **RUMP**, the Rutherford backscattering
 spectrometry (RBS) simulation and analysis package originally written by
-L. R. Doolittle and M. O. Thompson at Cornell. 
+L. R. Doolittle and M. O. Thompson at Cornell.
 
-This implementations is written using Claude Code.
-
-The original is ~22k lines of unmaintained C from the late 1980s, with a 1996-era
-HTML manual and no active support. pyRUMP reproduces its physics as a tested,
-importable library, with both a batch CLI and RUMP's own interactive shell.
-
-## Install
-
-```bash
-pip install -e .
-```
-
-Python 3.9+, numpy, scipy. The four physics data tables pyRUMP needs at
-runtime ship with the package, so nothing further is needed for simulation,
-fitting, or the interactive shell.
+The original is ~22k lines of unmaintained C from the late 1980s, with no
+active support. This reimplementation is written using Claude Code and
+reproduces RUMP's physics as a tested, importable Python library, with both
+a batch CLI and RUMP's own interactive shell. It runs on Windows, macOS, and
+Linux.
 
 ## Quick start
 
 ```bash
-pyrump                         # the interactive shell, from any directory
+pip install pyrump
 ```
 
+Requires Python 3.9+; numpy, scipy, and matplotlib are installed
+automatically, along with the physics data tables pyRUMP needs at runtime.
+
 ```
-Your wish? get 2A.rbs           /* read a spectrum and its metadata  */
-Your wish? sim                  /* edit the sample description       */
-SIM Command: get ITO.lcm
-SIM Command: return
-Your wish? compare              /* data vs simulation, with residuals */
+pyrump                         # the interactive shell, from any directory
+Your wish? cd examples
+Your wish? xeq MnPt.RBS         /* load the measured spectrum, above    */
+Your wish? sim get MnPt.lcm     /* load its 5-layer sample description  */
+Your wish? compare              /* data vs. simulation, with residuals  */
 ```
 
 Buffer 0 is always the simulation and recomputes itself when the sample or
@@ -56,14 +52,10 @@ The full manual — interactive shell reference, CLI and Python API, worked
 examples, the physics writeup, and the list of RUMP quirks and defects found
 while porting — is at **https://ikost.github.io/pyRUMP/**.
 
-## Changelog
-
-Release notes live on the [GitHub Releases page](https://github.com/ikost/pyRUMP/releases).
-
 ## Contributing
 
 ```bash
-pip install -e ".[dev,plot]"
+pip install -e ".[dev]"
 pytest              # unit tests, no external dependencies
 ruff check .
 ```
