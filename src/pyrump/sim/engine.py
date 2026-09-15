@@ -155,6 +155,7 @@ def simulate_bricks(
     screening: ScreeningModel = ScreeningModel.LECUYER,
     element_filter: int | None = None,
     layer_filter: int | None = None,
+    faithful: bool = True,
 ) -> Bricks:
     """Run the forward model up to the brick stage.
 
@@ -170,6 +171,11 @@ def simulate_bricks(
     *full*, unfiltered stack, so energy loss through material above or below
     the selection is unaffected -- the same order ``SimPrecal``/``SimMakeit``
     keep.
+
+    ``faithful`` (default ``True``) selects RUMP's own ``SQRT_DDS_POWER`` bug
+    in the energy-loss expansion's second-derivative term, everywhere it
+    feeds into the march (see :meth:`~pyrump.stopping.table.StoppingTable.derivative`'s
+    docstring); ``False`` uses the mathematically correct value instead.
     """
     geometry.validate()
 
@@ -192,6 +198,7 @@ def simulate_bricks(
         straggle_scale=sample.straggle,
         z_beam=beam.z,
         first_slab=first_slab,
+        faithful=faithful,
     )
 
     blocks: list[np.ndarray] = []
@@ -241,6 +248,7 @@ def simulate_bricks(
                 cutoff_keV=cutoff_keV,
                 straggle_geometry=geometry_factor,
                 first_slab=first_slab,
+                faithful=faithful,
             )
             if len(block):
                 blocks.append(block.data)
@@ -263,6 +271,7 @@ def simulate(
     convolve_edge: str = "rump",
     element_filter: int | None = None,
     layer_filter: int | None = None,
+    faithful: bool = True,
 ) -> Spectrum:
     """Full forward model: sample in, channel spectrum out.
 
@@ -273,6 +282,8 @@ def simulate(
     straight through to :func:`simulate_bricks`; every stage after bricks
     (convolution, normalisation, pile-up, multiple scattering, background)
     still runs unconditionally, matching ``SimCreateDetails``'s own order.
+
+    ``faithful`` is passed straight through to :func:`simulate_bricks`.
     """
     measurement = measurement or Measurement()
 
@@ -288,6 +299,7 @@ def simulate(
         bricks = simulate_bricks(
             replica, beam, geometry, registry, periodic_table, screening=screening,
             element_filter=element_filter, layer_filter=layer_filter,
+            faithful=faithful,
         )
         if len(bricks) == 0:
             continue

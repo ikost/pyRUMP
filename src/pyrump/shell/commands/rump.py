@@ -861,6 +861,7 @@ def cmd_faithful(session, args: ArgReader) -> None:
     token = args.optional()
     args.done()
     session.settings.faithful = token is None or token.lower() not in ("off", "no", "none")
+    session.touch()  # buffer 0's energy-loss expansion depends on this
     print(f"faithful mode is {'on' if session.settings.faithful else 'off'}")
 
 
@@ -881,6 +882,7 @@ def cmd_screening(session, args: ArgReader) -> None:
             raise CommandError(
                 f"unknown screening model {token!r}; choose from {names}"
             ) from None
+        session.touch()  # buffer 0's cross-section depends on this
     print(f"screening is {session.settings.screening.name}")
 
 

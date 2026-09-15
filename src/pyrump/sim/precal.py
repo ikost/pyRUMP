@@ -114,6 +114,7 @@ def march_inbound(
     z_beam: int = 2,
     e_scale: float = 1.0,
     first_slab: int = 0,
+    faithful: bool = True,
 ) -> InboundPath:
     """March the beam inward, recording energy and straggling per interface.
 
@@ -126,6 +127,11 @@ def march_inbound(
     detector, so the incoming beam never crosses them -- only the outgoing
     particle does. Marching through them on the way in would double-count their
     stopping and shift every edge.
+
+    ``faithful`` selects the C's buggy ``p[2]`` tail in the second-derivative
+    term below (default) or the mathematically correct ``p[1]`` -- see
+    :meth:`~pyrump.stopping.table.StoppingTable.derivative`'s docstring for
+    the bug itself.
     """
     n_slab = slab_coefficients.shape[0]
     energy = np.zeros(n_slab + 1, dtype=np.float64)
@@ -154,13 +160,15 @@ def march_inbound(
         first = coefficients[1:] * _DERIV_SCALE
         p1 = float((first @ powers[:-1]) / (2 * x)) * e_scale
         # d2S/dE2, RUMP's SQRT_DDS_POWER macro -- reads p[2] where the maths
-        # wants p[1] (stopping.h:47-49), reproduced as-is; see
-        # StoppingTable.derivative's own warning for the full story.
+        # wants p[1] (stopping.h:47-49); reproduced when faithful (default),
+        # corrected otherwise. See StoppingTable.derivative's own warning for
+        # the full story.
         head = (
             (3.75 * coefficients[5] * x + 2 * coefficients[4]) * x
             + 0.75 * coefficients[3]
         ) * x * x
-        p2 = float((head - 0.25 * coefficients[2]) / x**3) * e_scale * e_scale
+        tail = coefficients[2] if faithful else coefficients[1]
+        p2 = float((head - 0.25 * tail) / x**3) * e_scale * e_scale
 
         current -= energy_loss_step(p0, p1, p2, sec)
 

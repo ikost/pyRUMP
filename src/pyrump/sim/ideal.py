@@ -51,6 +51,7 @@ def simulate_isotope(
     cutoff_keV: float,
     straggle_geometry: float | None = None,
     first_slab: int = 0,
+    faithful: bool = True,
 ) -> Bricks:
     """Produce one brick per slab for a single target isotope.
 
@@ -63,6 +64,8 @@ def simulate_isotope(
     straggle_geometry:
         The ``stragc = sec_in*K + sec_out`` factor. ``None`` disables straggling,
         which is RUMP's default.
+    faithful:
+        Passed straight through to :func:`~pyrump.sim.outbound.flyout`.
     """
     kinematic = kinematic_factor(m_beam, m_target, scattering_angle_deg)
     n_slab = slab_element_density.size
@@ -96,6 +99,7 @@ def simulate_isotope(
                 sec_out=sec_out,
                 cutoff_keV=cutoff_keV,
                 first_surface=first_slab,
+                faithful=faithful,
             )
             if e_front <= cutoff_keV:
                 break
@@ -129,6 +133,7 @@ def simulate_isotope(
             sec_out=sec_out,
             cutoff_keV=cutoff_keV,
             first_surface=first_slab,
+            faithful=faithful,
         )
         if e_back < cutoff_keV:
             break

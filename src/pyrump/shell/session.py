@@ -526,6 +526,7 @@ class Session:
             reference.calibration,
             reference.measurement,
             screening=self.settings.screening,
+            faithful=self.settings.faithful,
         )
         buffer = Buffer(
             spectrum=spectrum,
@@ -573,6 +574,7 @@ class Session:
             reference.calibration,
             reference.measurement,
             screening=self.settings.screening,
+            faithful=self.settings.faithful,
             element_filter=element_z,
             layer_filter=layer,
         )

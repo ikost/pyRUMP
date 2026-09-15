@@ -179,6 +179,31 @@ def test_faithful_toggle(session):
 
 
 @needs_data
+def test_faithful_toggle_changes_the_simulated_spectrum(session, tmp_path):
+    """Regression for the FAITHFUL command being a no-op end to end: the
+    setting must reach sim/precal.py and sim/outbound.py, and toggling it
+    must invalidate the cached buffer 0 (session.touch()), not just leave
+    session.settings.faithful set with nothing rereading it."""
+    # A wide enough calibration to actually catch these edges (~hundreds of
+    # keV), which the default 5 keV/ch test buffer doesn't reach.
+    session.buffers.get(1).spectrum.calibration = Calibration(kevch=50.0, npt=64)
+    sample = tmp_path / "faithful_toggle.lcm"
+    sample.write_text(_SPLOT_SAMPLE)
+    run(session, f"sim get {sample}")
+
+    run(session, "faithful on")
+    on_first = session.simulation().spectrum.counts.copy()
+
+    run(session, "faithful off")
+    off = session.simulation().spectrum.counts.copy()
+    assert not np.array_equal(on_first, off)
+
+    run(session, "faithful on")
+    on_again = session.simulation().spectrum.counts.copy()
+    assert np.array_equal(on_first, on_again)
+
+
+@needs_data
 def test_faithful_persists_through_a_pyrumprc_style_macro(session, tmp_path):
     rc = tmp_path / ".pyrumprc"
     rc.write_text("faithful off\n")
@@ -200,6 +225,22 @@ def test_screening_select(session, capsys):
     assert session.settings.screening is ScreeningModel.NONE
     run(session, "screening lecuyer")
     assert session.settings.screening is ScreeningModel.LECUYER
+
+
+@needs_data
+def test_screening_change_invalidates_the_cached_simulation(session, tmp_path):
+    """SCREENING had the same staleness bug FAITHFUL did: changing it never
+    called session.touch(), so buffer 0 kept the cross-section computed under
+    the old model until something unrelated marked it dirty."""
+    session.buffers.get(1).spectrum.calibration = Calibration(kevch=50.0, npt=64)
+    sample = tmp_path / "screening_touch.lcm"
+    sample.write_text(_SPLOT_SAMPLE)
+    run(session, f"sim get {sample}")
+
+    lecuyer = session.simulation().spectrum.counts.copy()
+    run(session, "screening andersen")
+    andersen = session.simulation().spectrum.counts.copy()
+    assert not np.array_equal(lecuyer, andersen)
 
 
 @needs_data

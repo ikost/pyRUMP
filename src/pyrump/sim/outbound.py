@@ -36,7 +36,7 @@ def _evaluate(table: StoppingTable, coefficients: np.ndarray, energy_keV: float)
 
 
 def _evaluate_and_derivatives(
-    table: StoppingTable, coefficients: np.ndarray, energy_keV: float
+    table: StoppingTable, coefficients: np.ndarray, energy_keV: float, *, faithful: bool = True
 ) -> tuple[float, float, float]:
     """``p0, d1, d2`` at one energy, reproducing RUMP's ``SQRT_DDS_POWER`` bug.
 
@@ -54,6 +54,11 @@ def _evaluate_and_derivatives(
     those routines are built for. Differentiating a plain power-basis
     polynomial is exactly ``coefficients[1:] * arange(1, NDEG)`` -- inlined
     below, numerically identical, without the generic-array overhead.
+
+    ``faithful`` selects the C's ``p[2]`` (default, matching
+    :meth:`~pyrump.stopping.table.StoppingTable.derivative`'s own bug-for-bug
+    default) or the mathematically correct ``p[1]`` -- see that method's
+    docstring for the bug itself.
     """
     x = table.transform(energy_keV)
     powers = x ** _POWERS
@@ -62,7 +67,8 @@ def _evaluate_and_derivatives(
     d1 = float((first @ powers[:-1]) / (2 * x))
     p = coefficients
     head = ((3.75 * p[5] * x + 2 * p[4]) * x + 0.75 * p[3]) * x * x
-    d2 = float((head - 0.25 * p[2]) / x**3)
+    tail = p[2] if faithful else p[1]
+    d2 = float((head - 0.25 * tail) / x**3)
     return p0, d1, d2
 
 
@@ -76,6 +82,7 @@ def flyout(
     cutoff_keV: float,
     e2_scale: float = 1.0,
     first_surface: int = 0,
+    faithful: bool = True,
 ) -> tuple[float, float]:
     """Walk a scattered particle out to the surface (creatr.c:1953).
 
@@ -84,6 +91,9 @@ def flyout(
     ``from_slab`` is the slab the particle scattered *out of*; the walk covers
     ``from_slab`` down to 0 inclusive. Passing -1 (scattering at the very
     surface) is a no-op with ``ratde = 1``.
+
+    ``faithful`` is passed straight through to
+    :func:`_evaluate_and_derivatives`.
     """
     if from_slab < 0:
         return energy_keV, 1.0
@@ -100,7 +110,9 @@ def flyout(
         step_sec = 1.0e-3 if slab < first_surface else sec
 
         coefficients = slab_coefficients_out[slab]
-        p0, d1, d2 = _evaluate_and_derivatives(table, coefficients, energy * e2_scale)
+        p0, d1, d2 = _evaluate_and_derivatives(
+            table, coefficients, energy * e2_scale, faithful=faithful
+        )
         p1 = d1 * e2_scale
         p2 = d2 * e2_scale * e2_scale
 

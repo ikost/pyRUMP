@@ -49,6 +49,14 @@ expansion (`creatr.c:1554`) — but it is real and it shifts the depth scale.
 `faithful=False` gives the correct value. Covered by
 `test_second_derivative_reproduces_rump_bug`.
 
+This is also the bug `FAITHFUL` actually toggles: `sim/precal.py`'s inbound
+march and `sim/outbound.py`'s `flyout` each have their own inlined copy of
+the same second-derivative term (for speed -- see their own docstrings), and
+both now take a `faithful` argument threaded from `session.settings.faithful`
+through `sim/engine.py`. Before this was wired up, `FAITHFUL OFF` changed the
+setting but nothing downstream ever read it, so it was a silent no-op.
+Covered by `test_faithful_toggle_changes_the_simulated_spectrum`.
+
 ### 3. `-DREAL_IS_DOUBLE` silently corrupts every data table
 
 RUMP's table readers hard-code `%f` in their `scanf` formats while writing into
