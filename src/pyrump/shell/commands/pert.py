@@ -592,19 +592,27 @@ def cmd_autocmp(session, args: ArgReader) -> None:
 
 
 def cmd_report(session, args: ArgReader) -> None:
-    """``REPORT [off]`` -- append every ``GO``'s result to a file named after
-    the sample being fit (default off).
+    """``REPORT [off]`` -- after every ``GO``, save a full record of the fit
+    under the sample's own name (default off).
 
     A pyRUMP-only addition, not part of legacy RUMP. Once on, no further
-    action is needed per sample: each ``GO`` appends its fitted values,
-    uncertainties and chi-square to ``<sample>.report`` in the current
-    directory, where ``<sample>`` is the active data buffer's own file stem
-    (e.g. data loaded from ``MA8410.RBS`` writes ``MA8410.report``) -- so
-    switching samples with ``XEQ``/``GET`` naturally routes later fits to a
-    different file with no filename to remember. ``GO`` echoes "updated
-    <path>" at the end of its own output, so the write is never silent. A
-    standing preference like ``AUTOCMP``: survives ``GET``/``CLEAR``, not
-    saved by ``SAVE``.
+    action is needed per sample: each ``GO`` writes four files named after
+    ``<sample>``, the active data buffer's own file stem (e.g. data loaded
+    from ``MA8410.RBS`` writes files starting ``MA8410``) -- so switching
+    samples with ``XEQ``/``GET`` naturally routes later fits to different
+    files with no filename to remember:
+
+    - ``<sample>.report`` -- fitted values, uncertainties and chi-square,
+      appended (one block per ``GO``, so refitting the same sample keeps a
+      history)
+    - ``<sample>.pert`` -- the PERT selection, as ``PERT SAVE`` would write
+    - ``<sample>.lcm`` -- the sample description, as ``SIM SAVE`` would write
+    - ``<sample>.png`` -- the ``COMPARE`` plot, as ``FIGSAVE``/``HCOPY``
+      would write (drawn fresh for this, even if ``AUTOCMP`` is off)
+
+    ``GO`` echoes each one back ("updated .../wrote ...") at the end of its
+    own output, so none of the writes are silent. A standing preference
+    like ``AUTOCMP``: survives ``GET``/``CLEAR``, not saved by ``SAVE``.
     """
     token = args.optional()
     args.done()
@@ -720,11 +728,15 @@ def _sanitize_stem(text: str) -> str:
     return Path(tail).stem
 
 
+def _report_stem(buffer) -> str:
+    """A short, filesystem-safe name for this buffer's spectrum, shared by
+    every file ``REPORT`` writes -- see :func:`_sanitize_stem`."""
+    return _sanitize_stem(buffer.name) or _sanitize_stem(buffer.identifier) or "buffer"
+
+
 def _report_path(buffer) -> Path:
-    """``<sample>.report``, where ``<sample>`` is a short, filesystem-safe
-    name for this buffer's spectrum -- see :func:`_sanitize_stem`."""
-    stem = _sanitize_stem(buffer.name) or _sanitize_stem(buffer.identifier) or "buffer"
-    return Path(f"{stem}.report")
+    """``<sample>.report``, where ``<sample>`` is :func:`_report_stem`."""
+    return Path(f"{_report_stem(buffer)}.report")
 
 
 def _append_report(buffer, lines: list[str]) -> Path:
@@ -744,9 +756,8 @@ def _append_report(buffer, lines: list[str]) -> Path:
 def cmd_go(session, args: ArgReader) -> None:
     args.done()
     from ...fit.lm import fit
-    from ...script.lcm import structure_label, thickness_label, to_sample
+    from ...script.lcm import structure_label, thickness_label, to_sample, write_lcm
     from ...sim.engine import simulate
-    from .. import plotting
 
     state = state_for(session)
     if not state.varying:
@@ -756,6 +767,15 @@ def cmd_go(session, args: ArgReader) -> None:
 
     data_buffer = session.buffers.require_active()
     observed = np.asarray(data_buffer.spectrum.counts, dtype=float)
+
+    sample_id = _report_stem(data_buffer)
+    initial_structure = structure_label(
+        session.script, normalize=session.plot.composition_fraction
+    )
+    header_lines = [f"  Fitting {sample_id}", f"  {initial_structure}"]
+    for line in header_lines:
+        print(line)
+    report_lines = list(header_lines)
 
     sample = to_sample(session.script, session.table, session.densities)
     inputs = FitInputs(
@@ -813,7 +833,7 @@ def cmd_go(session, args: ArgReader) -> None:
     session.editor = None
     session.touch()
 
-    report_lines = [f"  fit took {elapsed:.2f} s"]
+    report_lines.append(f"\n  fit took {elapsed:.2f} s")
     report_lines.append(
         f"\n  reduced chi-square {result.reduced_chi_square:.4f} on {result.dof} dof"
     )
@@ -840,18 +860,35 @@ def cmd_go(session, args: ArgReader) -> None:
         if sigma:
             line += f"  +/- {sigma:.4g}"
         report_lines.append(line + f"   (was {before_text})")
-    sample_id = plotting.buffer_label(session, data_buffer, session.buffers.active)
-    label = structure_label(session.script, normalize=session.plot.composition_fraction)
-    report_lines.append(f"\n  {sample_id} {label}")
+    new_structure = structure_label(session.script, normalize=session.plot.composition_fraction)
+    report_lines.append(f"\n  {sample_id}")
+    report_lines.append(f"  {new_structure}")
 
-    for line in report_lines:
+    for line in report_lines[len(header_lines):]:
         print(line)
+
+    # REPORT's own .png needs a freshly drawn COMPARE -- draw it once,
+    # whether AUTOCMP asked for it, REPORT needs it, or both.
+    if state.autocmp or state.report:
+        cmd_compare(session, ArgReader([], command="compare"))
+
     if state.report:
+        stem = _report_stem(data_buffer)
         report_path = _append_report(data_buffer, report_lines)
         print(f"\n  updated {report_path}")
 
-    if state.autocmp:
-        cmd_compare(session, ArgReader([], command="compare"))
+        pert_path = Path(f"{stem}.pert")
+        pert_lines = _to_lines(state)
+        pert_path.write_text("\n".join(pert_lines) + ("\n" if pert_lines else ""))
+        print(f"  wrote {pert_path}")
+
+        lcm_path = Path(f"{stem}.lcm")
+        lcm_path.write_text(write_lcm(session.script))
+        print(f"  wrote {lcm_path}")
+
+        png_path = Path(f"{stem}.png")
+        session.figure.savefig(png_path)
+        print(f"  wrote {png_path}")
 
 
 TABLE = CommandTable("PERT Commands")

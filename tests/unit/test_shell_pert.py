@@ -583,7 +583,8 @@ def test_pert_get_go_runs_as_a_single_line(session, tmp_path, capsys):
     output = capsys.readouterr().out
     assert "fit took" in output
     assert "reduced chi-square" in output
-    assert "au Si" in output
+    assert "Fitting au" in output
+    assert "Si [5000/cm2] - Au [" in output
 
 
 @needs_data
@@ -612,7 +613,51 @@ def test_go_recovers_the_thickness_and_writes_it_back(session, capsys):
     assert "fit took" in output
     assert "reduced chi-square" in output
     assert "layer 1 thickness" in output
-    assert "au Si [5000/cm2] - Au [" in output
+    assert "Fitting au" in output
+    assert "Si [5000/cm2] - Au [" in output
+
+
+@needs_data
+def test_go_output_is_bookended_by_the_initial_and_final_structure(session, capsys):
+    """"Fitting <ID>" plus the pre-fit structure open the output, the usual
+    fit report follows, and the post-fit structure (behind a bare ID line,
+    not the messy buffer label) closes it."""
+    run(session, "pert", "window 355 375", "norm 140 200", "thick 1", "go")
+    output = capsys.readouterr().out
+
+    # "layer 1 thickness" also appears earlier, in the "varying ..."
+    # selection echo -- rindex to land on the fitted-result line instead.
+    fitting_at = output.index("Fitting au")
+    took_at = output.index("fit took")
+    result_at = output.rindex("layer 1 thickness")
+    assert fitting_at < took_at < result_at
+
+    # Two structure lines: initial (guess thickness 200/cm2) and final
+    # (recovered close to TRUTH=300/cm2) -- distinct, both present.
+    assert output.count("Si [5000/cm2] - Au [") == 2
+    assert "Au [200/cm2]" in output
+
+    # The closing ID line stands alone -- no structure text glued onto it.
+    lines = output.splitlines()
+    id_lines = [i for i, line in enumerate(lines) if line.strip() == "au"]
+    assert id_lines, "expected a bare 'au' line before the final structure"
+    assert lines[id_lines[-1] + 1].strip().startswith("Si [5000/cm2]")
+
+
+@needs_data
+def test_go_uses_a_sanitized_id_not_the_raw_buffer_label(session, capsys):
+    """Reproduces a WRASCII macro's FILENAME line stamping a full path into
+    buffer.name (see cmd_filename) -- GO's own output must show the clean
+    ID, not that path, in both the header and the closing structure line."""
+    run(session, r"filename c:\RBS\data\2026\08\MA8410.RBS")
+    capsys.readouterr()  # drop FILENAME's own echo of the raw path
+
+    run(session, "pert", "window 355 375", "norm 140 200", "thick 1", "go")
+    output = capsys.readouterr().out
+    assert r"c:\RBS" not in output
+    assert "Fitting MA8410" in output
+    lines = [line.strip() for line in output.splitlines()]
+    assert "MA8410" in lines
 
 
 @needs_data
@@ -703,9 +748,14 @@ def test_report_survives_clear(session):
 
 @needs_data
 def test_report_off_by_default_writes_no_file(session, tmp_path, monkeypatch):
+    # The session fixture itself writes tmp_path/au.lcm (the sample it loads
+    # via SIM GET), so that one extension isn't a useful negative check here
+    # -- .report/.pert/.png are the ones nothing else in the fixture creates.
     monkeypatch.chdir(tmp_path)
     run(session, "pert", "window 355 375", "norm 140 200", "thick 1", "go")
     assert not (tmp_path / "au.report").exists()
+    assert not (tmp_path / "au.pert").exists()
+    assert not (tmp_path / "au.png").exists()
 
 
 @pytest.mark.parametrize(
@@ -749,6 +799,24 @@ def test_report_on_appends_each_go_to_a_sample_named_file(session, tmp_path, mon
 
 
 @needs_data
+def test_report_on_writes_the_full_bundle(session, tmp_path, monkeypatch):
+    """REPORT ON writes all four files -- .report, .pert, .lcm, .png --
+    named after the sample, not just the text report."""
+    monkeypatch.chdir(tmp_path)
+    run(session, "pert", "window 355 375", "norm 140 200", "thick 1", "report", "go")
+
+    assert (tmp_path / "au.report").exists()
+    assert (tmp_path / "au.pert").exists()
+    assert (tmp_path / "au.lcm").exists()
+    png = tmp_path / "au.png"
+    assert png.exists()
+    assert png.stat().st_size > 0
+
+    assert "thickness 1" in (tmp_path / "au.pert").read_text()
+    assert "Composition" in (tmp_path / "au.lcm").read_text()
+
+
+@needs_data
 def test_report_on_prints_a_confirmation_line(session, tmp_path, monkeypatch, capsys):
     """A silent file write is easy to forget is even happening -- GO's own
     output should say so, not just the report file itself."""
@@ -756,6 +824,9 @@ def test_report_on_prints_a_confirmation_line(session, tmp_path, monkeypatch, ca
     run(session, "pert", "window 355 375", "norm 140 200", "thick 1", "report", "go")
     output = capsys.readouterr().out
     assert "updated au.report" in output
+    assert "wrote au.pert" in output
+    assert "wrote au.lcm" in output
+    assert "wrote au.png" in output
 
 
 @needs_data

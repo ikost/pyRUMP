@@ -72,14 +72,24 @@ PERT Command: go
 ```
 
 ```
+  Fitting SC0338
+  Si [5000/cm2] - Au [200/cm2]
+
   fit took 0.34 s
   reduced chi-square 1.2849 on 20 dof
   12 evaluations, Both `ftol` and `xtol` termination conditions are satisfied.
   data scaled by 0.99441 over the norm window
   layer 1 thickness                    299  +/- 0.3801   (was 200)
 
-  SC0338.RBS Si [5000/cm2] - Au [299/cm2]
+  SC0338
+  Si [5000/cm2] - Au [299/cm2]
 ```
+
+`GO` now opens with "Fitting `<ID>`" and the sample's structure *before* the
+fit, and closes with the same `<ID>` (bare, never the buffer's raw path/label)
+and the structure *after* -- `<ID>` is the active data buffer's own file stem
+(see `REPORT`), so it's stable even if a WRASCII macro stamped a full path
+into the buffer's name via `FILENAME`.
 
 Fitted values are written back into the sample description, so `SIM SHOW` and
 `SIM SAVE` reflect them. Two differences from the original: the data may be in
@@ -103,7 +113,7 @@ a simultaneous least-squares fit (`SINGLE` loops one parameter at a time).
 | `SINGLE` / `MULTI` | fit one parameter at a time / all together (default) |
 | `VOLUME [off]` | print a line per model evaluation during `GO` |
 | `AUTOCMP [off]` | run `COMPARE` automatically at the end of `GO` (default off) |
-| `REPORT [off]` | append every `GO`'s result to `<sample>.report` -- named after the active data buffer's own file stem, so switching samples with `XEQ`/`GET` routes later fits to a different file automatically (default off) |
+| `REPORT [off]` | after every `GO`, save `<sample>.report` (fit results, appended), `<sample>.pert` (`PERT SAVE`), `<sample>.lcm` (`SIM SAVE`) and `<sample>.png` (`FIGSAVE`) -- `<sample>` is the active data buffer's own file stem, so switching samples with `XEQ`/`GET` routes later fits to different files automatically (default off) |
 | `THICKNESS <layer> [<min> <max>]` | vary a layer's thickness, optionally bounded |
 | `COMPOSITION <layer> <El> [<min> <max>]` | vary one element's composition in a layer (must already be declared there) |
 | `SPECIES <layer> <El> [<min> <max>]` | vary the `EQUATION` species composition (must already be declared there) |
