@@ -1,6 +1,6 @@
-## Interactive shell
+## pyRUMP shell
 
-Running `pyrump` with no arguments starts the interactive shell — RUMP's own
+Running `pyrump` with no arguments starts the pyRUMP shell — RUMP's own
 working style, from any directory:
 
 ```
@@ -31,71 +31,178 @@ Commands tagged `[new]` below have no original-RUMP counterpart — see the
 [Changelog](https://github.com/ikost/pyRUMP/releases)'s versioning note for what that means for
 `pip install`.
 
-### Session and mode commands
+The sections below follow `?`'s own grouping and order, most important
+first — typing `?` at the RUMP prompt reproduces this same structure.
 
-| Command | Effect |
-| --- | --- |
-| `?` / `HELP` | list the commands available at the current level |
-| `SIM` | enter the sample-description editor, its own prompt |
-| `PERT` | enter the fitting sub-processor, its own prompt |
-| `RETURN` | leave `SIM`/`PERT` back to the RUMP level |
-| `DATA [dir]` | print, or reload the atomic tables from, a data directory |
-| `QUIT` / `BYE` | leave pyRUMP (asks to confirm, when run interactively) |
-| `FAITHFUL [on\|off]` `[new]` | toggle bug-for-bug vs. corrected physics (see [Design and validation](../physics/validation.md)) |
+## General system commands
 
-`SIM <command>` also runs one SIM command without leaving the RUMP level, e.g.
-`sim thick 500 A` — handy inside a one-line macro or when you only need to
-tweak one thing.
+#### `?` / `HELP`
 
-### Getting around
+```
+Your wish? help help
+  HELP  list the commands
+  usage: ? [name]
+```
 
-The shell has RUMP's own filesystem commands (a port of the "General System
-Commands" table at `lexp/system.c:175`), so you can move to your data rather than
-restarting in the right directory:
+Lists every command at the current level, one section per table — e.g. at
+the RUMP level, "Core workflow", "Settings", and so on, matching the
+original's own grouping (`rump.c:351-360`). `HELP <name>` (or `? <name>`)
+describes one command instead. A name this level doesn't know falls through
+to whatever a sub-level would resolve it to, so `HELP THICK` works from the
+RUMP prompt even though `THICK` is a `PERT` command.
 
-| Command | Effect |
-| --- | --- |
-| `PWD` / `WHERE` | print the working directory |
-| `CD <dir>` / `CHDIR` | change directory; **no argument goes home** |
-| `PUSHDIR <dir>` / `POPDIR` | change directory remembering the old one, and come back |
-| `LS [pattern]` / `DIRECTORY` | list files; `ls *.rbs` filters |
-| `LL [pattern]` | long listing, with size and date |
-| `TYPE <file>` / `CAT` / `MORE` | show a text file, paged when interactive |
-| `CLS` | clear the screen |
+#### `QUIT` / `BYE`
 
-Wildcards are expanded by the command itself, never by an OS shell, so `ls *.rbs`
-behaves the same on Linux, macOS and Windows. Tab completion works on both
-command names and paths.
+Leaves pyRUMP. Run interactively (not from an `XEQ` macro, which has no one
+at the keyboard to answer), it asks "Really quit pyRUMP? [y/N]" first;
+anything but `y`/`yes` cancels.
 
-These are reachable from `SIM` and `PERT` too — as in the original, a command the
-sub-level does not know returns you to the RUMP level and runs there.
+The rest of this section is a port of RUMP's own filesystem commands
+(`lexp/system.c:175`), so you can move to your data rather than restarting
+pyRUMP in the right directory. Reachable from every level — as in the
+original, a command `SIM`/`PERT` doesn't know returns you to the RUMP level
+and runs there.
 
-There is deliberately **no shell escape** (the original's `!` / `DOS` / `CSH`):
-it would let any `.cmd` macro run arbitrary commands on your machine.
+Wildcards are expanded by the command itself, never by an OS shell, so `ls
+*.rbs` behaves the same on Linux, macOS and Windows. Tab completion works on
+both command names and paths.
 
-### Buffers
+There is deliberately **no shell escape** (the original's `!` / `DOS` /
+`CSH`): it would let any `.cmd` macro run arbitrary commands on your
+machine.
 
-Spectra live in numbered buffers, one of which is ACTIVE and is what most
-commands act on implicitly. Buffer **0 is the simulation**; data starts at 1.
+#### `LS` / `DIRECTORY` / `SL`
 
-| Command | Effect |
-| --- | --- |
-| `GET <file\|n>` | read a file into a buffer, or point at buffer *n* (`READ` reads a file only) |
-| `POINTAT <n>` | point at buffer *n*, by number only |
-| `BUFFERS` | list the buffers, marking the active one |
-| `ACTIVE` | print the active buffer's full parameter set |
-| `EMPTY [n]` | scroll a fresh blank buffer into buffer 1 (default), or reset buffer *n* in place |
-| `COPY a b` / `MOVE a b` | copy / exchange |
-| `RELEASE [n]` / `NEWALL` | drop one buffer (default: active) / drop all |
-| `WRITE f.rbs` / `WRASCII f.dat` | save the active buffer, binary or text |
-| `RECALCULATE` | force buffer 0 (the simulation) to recompute |
+```
+Your wish? help ls
+  LS  list files, optionally matching a pattern
+  usage: LS [pattern]
+```
 
-Reading a file you don't already have open always lands it in buffer 1 and
-becomes ACTIVE, pushing every other data buffer up one slot -- matching the
-original, where buffer 1 is "whatever was read most recently," not a fixed
-slot. Unlike the original, though, nothing ever falls off the end and gets
-destroyed to make room: the buffer list just keeps growing. Re-`GET`ting a
-file already open in some buffer just re-selects it in place, without
+Lists files, optionally matching a glob (`ls *.rbs`). `SL` is a bare
+synonym, not shown in `?`'s listing but still usable.
+
+#### `LL`
+
+```
+Your wish? help ll
+  LL  long listing with size and date
+  usage: LL [pattern]
+```
+
+Long listing: size and modification time, columned. Deliberately not Unix
+permission bits — they carry no meaning on Windows, and this listing looks
+the same on every platform.
+
+#### `CD` / `CHDIR`
+
+```
+Your wish? help cd
+  CD  change directory (no argument: home)
+  usage: CD [directory]
+```
+
+Changes directory; with no argument, goes home.
+
+#### `PUSHDIR` / `POPDIR`
+
+```
+Your wish? help pushdir
+  PUSHDir  change directory, remembering this one
+  usage: PUSHDIR [dir]
+```
+
+`PUSHDIR <dir>` remembers the current directory before changing to `<dir>`
+(or home, with no argument); `POPDIR` changes back to it.
+
+#### `PWD` / `WHERE`
+
+Prints the working directory.
+
+#### `TYPE` / `CAT` / `MORE`
+
+```
+Your wish? help type
+  TYpe  display a text file
+  usage: TYPE <file>
+```
+
+Shows a text file, paged a screenful at a time when there's an actual
+terminal to pause for — under `XEQ`, `--batch`, or in tests, it prints
+straight through instead of blocking for a keypress.
+
+#### `CLS`
+
+Clears the screen.
+
+#### `XEQ` / `CALL` / `EXECUTE`
+
+```
+Your wish? help xeq
+  XEq  read RC43 .RBS file or execute a command file
+  usage: XEQ <file>
+```
+
+Runs a file of commands through the same interpreter the prompt uses, so an
+analysis can be checked in as a text file and replayed. A bare name with no
+extension is tried as-is, then as `.cmd`, then as `.rbs`/`.RBS` -- the last
+two `[new]` because some RBS acquisition software writes its output as a
+plain `EMPTY`/`SWALLOW` command macro under that extension (see
+[File formats](#file-formats)), despite the name suggesting real spectrum
+data. `XEQ`ing an actual binary `.rbs` file (that belongs with `GET`) fails
+with a clear message rather than a decode error.
+
+```
+Your wish? get measured.rbs     /* binary format -- reads records directly */
+Your wish? xeq acquired.rbs     /* text macro -- replayed as commands      */
+```
+
+#### `ECHO` / `QUIET`
+
+```
+Your wish? help echo
+  ECHO  echo commands as they run
+  usage: ECHO [off]
+```
+
+`ECHO [off]` toggles whether commands are echoed as they run — most useful
+inside an `XEQ` macro, to see what's actually executing. `QUIET` is the
+original's own off-synonym for `ECHO`.
+
+#### `SCRIPT` / `LOGFILE` / `RECORD`
+
+```
+Your wish? help script
+  SCRIPT  record commands to a file for replay
+  usage: SCRIPT [file|off]
+```
+
+Logs what you type into a file, for later replay with `XEQ`; `SCRIPT OFF`
+(or `LOGFILE OFF`/`RECORD OFF`) stops. Needs at least four characters, which
+is how the original kept it clear of `LOG` — the logarithmic yield axis.
+Typing `log` gets you the axis, `logf` the session log.
+
+Standing per-user defaults (the `FAITHFUL` toggle, default experiment
+settings, plot state) are set once via `~/.pyrumprc` rather than every
+session — see [Config](config.md).
+
+### Core workflow
+
+#### `GET` / `READ`
+
+```
+Your wish? help get
+  GET  point at a buffer, or read a file into one
+  usage: GET <file|n>
+```
+
+Reads a file into a buffer, or points at buffer *n* (`READ` reads a file
+only). Reading a file you don't already have open always lands it in buffer
+1 and becomes ACTIVE, pushing every other data buffer up one slot -- matching
+the original, where buffer 1 is "whatever was read most recently," not a
+fixed slot. Unlike the original, though, nothing ever falls off the end and
+gets destroyed to make room: the buffer list just keeps growing. Re-`GET`ting
+a file already open in some buffer just re-selects it in place, without
 scrolling anything (`cmds.htm`'s documented `PLOT` behaviour). Buffer 0 has
 **no simulate command**: it is recomputed whenever the sample or the active
 buffer's parameters change, which is how RUMP behaved.
@@ -107,35 +214,313 @@ Your wish? get 0                /* point back at the simulation       */
 Your wish? copy 0 2              /* snapshot the simulation into buffer 2 */
 ```
 
-### Buffer and spectrum parameters
+#### `XEQ`
+
+Cross-referenced here from [General system commands](#xeq-call-execute):
+`XEQ <file>` runs a command file, and loads data about as often as it runs a
+macro, so it belongs alongside `GET` as much as alongside the filesystem
+commands it's filed under.
+
+#### `SIM`
+
+Enters the sample-description editor: its own `SIM Command:` prompt, for
+building or editing the layered target `PERT` fits against and `COMPARE`
+plots. See [SIM and PERT](sim-pert.md).
+
+`SIM <command>` runs one SIM command without leaving the RUMP level and
+returning, e.g. `sim thick 500 A` — handy inside a one-line macro, or when
+you only need to tweak one thing:
+
+```
+Your wish? sim thick 1 500 A
+  layer 1 thickness = 500 A
+```
+
+#### `PERT`
+
+Enters the fitting sub-processor: its own `PERT Command:` prompt, for
+selecting what varies and running the least-squares search. Same one-shot
+form as `SIM` — `PERT GO` re-runs the last selection without entering the
+prompt. See [SIM and PERT](sim-pert.md).
+
+#### `COMPARE` / `CMP`
+
+Active buffer vs. the simulation, with Poisson residuals and a reduced
+chi-square readout (over `PERT`'s error windows if set, else the visible
+`REGION`). `CMP` is a synonym, usable at the RUMP, SIM, and PERT levels
+alike — see the abbreviation note above for why `COMPARE` itself needs its
+full name.
+
+#### `PLOT`
+
+```
+Your wish? help plot
+  PLot  erase and plot a buffer or file
+  usage: PLOT [buffer|file]
+```
+
+Erases and plots a buffer (default: active) or file. The plot is one
+persistent matplotlib window whose state survives between commands — see
+[Plotting & display](#plotting-display) for everything that shapes it.
+
+```
+Your wish? plot 1               /* erase and plot buffer 1            */
+```
+
+#### `RECALCULATE`
+
+Forces buffer 0 (the simulation) to recompute. Rarely needed by hand —
+`SIM`/`PERT` changes already trigger it — but useful after something that
+doesn't, e.g. reloading the atomic tables with `DATA`.
+
+#### `RETURN`
+
+Leaves `SIM` or `PERT` back to the RUMP level. Typing a command neither
+sub-level recognizes does the same thing implicitly — it falls through to
+RUMP and runs there — so `RETURN` is only needed to get back with nothing
+else to run.
+
+### Plotting & display
+
+The plot is one persistent matplotlib window whose state survives between
+commands. matplotlib installs by default with pyrump.
+
+#### `OVERLAY`
+
+```
+Your wish? help overlay
+  OVerlay  overlay a buffer or file on the current plot
+  usage: OVERLAY [buffer|file]
+```
+
+Adds another trace to the current plot, without erasing it.
+
+```
+Your wish? overlay 0            /* add the simulation on top          */
+```
+
+#### `REPLOT`
+
+Redraws the current plot, unchanged — useful after resizing the window or
+after a setting that doesn't redraw on its own.
+
+#### `FIGSAVE` / `HCOPY`
+
+```
+Your wish? help figsave
+  FIGSave / HCOPY  save the current plot to an image file, e.g. FIGSAVE out.png
+  usage: FIGSAVE <file>
+```
+
+Saves the current plot to an image file (`.png` by default; format follows
+the extension). `HCOPY` is a synonym, the original's own name for the
+command (a literal hard-copy to a plotter, in RUMP's day).
+
+#### `REGION`
+
+```
+Your wish? help region
+  REGion  set the channel range
+  usage: REGION lo hi
+```
+
+Sets the channel range shown.
+
+```
+Your wish? region 100 400
+```
+
+#### `EXPAND`
+
+```
+Your wish? help expand
+  EXpand  narrow the region and replot
+  usage: EXPAND lo hi
+```
+
+Narrows the current region and redraws — a `REGION` that's relative to what's
+already shown rather than absolute channel numbers.
+
+#### `COUNTS`
+
+```
+Your wish? help counts
+  COunts  set the yield range
+  usage: COUNTS lo [hi]
+```
+
+Sets the yield range shown.
+
+#### `LINEAR` / `SQRT` / `LOG`
+
+Sets the yield axis scale. `sqrt` redraws immediately with the new scale:
+
+```
+Your wish? sqrt                 /* redraws immediately, sqrt yield    */
+```
+
+#### `NORMALIZE` / `RAW`
+
+Toggles between normalized and raw yield units on the plot.
+
+#### `LABELS`
+
+```
+Your wish? help labels
+  LAbels  label the axes (LABELS OFF to suppress)
+  usage: LABELS [off]
+```
+
+Turns axis labels on or off.
+
+#### `STRUCTLABEL`
+
+```
+Your wish? help structlabel
+  STRUctlabel  show the sample's layer structure as the simulation's legend text (STRUCTLABEL OFF for "SIM")
+  usage: STRUCTLABEL [off]
+```
+
+Shows the `SIM` sample's layer structure (substrate first) as the
+simulation's legend text, instead of "SIM".
+
+#### `COMPFRAC` `[new]`
+
+```
+Your wish? help compfrac
+  COMPfrac  show composition (STRUCTLABEL and SHOW) as atomic fraction, not raw stoichiometry
+  usage: COMPFRAC [off]
+```
+
+Shows each layer's composition as atomic fraction (sums to 1) instead of raw
+stoichiometry, in both `STRUCTLABEL` and SIM/PERT `SHOW`.
+
+#### `ENERGY`
+
+```
+Your wish? help energy
+  ENERgy  x axis in energy rather than channel
+  usage: ENERGY [off]
+```
+
+Puts the x axis in energy (keV) rather than channel.
+
+#### `AXIS`
+
+Draws empty axes, with no data.
+
+#### `BLOWUP`
+
+```
+Your wish? help blowup
+  BLowup  expand the vertical scale
+  usage: BLOWUP <max>
+```
+
+Shorthand for `COUNTS 0 <max>`.
+
+#### `PARAMETERS` / `PARMS`
+
+Prints the current plot settings.
+
+#### `DISPLAY`
+
+Plots the sample composition against depth, from the `SIM` description.
+
+### Buffers
+
+Spectra live in numbered buffers, one of which is ACTIVE and is what most
+commands act on implicitly. Buffer **0 is the simulation**; data starts at
+1. See [`GET`](#get-read) in Core workflow for how a freshly
+read file gets slotted in.
+
+#### `BUFFERS`
+
+Lists the buffers, marking the active one.
+
+#### `READ`
+
+```
+Your wish? help read
+  REad  read a file into a buffer
+  usage: GET <file|n>
+```
+
+Cross-referenced from [Core workflow](#get-read): `READ <file>`
+reads a file into a buffer, same as `GET` except it never accepts a bare
+buffer number.
+
+#### `POINTAT`
+
+```
+Your wish? help pointat
+  POintat  point at a buffer by number
+  usage: POINTAT <n>
+```
+
+Points at buffer *n*, by number only — unlike `GET`, which also accepts a
+filename.
+
+#### `RELEASE` / `NEWALL`
+
+```
+Your wish? help release
+  RELEASE  release the active buffer
+  usage: RELEASE [n]
+```
+
+`RELEASE` drops one buffer (default: active); `NEWALL` drops all of them.
+
+#### `EMPTY`
+
+```
+Your wish? help empty
+  EMPty  reset a buffer to blank, or open a new one
+  usage: EMPTY [n]
+```
+
+Scrolls a fresh blank buffer into buffer 1 (default), or resets buffer *n*
+in place.
+
+#### `COPY` / `MOVE`
+
+```
+Your wish? help copy
+  COPY  copy one buffer to another
+  usage: COPY <source> <target>
+
+Your wish? help move
+  MOVE  exchange two buffers
+  usage: MOVE <a> <b>
+```
+
+`COPY` duplicates a buffer; `MOVE` exchanges two.
+
+```
+Your wish? copy 0 2              /* snapshot the simulation into buffer 2 */
+```
+
+#### `WRITE` / `WRASCII`
+
+```
+Your wish? help write
+  WRITE  write the active buffer to a .rbs file
+  usage: WRITE <file>
+
+Your wish? help wrascii
+  WRAscii  write the active buffer as text
+  usage: WRASCII <file>
+```
+
+Saves the active buffer, binary or text.
+
+### Sample & instrument parameters
 
 Each buffer carries its own beam, geometry, calibration and measurement
-metadata. Every one of these **prints the current value with no argument, and
-sets it (echoing the new value) with one** — and chains onto any further
-command left on the line, so `Choff 0 FWHM 15` works in one go, exactly as
-RUMP's own `WRASCII` output writes it back.
-
-| Command | Sets |
-| --- | --- |
-| `BEAM 4He++` | beam species and charge state |
-| `MEV <energy>` | beam energy, MeV |
-| `THETA <deg>` | sample tilt |
-| `PHI <deg>` | 180° minus the scattering angle |
-| `PSI <deg>` | exit angle (GENERAL geometry only) |
-| `GEOMETRY cornell\|ibm\|general` | detector geometry convention |
-| `CONVERSION <keV/ch> [keV(0)]` | energy calibration |
-| `SLOPE <keV/ch>` `[new]` | calibration slope alone, independent of `CONVERSION`'s offset |
-| `OFFSET <keV(0)>` `[new]` | calibration offset alone, independent of `CONVERSION` |
-| `CORRECTION <factor>` | normalization fudge factor |
-| `CHARGE <uC>` | integrated beam dose |
-| `CURRENT <nA>` | average beam current — enables pile-up with `TAU` |
-| `CHOFF <n>` | channel number of the first data point |
-| `FWHM <keV>` | detector resolution |
-| `OMEGA <msr>` | detector solid angle |
-| `TAU <us>` | MCA shaping time |
-| `IDENTIFIER <text>` | free-text spectrum description |
-| `DATE <text>` | when the spectrum was measured |
-| `FILENAME <name>` | recorded source filename |
+metadata. Every one of these **prints the current value with no argument,
+and sets it (echoing the new value) with one** — and chains onto any
+further command left on the line, so `Choff 0 FWHM 15` works in one go,
+exactly as RUMP's own `WRASCII` output writes it back.
 
 ```
 Your wish? beam 4He++
@@ -146,83 +531,300 @@ Your wish? conversion 5.0 0
   5 keV/channel, offset 0 keV
 ```
 
-`SWALLOW [-twocolumn]`, used inside an `XEQ` macro, reads the macro file's
-following lines straight into the active buffer as channel data (or
-channel/value pairs), stopping at the first blank line — how a RUMP-written
-`.cmd` file reconstructs a spectrum inline.
+#### `ACTIVE`
 
-### Plotting
+Prints the active buffer's full parameter set.
 
-The plot is one persistent matplotlib window whose state survives between
-commands.
-
-| Command | Effect |
-| --- | --- |
-| `PLOT [buffer\|file]` | erase and plot a buffer (default: active) or file |
-| `OVERLAY [buffer\|file]` | add another trace to the current plot |
-| `REPLOT` | redraw the current plot, unchanged |
-| `AXIS` | draw empty axes, with no data |
-| `COMPARE` | active buffer vs. the simulation, with Poisson residuals and a reduced chi-square readout (over PERT's error windows if set, else the visible REGION) |
-| `CMP` | synonym for `COMPARE`, at the RUMP, SIM, and PERT levels alike |
-| `FIGSAVE <file>` | save the current plot to an image file (`.png` by default; format follows the extension) |
-| `HCOPY <file>` | synonym for `FIGSAVE` |
-| `DISPLAY` | sample composition vs. depth (from the SIM description) |
-| `REGION lo hi` | channel range shown |
-| `EXPAND lo hi` | narrow the current region and redraw |
-| `COUNTS lo [hi]` | yield range shown |
-| `BLOWUP <max>` | shorthand for `COUNTS 0 <max>` |
-| `LINEAR` / `SQRT` / `LOG` | yield axis scale |
-| `NORMALIZE` / `RAW` | normalized vs. raw yield units |
-| `LABELS [off]` | axis labels on or off |
-| `STRUCTLABEL [off]` | show the SIM sample's layer structure (substrate first) as the simulation's legend text, instead of "SIM" |
-| `COMPFRAC [off]` `[new]` | show each layer's composition as atomic fraction (sums to 1) instead of raw stoichiometry, in both `STRUCTLABEL` and SIM/PERT `SHOW` |
-| `ENERGY [off]` | x axis in energy (keV) rather than channel |
-| `PARMS` / `PARAMETERS` | print the current plot settings |
+#### `BEAM`
 
 ```
-Your wish? plot 1               /* erase and plot buffer 1            */
-Your wish? overlay 0            /* add the simulation on top          */
-Your wish? region 100 400
-Your wish? sqrt                 /* redraws immediately, sqrt yield    */
+Your wish? help beam
+  BEAM  incident beam species, e.g. 4He++
+  usage: BEAM 4He++
 ```
 
-matplotlib installs by default with pyrump.
+Sets the beam species and charge state.
 
-### Analysis
+#### `MEV`
+
+```
+Your wish? help mev
+  MEV  beam energy
+  usage: MEV <energy>
+```
+
+Sets the beam energy, MeV.
+
+#### `THETA`
+
+```
+Your wish? help theta
+  THEta  sample tilt
+  usage: THETA <deg>
+```
+
+Sets the sample tilt.
+
+#### `PHI`
+
+```
+Your wish? help phi
+  PHI  supplement of the scattering angle
+  usage: PHI <deg>
+```
+
+Sets 180° minus the scattering angle.
+
+#### `PSI`
+
+```
+Your wish? help psi
+  PSI  exit angle
+  usage: PSI <deg>
+```
+
+Sets the exit angle (GENERAL geometry only).
+
+#### `GEOMETRY`
+
+```
+Your wish? help geometry
+  GEOMetry  cornell, ibm or general
+  usage: GEOMETRY cornell|ibm|general
+```
+
+Sets the detector geometry convention.
+
+#### `CONVERSION`
+
+```
+Your wish? help conversion
+  CONVersion  keV per channel and offset
+  usage: CONVERSION <keV/ch> [keV(0)]
+```
+
+Sets the energy calibration: slope and, optionally, offset together.
+
+#### `SLOPE` `[new]`
+
+```
+Your wish? help slope
+  SLOpe  keV/channel alone, independent of CONVERSION's offset
+  usage: SLOPE <keV/ch>
+```
+
+Sets the calibration slope alone, independent of `CONVERSION`'s offset.
+
+#### `OFFSET` `[new]`
+
+```
+Your wish? help offset
+  OFFset  keV(0) alone, independent of CONVERSION's keV/ch
+  usage: OFFSET <keV(0)>
+```
+
+Sets the calibration offset alone, independent of `CONVERSION`'s slope.
+
+#### `CORRECTION`
+
+```
+Your wish? help correction
+  CORrection  normalization fudge factor
+  usage: CORRECTION <factor>
+```
+
+Sets the normalization fudge factor that absorbs charge-integration error
+(RUMP's `CORR`). `PERT`'s `NORMALIZE` window can set this automatically from
+a fit instead of you setting it by hand — see
+[PERT commands](sim-pert.md#pert-commands).
+
+#### `CHARGE`
+
+```
+Your wish? help charge
+  CHarge  beam dose
+  usage: CHARGE <uC>
+```
+
+Sets the integrated beam dose.
+
+#### `CURRENT`
+
+```
+Your wish? help current
+  CURRent  average beam current, for pileup
+  usage: CURRENT <nA>
+```
+
+Sets the average beam current — enables pile-up modeling together with
+`TAU`.
+
+#### `CHOFF`
+
+```
+Your wish? help choff
+  CHOff  channel number of the first data point
+  usage: CHOFF <n>
+```
+
+Sets the channel number of the first data point.
+
+#### `FWHM`
+
+```
+Your wish? help fwhm
+  FWHM  detector resolution
+  usage: FWHM <keV>
+```
+
+Sets the detector resolution.
+
+#### `OMEGA`
+
+```
+Your wish? help omega
+  OMEGA  detector solid angle
+  usage: OMEGA <msr>
+```
+
+Sets the detector solid angle.
+
+#### `TAU`
+
+```
+Your wish? help tau
+  TAU  MCA shaping time
+  usage: TAU <us>
+```
+
+Sets the MCA shaping time constant.
+
+#### `IDENTIFIER`
+
+```
+Your wish? help identifier
+  IDEntifier  description of the spectrum
+  usage: IDENTIFIER <text>
+```
+
+Sets a free-text spectrum description.
+
+#### `DATE`
+
+```
+Your wish? help date
+  DATE  when the spectrum was measured
+  usage: DATE <text>
+```
+
+Sets when the spectrum was measured.
+
+#### `FILENAME`
+
+```
+Your wish? help filename
+  FILEname  record the buffer's source filename
+  usage: FILENAME <name>
+```
+
+Sets the recorded source filename.
+
+#### `SWALLOW`
+
+```
+Your wish? help swallow
+  SWALLOW  read the following macro lines as channel data
+  usage: SWALLOW [-twocolumn]
+```
+
+Used inside an `XEQ` macro, reads the macro file's following lines straight
+into the active buffer as channel data (or channel/value pairs), stopping at
+the first blank line — how a RUMP-written `.cmd` file reconstructs a
+spectrum inline.
+
+### Analysis tools
 
 Element identification, calibration, and quantification, ported from RUMP's
 `anlytc.c` command family. All of these act on the active buffer; region
 arguments are plain 0-based channel indices, matching `INTEGRAL`'s existing
 convention (not RUMP's own `first`-relative channel numbering).
 
-| Command | Effect |
-| --- | --- |
-| `ELEMENT el [el ...]` | expected K, energy and channel of each element's surface edge |
-| `MATRIX el` | expected energy, channel **and matrix height** for one element |
-| `WHATISIT <channel>` | identify the elements whose surface edge is nearest a channel |
-| `INFO el` | full report: density, K, cross section, stopping factors, isotopes |
-| `INTEGRAL lo hi` | gross/net counts over a channel range (background-corrected net) |
-| `THICKNESS lo hi el` | INTEGRAL plus conversion to atoms/cm² and Angstroms |
-| `BACKGROUND lo1 hi1 lo2 hi2 order [-inplace] [-noplot]` | fit and strip a polynomial background |
-| `SMOOTH [-sv\|-conv\|-fft] [-range lo hi] [n]` | smooth the active buffer |
-| `FFT lo hi width` | same as `SMOOTH -fft -range lo hi width` |
-| `WIDTH_THICK ch1 ch2 el` | thickness from a peak's half-height width |
-| `CALIBRATE ch1 el1 ch2 el2 [energy channel]` | set keV/channel and keV(0) from two known peaks |
-| `INTSET [Round\|Interp\|Surface\|Estimated\|Query\|?]` | INTEGRAL/THICKNESS rounding and alpha mode |
-| `CURSOR` | not available in this shell — there is no interactive graphics device |
-| `PROFILE` | not implemented — never was, even in the original |
+#### `CURSOR`
 
-`SMOOTH -conv`'s characteristic width uses RUMP's own (nonstandard)
-`sigma = (FWHM/2)/sqrt(ln 2)/kevch` — not the usual `FWHM/(2*sqrt(2 ln 2))` —
-reproduced deliberately, not corrected. `SMOOTH`'s default range is the whole
-buffer; `-conv`'s iteration count and `-fft`'s width both come from a trailing
-number, interpreted according to whichever mode is active.
+```
+Your wish? help cursor
+  CURsor  read channel/energy/yield at the nearest data point
+  usage: CURSOR <channel>
+```
 
-`INTSET` picks two independent modes that both `INTEGRAL` and `THICKNESS`
-honor: whether a region's boundaries are rounded to the nearest channel or
-interpolated between them, and (for `THICKNESS` only) whether its second,
-"compensated" pass uses an estimated alpha or asks you for one. Two-peak
-calibration, then a thickness that uses it:
+Reads the channel, energy and yield at the nearest sampled channel in the
+active buffer, printing which buffer that is up front (index and name) so
+that's never a guess. RUMP's own `CURSOR` read whatever point a physical
+graphics crosshair sat on; pyRUMP has no such device and no reason to fake
+one with mouse clicks — matplotlib's own toolbar already gives a live x/y
+readout for free while hovering a plot, so this takes the channel directly
+instead and snaps to the nearest real sample, the same "read what's
+actually there" the original's cursor served.
+
+#### `ELEMENT`
+
+```
+Your wish? help element
+  ELement  expected energy/channel of an element's surface peak
+  usage: ELEMENT el [el ...]
+```
+
+Prints the expected K, energy and channel of each element's surface edge.
+
+#### `MATRIX`
+
+```
+Your wish? help matrix
+  MATrix  expected energy, channel and matrix height
+  usage: MATRIX el
+```
+
+Prints the expected energy, channel **and matrix height** for one element.
+
+#### `WHATISIT`
+
+```
+Your wish? help whatisit
+  WHATisit  identify elements near a channel
+  usage: WHATISIT <channel>
+```
+
+Identifies the elements whose surface edge is nearest a channel.
+
+#### `INFO`
+
+```
+Your wish? help info
+  INFo  detailed report on an element
+  usage: INFO el
+```
+
+Full report: density, K, cross section, stopping factors, isotopes.
+
+#### `INTEGRAL`
+
+```
+Your wish? help integral
+  INTegral  sum counts over a channel range
+  usage: INTEGRAL lo hi
+```
+
+Gross/net counts over a channel range (background-corrected net).
+
+#### `THICKNESS`
+
+```
+Your wish? help thickness
+  THICkness  integral plus thickness conversion
+  usage: THICKNESS lo hi element
+```
+
+`INTEGRAL` plus conversion to atoms/cm² and Angstroms.
 
 ```
 Your wish? calibrate 226 Si 369 Au
@@ -249,72 +851,142 @@ plateau, for a meaningful net figure.
 Non-Rutherford (tabulated-resonance) cross sections aren't wired into any of
 these — see the [known-limitations note](../dev/about.md#milestones).
 
-### Macros
-
-`XEQ <file>` runs a file of commands through the same interpreter the prompt
-uses, so an analysis can be checked in as a text file and replayed. `CALL` and
-`EXECUTE` are synonyms. A bare name with no extension is tried as-is, then as
-`.cmd`, then as `.rbs`/`.RBS` -- the last two `[new]` because some RBS
-acquisition software writes its output as a plain `EMPTY`/`SWALLOW` command
-macro under that extension (see [File formats](#file-formats)), despite the
-name suggesting real spectrum data. `XEQ`ing an actual binary `.rbs` file
-(that belongs with `GET`) fails with a clear message rather than a decode
-error.
-
-`SCRIPT <file>` logs what you type into exactly such a file, and `SCRIPT OFF`
-stops. `LOGFILE` and `RECORD` are synonyms.
-
-**`~/.pyrumprc`** is a plain macro file — no different from anything `XEQ`
-runs — that's read once at startup, before you're dropped into the prompt,
-unless you pass `--norc`. It lives at `Path.home() / ".pyrumprc"`: that's
-`~/.pyrumprc` on Linux/macOS and `C:\Users\<you>\.pyrumprc` on Windows, same
-filename either way, nothing further to configure. A minimal one is just
-ordinary commands, one per line:
+#### `BACKGROUND`
 
 ```
-$ cat ~/.pyrumprc
-faithful off
-mev 3.5
-theta 5
-region 300 800
+Your wish? help background
+  BACKground  fit and subtract a polynomial background
+  usage: BACKGROUND lo1 hi1 lo2 hi2 order [-inplace] [-noplot]
 ```
 
-> Note `SCRIPT`/`LOGFILE` need at least four characters, which is how the
-> original kept them clear of `LOG` — the logarithmic yield axis. Typing `log`
-> gets you the axis, `logf` the session log.
+Fits and strips a polynomial background.
 
-`faithful off` toggles the session between the shipped C's bug-for-bug
-behaviour (the default) and the corrected physics available at that point in
-the port — see [Design and validation](../physics/validation.md). It's a
-session setting, not persisted on its own, so `~/.pyrumprc` is how you make
-it a standing per-user default. `--faithful on`/`--faithful off` overrides it
-for one invocation, applied after `~/.pyrumprc` runs but before any macro
-passed on the command line — the macro can still set `FAITHFUL` itself if it
-needs to.
+#### `SMOOTH`
 
-`mev 3.5`/`theta 5` are **default experiment settings**. `MEV`/`THETA`/`PHI`/
-`PSI`/`OMEGA`/`CHARGE`/`CURRENT`/`FWHM`/`CORRECTION`/`CHOFF`/`CONVERSION`/
-`OFFSET`/`GEOMETRY`/`BEAM` all normally act on the ACTIVE buffer — but before
-any `GET`, there is no active buffer, so they fall back to a session-wide
-default instead of erroring. That makes it possible to explore a `SIM`
-sample's theoretical spectrum (`PLOT 0`) with no real data loaded at all.
-The same defaults also fill in for a freshly-read ASCII spectrum, which
-carries no beam/geometry/detector metadata of its own — so `GET`ting one
-picks up your defaults instead of the code's hardcoded 2.0 MeV. A `.RBS`
-file's own metadata always wins, and once any real buffer becomes ACTIVE,
-these commands go back to editing it, exactly as before — the defaults are
-only a fallback, never a silent override of real data.
+```
+Your wish? help smooth
+  SMOoth  smooth the active buffer (-sv, -conv, -fft)
+  usage: SMOOTH [-sv|-conv|-fft] [-range lo hi] [n]
+```
 
-`region 300 800` works from `~/.pyrumprc` for a different reason: `REGION`
-(and `SCALE`/`LABELS`/`ENERGY`/`COUNTS`/`BLOWUP`, the other plot-state
-commands) write straight to session-wide state that was never gated on an
-active buffer in the first place, so they've always been usable before any
-`GET` — no code changes were needed to support them here. It also now
-shapes `COMPARE`, not just `PLOT`/`OVERLAY` (see the 1.1.0 changelog entry).
-As a rule of thumb for anything not listed above: if a command already
-writes to session-wide state rather than a specific buffer, it works from
-`~/.pyrumprc` for free; only a command that hard-requires an active buffer
-needs the fallback that `MEV`/`THETA`/etc. got in 1.1.0.
+Smooths the active buffer. `-conv`'s characteristic width uses RUMP's own
+(nonstandard) `sigma = (FWHM/2)/sqrt(ln 2)/kevch` — not the usual
+`FWHM/(2*sqrt(2 ln 2))` — reproduced deliberately, not corrected. The
+default range is the whole buffer; `-conv`'s iteration count and `-fft`'s
+width both come from a trailing number, interpreted according to whichever
+mode is active.
+
+#### `FFT`
+
+```
+Your wish? help fft
+  FFT  FFT smooth (same as SMOOTH -FFT -RANGE)
+  usage: FFT lo hi width
+```
+
+Same as `SMOOTH -fft -range lo hi width`.
+
+#### `WIDTH_THICK`
+
+```
+Your wish? help width_thick
+  WIDth_thick  thickness from a peak's half-height width
+  usage: WIDTH_THICK ch1 ch2 element
+```
+
+Computes thickness from a peak's half-height width.
+
+#### `CALIBRATE`
+
+```
+Your wish? help calibrate
+  CALibrate  energy-calibrate from two known peaks
+  usage: CALIBRATE ch1 el1 ch2 el2 [energy_eV marker_channel]
+```
+
+Sets keV/channel and keV(0) from two known peaks — see the `THICKNESS`
+example above, which chains a `CALIBRATE` into it.
+
+#### `INTSET`
+
+```
+Your wish? help intset
+  INTSET  change INTEGRAL/THICKNESS rounding and alpha mode
+  usage: INTSET [Round|Interp|Surface|Estimated|Query|?]
+```
+
+Picks two independent modes that both `INTEGRAL` and `THICKNESS` honor:
+whether a region's boundaries are rounded to the nearest channel or
+interpolated between them, and (for `THICKNESS` only) whether its second,
+"compensated" pass uses an estimated alpha or asks you for one.
+
+### Settings
+
+#### `DATA`
+
+```
+Your wish? help data
+  DATA  show or change the atomic data directory
+  usage: DATA [dir]
+```
+
+With no argument, prints the directory the atomic tables (`atom4.dat`,
+`pscoef.dat`, stopping-power tables, …) were loaded from. With one, reloads
+every table from that directory instead and forces the simulation buffer to
+recompute — for comparing two table sets without restarting pyRUMP.
+
+#### `FAITHFUL` `[new]`
+
+```
+Your wish? help faithful
+  FAIThful  toggle faithful (bug-for-bug) vs corrected physics (FAITHFUL OFF to correct)
+  usage: FAITHFUL [on|off]
+```
+
+Toggles the session between the shipped C's bug-for-bug behaviour (the
+default) and pyRUMP's corrected physics where the two diverge — see
+[Design and validation](../physics/validation.md) for what "corrected"
+covers. With no argument, reports the current state instead of changing it.
+Has no original-RUMP counterpart, hence `[new]`.
+
+#### `SCREENING` `[new]`
+
+```
+Your wish? help screening
+  SCREening  select the Rutherford screening correction: NONE, LECUYER (default) or ANDERSEN
+  usage: SCREENING [none|lecuyer|andersen]
+```
+
+Selects the Rutherford screening correction. `LECUYER` is RUMP's own and
+the default. `ANDERSEN` is a pyRUMP addition (Andersen et al., Phys. Rev. A
+21 (1980) 1891) — more accurate at forward angles, but with no RUMP oracle
+to validate it against, and per its own literature, may be inaccurate below
+a few hundred keV or at small scattering angles.
+
+#### `MODE` `[new]`
+
+```
+Your wish? help mode
+  MODE  SIM/PERT thickness convention, COMP or ATOMS -- see MODE with no argument
+  usage: MODE [Comp|Atoms]
+```
+
+Sets how `SIM`/`PERT` describe a layer's thickness. `Comp` is RUMP's own
+convention: a physical thickness (normally Angstroms) split across elements
+by stoichiometric ratio — `SIM`/`PERT`'s `THICKNESS` and `COMPOSITION`.
+`Atoms` instead holds each element's own areal density directly in
+`COMPOSITION`, with `THICKNESS` just their sum in `/CM2` — `SIM`/`PERT`'s
+`ATOMS`. Only one set of commands is usable at a time, gated by this
+setting, so a fit can never mix the two conventions on the same layer.
+Switching recalculates every layer between the two conventions through each
+layer's own atomic density — not a relabelling — so the simulated spectrum
+is unchanged either way. With no argument, prints the current mode.
+
+#### `PROFILE`
+
+Not implemented — never was, even in the original (`RbsNewprf`, dead code in
+the shipped C). Reproduced verbatim: it prints "OOPS: Didn't think anyone
+used this routine anymore - sorry not implemented" and does nothing.
 
 ### File formats
 
@@ -351,7 +1023,7 @@ name suggesting real binary spectrum data. It's an ordinary text macro --
 `IDENTIFIER`, `DATE`, `CONVERSION`, `MEV`, `BEAM`, `GEOMETRY`,
 `THETA`/`PHI`/`PSI`, `OMEGA`, `CHOFF`, `FWHM`, `CURRENT`, `CHARGE` -- ending
 in `SWALLOW`, which reads everything after it straight into the buffer as
-channel data (see [Buffer and spectrum parameters](#buffer-and-spectrum-parameters)
+channel data (see [Sample & instrument parameters](#sample-instrument-parameters)
 for `SWALLOW` itself). It's the same mechanism a RUMP-written `.cmd` file
 uses to reconstruct a spectrum inline; RC43 just also uses it under a `.RBS`
 name.
@@ -364,4 +1036,3 @@ Your wish? xeq acquired.rbs     /* text macro -- replayed as commands      */
 See [Quick start](../getting-started/index.md#data-loading) for both formats
 worked end to end, including what each of `GET`/`XEQ` prints when pointed at
 the other one's file by mistake.
-

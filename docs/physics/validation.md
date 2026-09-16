@@ -6,7 +6,7 @@ with. Known defects — and there are several — are reproduced exactly, with
 the mathematically correct behaviour available behind explicit flags. The
 shell exposes this as a session setting, `session.settings.faithful`,
 toggled with the `FAITHFUL` command and persisted through `~/.pyrumprc` (see
-[Macros](../manual/shell.md#macros)) rather than a separate branch or fork — corrected and
+[Config](../manual/config.md)) rather than a separate branch or fork — corrected and
 faithful behaviour live in the same codebase so they stay comparable against
 the C oracle side by side. `FAITHFUL` governs physics only — for pyRUMP's own
 command-surface additions beyond stock RUMP, see the

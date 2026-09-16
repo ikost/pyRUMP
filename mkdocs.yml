@@ -46,18 +46,18 @@ nav:
   - Home: index.md
   - Getting started:
       - getting-started/index.md
-  - Physics and simulation:
-      - physics/index.md
-      - Design and validation: physics/validation.md
   - Manual:
-      - Interactive shell: manual/shell.md
+      - physics/index.md
+      - pyRUMP shell: manual/shell.md
       - SIM and PERT: manual/sim-pert.md
       - CLI reference: manual/cli.md
+      - Config: manual/config.md
       - Sample descriptions & depth profiles: manual/samples.md
       - Things that will catch you out: manual/gotchas.md
   - Development:
       - Python API: dev/python-api.md
       - Contributing: dev/contributing.md
+      - Design and validation: physics/validation.md
       - RUMP quirks and defects: dev/rump-quirks.md
       - About: dev/about.md
       - Changelog: https://github.com/ikost/pyRUMP/releases

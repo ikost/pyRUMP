@@ -42,6 +42,5 @@ CLI tools — but a Python equivalent could be added later if there's real deman
 ## Where to go next
 
 - **[Getting started](getting-started/index.md)** — install pyRUMP and run your first simulation
-- **[Physics and simulation](physics/index.md)** — what the forward model computes, and how well it agrees with the original
-- **[Manual](manual/shell.md)** — the interactive shell, CLI, and sample-description reference
-- **[Development](dev/python-api.md)** — the Python API, contributing, and porting notes
+- **[Manual](physics/index.md)** — what the forward model computes, the interactive shell, CLI, and sample-description reference
+- **[Development](dev/python-api.md)** — the Python API, contributing, validation against the original, and porting notes

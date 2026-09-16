@@ -25,3 +25,6 @@ htmlcov/
 # oracle build artifacts
 tests/oracle/build/
 mytest/
+
+# local dev convenience scripts
+serve-docs.sh

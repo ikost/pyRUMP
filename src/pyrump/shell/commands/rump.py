@@ -140,7 +140,8 @@ def _buffer_argument(session, args: ArgReader, *, read: bool = True) -> tuple[in
 
 
 def cmd_help(session, args: ArgReader) -> None:
-    """List every command, one section per table -- as rump.c:351-360 does.
+    """``? [name]`` -- list every command, one section per table, as
+    rump.c:351-360 does.
 
     ``HELP <name>`` instead describes that one command, looking first at the
     RUMP level and then, like an unrecognised command would, falling through
@@ -184,6 +185,8 @@ def cmd_quit(session, args: ArgReader) -> None:
 
 
 def cmd_sim(session, args: ArgReader) -> None:
+    """``SIM [command]`` -- enter the sample-description editor, or run one
+    SIM command without leaving the RUMP level."""
     if args:
         # "SIM Reset", "SIM thick 500" -- one-shot form, handled by SIM's table.
         from .sim import execute_in_sim
@@ -194,6 +197,8 @@ def cmd_sim(session, args: ArgReader) -> None:
 
 
 def cmd_pert(session, args: ArgReader) -> None:
+    """``PERT [command]`` -- enter the fitting sub-processor, or run one
+    PERT command without leaving the RUMP level."""
     if args:
         # "PERT GO", "PERT GET usual.pert GO" -- one-shot form, handled by
         # PERT's own table (GET is what understands a trailing GO).
@@ -209,7 +214,8 @@ def cmd_return(session, args: ArgReader) -> None:
 
 
 def cmd_data(session, args: ArgReader) -> None:
-    """Report, or switch, the directory the atomic tables came from."""
+    """``DATA [dir]`` -- report, or switch, the directory the atomic tables
+    came from."""
     token = args.optional()
     args.done()
     if token is None:
@@ -235,6 +241,8 @@ def cmd_buffers(session, args: ArgReader) -> None:
 
 
 def cmd_get(session, args: ArgReader) -> None:
+    """``GET <file|n>`` -- read a file into a buffer, or point at buffer
+    *n*."""
     token = args.token("a file or buffer number")
     args.done()
     try:
@@ -250,6 +258,7 @@ def cmd_get(session, args: ArgReader) -> None:
 
 
 def cmd_pointat(session, args: ArgReader) -> None:
+    """``POINTAT <n>`` -- point at buffer *n*, by number only."""
     index = args.integer("a buffer number")
     args.done()
     if index and session.buffers.get(index) is None:
@@ -260,6 +269,7 @@ def cmd_pointat(session, args: ArgReader) -> None:
 
 
 def cmd_release(session, args: ArgReader) -> None:
+    """``RELEASE [n]`` -- drop one buffer (default: active)."""
     token = args.optional()
     args.done()
     index = session.buffers.active if token is None else session.resolve(token)
@@ -279,6 +289,7 @@ def cmd_newall(session, args: ArgReader) -> None:
 
 
 def cmd_copy(session, args: ArgReader) -> None:
+    """``COPY <source> <target>`` -- copy one buffer to another."""
     source = session.resolve(args.token("a source buffer"))
     target = args.integer("a target buffer")
     args.done()
@@ -292,6 +303,7 @@ def cmd_copy(session, args: ArgReader) -> None:
 
 
 def cmd_move(session, args: ArgReader) -> None:
+    """``MOVE <a> <b>`` -- exchange two buffers."""
     first = session.resolve(args.token("a buffer"))
     second = session.resolve(args.token("a buffer"))
     args.done()
@@ -304,6 +316,7 @@ def cmd_move(session, args: ArgReader) -> None:
 
 
 def cmd_write(session, args: ArgReader) -> None:
+    """``WRITE <file>`` -- write the active buffer to a binary .rbs file."""
     from ...io.rbs import write_rbs
 
     target = Path(args.token("an output file"))
@@ -314,6 +327,7 @@ def cmd_write(session, args: ArgReader) -> None:
 
 
 def cmd_wrascii(session, args: ArgReader) -> None:
+    """``WRASCII <file>`` -- write the active buffer as text."""
     from ...io.ascii import write_ascii
 
     target = Path(args.token("an output file"))
@@ -390,12 +404,16 @@ def _setter(apply, describe):
     return handler
 
 
-def _numeric(field, target, label, unit=""):
+def _numeric(field, target, label, unit="", *, usage=None):
     """A setter for one numeric field of a frozen parameter dataclass.
 
     ``target`` names the ``Buffer`` attribute holding it -- ``calibration``,
     ``geometry`` or ``measurement`` -- and the matching ``set_*`` method
-    rebuilds it, since all three are frozen.
+    rebuilds it, since all three are frozen. ``usage``, if given (e.g.
+    ``"THETA <deg>"``), becomes the returned handler's docstring, so
+    ``HELP <name>`` shows it (see :func:`~pyrump.shell.dispatch._usage`) --
+    each call site gets its own handler closure, so this is safe to set here
+    despite several commands sharing this same factory.
     """
 
     def apply(session, buffer, args: ArgReader) -> None:
@@ -404,7 +422,10 @@ def _numeric(field, target, label, unit=""):
     def describe(buffer) -> str:
         return f"  {label} = {getattr(getattr(buffer, target), field):g}{unit}"
 
-    return _setter(apply, describe)
+    handler = _setter(apply, describe)
+    if usage is not None:
+        handler.__doc__ = f"``{usage}``."
+    return handler
 
 
 def cmd_beam(session, args: ArgReader) -> None:
@@ -436,6 +457,7 @@ def cmd_beam(session, args: ArgReader) -> None:
 
 
 def cmd_mev(session, args: ArgReader) -> None:
+    """``MEV <energy>`` -- beam energy, MeV."""
     buffer = _reference(session)
     if not args:
         print(f"  MeV = {buffer.beam.e0_MeV:g}")
@@ -447,6 +469,7 @@ def cmd_mev(session, args: ArgReader) -> None:
 
 
 def cmd_geometry(session, args: ArgReader) -> None:
+    """``GEOMETRY cornell|ibm|general`` -- detector geometry convention."""
     buffer = _reference(session)
     if not args:
         print(f"  geometry = {buffer.geometry.kind.name.lower()}")
@@ -484,6 +507,7 @@ def cmd_conversion(session, args: ArgReader) -> None:
 
 
 def cmd_identifier(session, args: ArgReader) -> None:
+    """``IDENTIFIER <text>`` -- free-text spectrum description."""
     buffer = session.buffers.require_active()
     if not args:
         print(f"  {buffer.identifier}")
@@ -554,7 +578,8 @@ def cmd_empty(session, args: ArgReader) -> None:
 
 
 def cmd_swallow(session, args: ArgReader) -> None:
-    """``SWALLOW`` -- read the macro's following lines as channel data.
+    """``SWALLOW [-twocolumn]`` -- read the macro's following lines as
+    channel data.
 
     Consumes real-number tokens straight off the running ``XEQ`` file, one
     channel per token (or channel/value pairs with ``-twocolumn``), stopping
@@ -623,6 +648,8 @@ def cmd_swallow(session, args: ArgReader) -> None:
 
 
 def cmd_plot(session, args: ArgReader) -> None:
+    """``PLOT [buffer|file]`` -- erase and plot a buffer (default: active) or
+    file."""
     index, buffer = _buffer_argument(session, args)
     args.done()
     if index != 0:
@@ -632,6 +659,7 @@ def cmd_plot(session, args: ArgReader) -> None:
 
 
 def cmd_overlay(session, args: ArgReader) -> None:
+    """``OVERLAY [buffer|file]`` -- add another trace to the current plot."""
     index, buffer = _buffer_argument(session, args)
     args.done()
     plotting.add_trace(session, index, buffer, clear=False)
@@ -745,6 +773,7 @@ def cmd_display(session, args: ArgReader) -> None:
 
 
 def cmd_region(session, args: ArgReader) -> None:
+    """``REGION lo hi`` -- set the channel range shown."""
     if not args:
         print(session.plot.describe())
         return
@@ -759,7 +788,8 @@ def cmd_region(session, args: ArgReader) -> None:
 
 
 def cmd_expand(session, args: ArgReader) -> None:
-    """Narrow the region to a subset of the current one and replot."""
+    """``EXPAND lo hi`` -- narrow the region to a subset of the current one
+    and replot."""
     low = args.integer("the first channel")
     high = args.integer("the last channel")
     args.done()
@@ -775,6 +805,7 @@ def cmd_expand(session, args: ArgReader) -> None:
 
 
 def cmd_counts(session, args: ArgReader) -> None:
+    """``COUNTS lo [hi]`` -- set the yield range shown."""
     if not args:
         print(session.plot.describe())
         return
@@ -789,7 +820,8 @@ def cmd_counts(session, args: ArgReader) -> None:
 
 
 def cmd_blowup(session, args: ArgReader) -> None:
-    """Expand the vertical scale: ``BLOWUP <max counts>``."""
+    """``BLOWUP <max>`` -- expand the vertical scale, shorthand for
+    ``COUNTS 0 <max>``."""
     ceiling = args.number("the maximum yield")
     args.done()
     session.plot.ylow, session.plot.yhigh = 0.0, ceiling
@@ -821,6 +853,7 @@ def _flag(attribute, value, message):
 
 
 def cmd_labels(session, args: ArgReader) -> None:
+    """``LABELS [off]`` -- axis labels on or off."""
     token = args.optional()
     args.done()
     session.plot.labels = token is None or token.lower() not in ("off", "no", "none")
@@ -830,8 +863,8 @@ def cmd_labels(session, args: ArgReader) -> None:
 
 
 def cmd_structlabel(session, args: ArgReader) -> None:
-    """STRUCTLABEL [OFF]: show the SIM sample's layer structure instead of
-    the literal "SIM" in the simulation's legend entry -- everywhere
+    """``STRUCTLABEL [off]`` -- show the SIM sample's layer structure instead
+    of the literal "SIM" in the simulation's legend entry -- everywhere
     PLOT/OVERLAY/SPLOT/COMPARE draw it, via plotting.buffer_label's single
     hook on buffer 0."""
     token = args.optional()
@@ -843,7 +876,7 @@ def cmd_structlabel(session, args: ArgReader) -> None:
 
 
 def cmd_compfrac(session, args: ArgReader) -> None:
-    """COMPFRAC [OFF]: show each layer's composition as atomic fraction
+    """``COMPFRAC [off]`` -- show each layer's composition as atomic fraction
     (summing to 1) instead of raw stoichiometry -- "Mn 0.75 Pt 0.25"
     instead of "Mn 3 Pt 1". Affects STRUCTLABEL's layer structure and the
     SIM/PERT SHOW table alike. Cosmetic only: it reformats the display,
@@ -858,6 +891,7 @@ def cmd_compfrac(session, args: ArgReader) -> None:
 
 
 def cmd_faithful(session, args: ArgReader) -> None:
+    """``FAITHFUL [on|off]`` -- bug-for-bug vs corrected physics."""
     token = args.optional()
     args.done()
     session.settings.faithful = token is None or token.lower() not in ("off", "no", "none")
@@ -866,8 +900,8 @@ def cmd_faithful(session, args: ArgReader) -> None:
 
 
 def cmd_screening(session, args: ArgReader) -> None:
-    """SCREENING [NONE|LECUYER|ANDERSEN]: select the Rutherford screening
-    correction. LECUYER is RUMP's own and the default. ANDERSEN is a pyRUMP
+    """``SCREENING [none|lecuyer|andersen]`` -- select the Rutherford
+    screening correction. LECUYER is RUMP's own and the default. ANDERSEN is a pyRUMP
     addition (Andersen et al., Phys. Rev. A 21 (1980) 1891) -- more accurate
     at forward angles, but with no RUMP oracle to validate it against, and
     per its own literature, may be inaccurate below a few hundred keV or at
@@ -907,7 +941,8 @@ def cmd_axis(session, args: ArgReader) -> None:
 
 
 def cmd_energy(session, args: ArgReader) -> None:
-    """Switch the x axis between channel (RUMP's default) and energy."""
+    """``ENERGY [off]`` -- switch the x axis between channel (RUMP's
+    default) and energy."""
     token = args.optional()
     args.done()
     session.plot.energy_axis = token is None or token.lower() not in ("off", "no")
@@ -1591,28 +1626,33 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("ACTIVE", 2, cmd_active, "list the active buffer's parameters"),
     ("BEAM", 4, cmd_beam, "incident beam species, e.g. 4He++"),
     ("MEV", 3, cmd_mev, "beam energy"),
-    ("THETA", 3, _numeric("theta", "geometry", "theta", " deg"), "sample tilt"),
-    ("PHI", 3, _numeric("phi", "geometry", "phi", " deg"),
+    ("THETA", 3, _numeric("theta", "geometry", "theta", " deg", usage="THETA <deg>"),
+     "sample tilt"),
+    ("PHI", 3, _numeric("phi", "geometry", "phi", " deg", usage="PHI <deg>"),
      "supplement of the scattering angle"),
-    ("PSI", 3, _numeric("psi", "geometry", "psi", " deg"), "exit angle"),
+    ("PSI", 3, _numeric("psi", "geometry", "psi", " deg", usage="PSI <deg>"), "exit angle"),
     ("GEOMETRY", 4, cmd_geometry, "cornell, ibm or general"),
     ("CONVERSION", 4, cmd_conversion, "keV per channel and offset"),
-    ("SLOPE", 3, _numeric("kevch", "calibration", "slope", " keV/channel"),
+    ("SLOPE", 3, _numeric("kevch", "calibration", "slope", " keV/channel",
+     usage="SLOPE <keV/ch>"),
      "keV/channel alone, independent of CONVERSION's offset"),
-    ("OFFSET", 3, _numeric("kev0", "calibration", "offset", " keV"),
+    ("OFFSET", 3, _numeric("kev0", "calibration", "offset", " keV", usage="OFFSET <keV(0)>"),
      "keV(0) alone, independent of CONVERSION's keV/ch"),
-    ("CORRECTION", 3, _numeric("correction", "measurement", "corr"),
+    ("CORRECTION", 3, _numeric("correction", "measurement", "corr", usage="CORRECTION <factor>"),
      "normalization fudge factor"),
-    ("CHARGE", 2, _numeric("charge_uC", "measurement", "charge", " uC"), "beam dose"),
-    ("CURRENT", 4, _numeric("current_nA", "measurement", "current", " nA"),
+    ("CHARGE", 2, _numeric("charge_uC", "measurement", "charge", " uC", usage="CHARGE <uC>"),
+     "beam dose"),
+    ("CURRENT", 4, _numeric("current_nA", "measurement", "current", " nA",
+     usage="CURRENT <nA>"),
      "average beam current, for pileup"),
-    ("CHOFF", 3, _numeric("first", "calibration", "first"),
+    ("CHOFF", 3, _numeric("first", "calibration", "first", usage="CHOFF <n>"),
      "channel number of the first data point"),
-    ("FWHM", 4, _numeric("fwhm_keV", "measurement", "FWHM", " keV"),
+    ("FWHM", 4, _numeric("fwhm_keV", "measurement", "FWHM", " keV", usage="FWHM <keV>"),
      "detector resolution"),
-    ("OMEGA", 5, _numeric("omega_msr", "measurement", "omega", " msr"),
+    ("OMEGA", 5, _numeric("omega_msr", "measurement", "omega", " msr", usage="OMEGA <msr>"),
      "detector solid angle"),
-    ("TAU", 3, _numeric("tau_us", "measurement", "tau", " us"), "MCA shaping time"),
+    ("TAU", 3, _numeric("tau_us", "measurement", "tau", " us", usage="TAU <us>"),
+     "MCA shaping time"),
     ("IDENTIFIER", 3, cmd_identifier, "description of the spectrum"),
     ("DATE", 4, cmd_date, "when the spectrum was measured"),
     ("FILENAME", 4, cmd_filename, "record the buffer's source filename"),

@@ -96,7 +96,7 @@ Your wish? region 100 400       /* zoom to a channel range             */
 Your wish? sqrt                 /* sqrt yield scale, redraws right away */
 ```
 
-See [Plotting](../manual/shell.md#plotting) in the manual for the rest —
+See [Plotting & display](../manual/shell.md#plotting-display) in the manual for the rest —
 `OVERLAY`, `COMPARE`, `EXPAND`, `LOG`/`LINEAR`/`SQRT`, `ENERGY`, `FIGSAVE` and
 more.
 

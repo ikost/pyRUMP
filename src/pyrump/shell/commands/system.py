@@ -78,7 +78,7 @@ def cmd_cd(session, args: ArgReader) -> None:
 
 
 def cmd_pushdir(session, args: ArgReader) -> None:
-    """Remember where we are, then change directory."""
+    """``PUSHDIR [dir]`` -- remember where we are, then change directory."""
     token = args.optional()
     args.done()
     here = Path.cwd()
@@ -132,6 +132,8 @@ def _name(path: Path) -> str:
 
 
 def cmd_ls(session, args: ArgReader) -> None:
+    """``LS [pattern]`` -- list files, expanding the pattern here, not in an
+    OS shell."""
     token = args.optional()
     args.done()
     base, entries = _entries(token)
@@ -148,7 +150,7 @@ def cmd_ls(session, args: ArgReader) -> None:
 
 
 def cmd_ll(session, args: ArgReader) -> None:
-    """Long listing: size and modification time.
+    """``LL [pattern]`` -- long listing: size and modification time.
 
     Deliberately not Unix permission bits -- they carry no meaning on Windows,
     and this listing is the same on every platform.
@@ -176,7 +178,8 @@ def cmd_ll(session, args: ArgReader) -> None:
 
 
 def cmd_type(session, args: ArgReader) -> None:
-    """Show a text file, paging only when there is a terminal to page for."""
+    """``TYPE <file>`` -- show a text file, paging only when there is a
+    terminal to page for."""
     path = resolve(args.token("a file to display"))
     args.done()
     if path.is_dir():
@@ -252,6 +255,8 @@ def cmd_cls(session, args: ArgReader) -> None:
 
 
 def cmd_xeq(session, args: ArgReader) -> None:
+    """``XEQ <file>`` -- run a file of commands through the same interpreter
+    the prompt uses."""
     from ..repl import execute_file
 
     path = resolve(args.token("a command file"))
@@ -260,6 +265,7 @@ def cmd_xeq(session, args: ArgReader) -> None:
 
 
 def cmd_echo(session, args: ArgReader) -> None:
+    """``ECHO [off]`` -- echo commands as they run."""
     token = args.optional()
     args.done()
     session.echo = True if token is None else token.lower() not in ("off", "no", "0")
@@ -274,7 +280,8 @@ def cmd_quiet(session, args: ArgReader) -> None:
 
 
 def cmd_script(session, args: ArgReader) -> None:
-    """Record commands to a file, for replay with XEQ.
+    """``SCRIPT [file|off]`` -- record commands to a file, for replay with
+    XEQ.
 
     RUMP calls this SCRIPT, with LOGFILE as a synonym (system.c:212). Both need
     at least four characters, which is how the original kept them clear of
