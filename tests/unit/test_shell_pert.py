@@ -656,6 +656,39 @@ def test_go_recovers_the_thickness_and_writes_it_back(session, capsys):
 
 
 @needs_data
+def test_go_writes_the_normalisation_back_into_the_correction_factor(synthetic, tmp_path):
+    """A charge-integration error shows up as a scale mismatch over the norm
+    window that a local thickness fit can't absorb -- RUMP writes the
+    estimated scale into the buffer's CORR factor (pert.c:1402-1403,
+    "Estimated correction factor set for buffer"), not just reports it."""
+    from pyrump.model.spectrum import Spectrum
+
+    counts, calibration, geometry, measurement, beam = synthetic
+    # An under-recorded dose: every channel short by 20%, everywhere -- not
+    # something a thickness fit local to the Au peak (window 355-375) can
+    # explain away.
+    scaled = counts * 0.8
+
+    built = Session.create(str(DATA))
+    built.buffers.load(
+        Buffer(
+            spectrum=Spectrum(counts=scaled, calibration=calibration),
+            beam=beam, geometry=geometry, measurement=measurement, name="au",
+        ),
+        1,
+    )
+    built.buffers.active = 1
+    sample = tmp_path / "au.lcm"
+    sample.write_text(SAMPLE.format(guess=GUESS))
+    run(built, f"sim get {sample}")
+
+    run(built, "pert", "window 355 375", "norm 140 200", "thick 1", "go")
+
+    buffer = built.buffers.require_active()
+    assert buffer.measurement.correction == pytest.approx(1.25, rel=0.15)
+
+
+@needs_data
 def test_go_output_is_bookended_by_the_initial_and_final_structure(session, capsys):
     """"Fitting <ID>: <structure>" opens the output on one line, the usual
     fit report follows, and "<ID>: <structure>" (not the messy buffer label)

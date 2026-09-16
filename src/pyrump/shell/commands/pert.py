@@ -830,8 +830,16 @@ def cmd_go(session, args: ArgReader) -> None:
     status = "converged" if result.success else "did not converge"
     report_lines.append(f"  {result.n_evaluations} evaluations, {status}")
     if result.normalisation != 1.0:
+        # RUMP writes the fitted scale back into the buffer's CORR factor
+        # (pert.c:1402-1403, "Estimated correction factor set for buffer"),
+        # rather than only reporting it -- CORRECTION and a normalisation
+        # window can't be varied together (WindowSet.validate_against), so
+        # this never fights with a PERT CORRECTION selection.
+        new_correction = data_buffer.measurement.correction * result.normalisation
+        data_buffer.measurement = replace(data_buffer.measurement, correction=new_correction)
         report_lines.append(
             f"  data scaled by {result.normalisation:.5f} over the norm window"
+            f"   (correction factor set to {new_correction:.5g})"
         )
     if result.n_invalid:
         report_lines.append(
