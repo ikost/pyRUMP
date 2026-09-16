@@ -19,7 +19,7 @@ region 300 800
 
 `faithful off` toggles the session between the shipped C's bug-for-bug
 behaviour (the default) and the corrected physics available at that point in
-the port — see [Design and validation](../physics/validation.md). It's a
+the port — see [Design and validation](../dev/validation.md). It's a
 session setting, not persisted on its own, so `~/.pyrumprc` is how you make
 it a standing per-user default. `--faithful on`/`--faithful off` overrides it
 for one invocation, applied after `~/.pyrumprc` runs but before any macro
@@ -49,3 +49,71 @@ As a rule of thumb for anything not listed above: if a command already
 writes to session-wide state rather than a specific buffer, it works from
 `~/.pyrumprc` for free; only a command that hard-requires an active buffer
 needs the fallback that `MEV`/`THETA`/etc. got in 1.1.0.
+
+### Settings
+
+#### `DATA`
+
+```
+Your wish? help data
+  DATA  show or change the atomic data directory
+  usage: DATA [dir]
+```
+
+With no argument, prints the directory the atomic tables (`atom4.dat`,
+`pscoef.dat`, stopping-power tables, …) were loaded from. With one, reloads
+every table from that directory instead and forces the simulation buffer to
+recompute — for comparing two table sets without restarting pyRUMP.
+
+#### `FAITHFUL` `[new]`
+
+```
+Your wish? help faithful
+  FAIThful  toggle faithful (bug-for-bug) vs corrected physics (FAITHFUL OFF to correct)
+  usage: FAITHFUL [on|off]
+```
+
+Toggles the session between the shipped C's bug-for-bug behaviour (the
+default) and pyRUMP's corrected physics where the two diverge — see
+[Design and validation](../dev/validation.md) for what "corrected"
+covers. With no argument, reports the current state instead of changing it.
+Has no original-RUMP counterpart, hence `[new]`.
+
+#### `SCREENING` `[new]`
+
+```
+Your wish? help screening
+  SCREening  select the Rutherford screening correction: NONE, LECUYER (default) or ANDERSEN
+  usage: SCREENING [none|lecuyer|andersen]
+```
+
+Selects the Rutherford screening correction. `LECUYER` is RUMP's own and
+the default. `ANDERSEN` is a pyRUMP addition (Andersen et al., Phys. Rev. A
+21 (1980) 1891) — more accurate at forward angles, but with no RUMP oracle
+to validate it against, and per its own literature, may be inaccurate below
+a few hundred keV or at small scattering angles.
+
+#### `MODE` `[new]`
+
+```
+Your wish? help mode
+  MODE  SIM/PERT thickness convention, COMP or ATOMS -- see MODE with no argument
+  usage: MODE [Comp|Atoms]
+```
+
+Sets how `SIM`/`PERT` describe a layer's thickness. `Comp` is RUMP's own
+convention: a physical thickness (normally Angstroms) split across elements
+by stoichiometric ratio — `SIM`/`PERT`'s `THICKNESS` and `COMPOSITION`.
+`Atoms` instead holds each element's own areal density directly in
+`COMPOSITION`, with `THICKNESS` just their sum in `/CM2` — `SIM`/`PERT`'s
+`ATOMS`. Only one set of commands is usable at a time, gated by this
+setting, so a fit can never mix the two conventions on the same layer.
+Switching recalculates every layer between the two conventions through each
+layer's own atomic density — not a relabelling — so the simulated spectrum
+is unchanged either way. With no argument, prints the current mode.
+
+#### `PROFILE`
+
+Not implemented — never was, even in the original (`RbsNewprf`, dead code in
+the shipped C). Reproduced verbatim: it prints "OOPS: Didn't think anyone
+used this routine anymore - sorry not implemented" and does nothing.

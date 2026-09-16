@@ -47,8 +47,12 @@ nav:
   - Getting started:
       - getting-started/index.md
   - Manual:
-      - physics/index.md
+      - Physics and simulation: manual/physics.md
       - pyRUMP shell: manual/shell.md
+      - Buffers & instrument parameters: manual/buffers.md
+      - Plotting & display: manual/plotting.md
+      - Analysis tools: manual/analysis.md
+      - File formats: manual/file-formats.md
       - SIM and PERT: manual/sim-pert.md
       - CLI reference: manual/cli.md
       - Config: manual/config.md
@@ -57,7 +61,7 @@ nav:
   - Development:
       - Python API: dev/python-api.md
       - Contributing: dev/contributing.md
-      - Design and validation: physics/validation.md
+      - Design and validation: dev/validation.md
       - RUMP quirks and defects: dev/rump-quirks.md
       - About: dev/about.md
       - Changelog: https://github.com/ikost/pyRUMP/releases

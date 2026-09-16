@@ -55,7 +55,7 @@ default, matching RUMP's own and only behaviour. **Andersen** screening
 (Phys. Rev. A 21 (1980) 1891) is a pyRUMP-only addition, angle- and
 energy-dependent rather than L'Ecuyer's flat rolloff, selectable with the
 `SCREENING` command; RUMP itself never had it, so there is no C oracle to
-validate it against -- see [Design and validation](validation.md). RUMP has
+validate it against -- see [Design and validation](../dev/validation.md). RUMP has
 no relativistic correction either way.
 
 ### The brick

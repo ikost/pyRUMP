@@ -8,7 +8,7 @@ behind a flag.** A silent "correction" would make pyRUMP disagree with every
 published RUMP result.
 
 The mechanism for that flag is `session.settings.faithful` (toggled by the
-[`FAITHFUL`](../manual/shell.md#faithful-new) command), or a dedicated `Settings` field for a
+[`FAITHFUL`](../manual/config.md#faithful-new) command), or a dedicated `Settings` field for a
 correction that needs to be controlled independently. Not every entry below
 is wired to it yet — each entry says whether it is.
 

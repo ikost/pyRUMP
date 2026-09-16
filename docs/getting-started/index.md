@@ -18,7 +18,7 @@ Anything ending in `.rbs`/`.RBS` might be one of two unrelated things: RUMP's
 own binary spectrum format, or a plain-text acquisition macro that just
 happens to share the extension. `GET` and `XEQ` load them, respectively —
 using the wrong one gets you a clear error rather than garbage data. See
-[File formats](../manual/shell.md#file-formats) in the manual for the full
+[File formats](../manual/file-formats.md) in the manual for the full
 specification of both.
 
 **Example 1 — RUMP binary format (.rbs)**
@@ -96,7 +96,7 @@ Your wish? region 100 400       /* zoom to a channel range             */
 Your wish? sqrt                 /* sqrt yield scale, redraws right away */
 ```
 
-See [Plotting & display](../manual/shell.md#plotting-display) in the manual for the rest —
+See [Plotting & display](../manual/plotting.md) in the manual for the rest —
 `OVERLAY`, `COMPARE`, `EXPAND`, `LOG`/`LINEAR`/`SQRT`, `ENERGY`, `FIGSAVE` and
 more.
 

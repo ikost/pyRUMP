@@ -11,7 +11,7 @@ faithful behaviour live in the same codebase so they stay comparable against
 the C oracle side by side. `FAITHFUL` governs physics only — for pyRUMP's own
 command-surface additions beyond stock RUMP, see the
 [Changelog](https://github.com/ikost/pyRUMP/releases)'s versioning note. See
-[RUMP quirks and defects found while porting](../dev/rump-quirks.md).
+[RUMP quirks and defects found while porting](rump-quirks.md).
 
 **Validated against the original**, at two levels. The legacy C is compiled
 into a shared library and called directly from the test suite, so each stage
@@ -31,7 +31,7 @@ pytest -m oracle
 pseudo-terminal to produce reference spectra.
 
 Both require the legacy C tree, which is **not redistributed** (see
-[Licensing and provenance](../dev/about.md#licensing-and-provenance)). Point `PYRUMP_C_REFERENCE`
+[Licensing and provenance](about.md#licensing-and-provenance)). Point `PYRUMP_C_REFERENCE`
 at it, or place it at `C-code/`. Tests skip cleanly when it is absent.
 
 ```bash
@@ -72,7 +72,7 @@ multi-layer sample with micron-thick polymer layers, agreement loosens to
 ~3e-3: thousands of sublayers accumulate single-precision differences, and part
 of the beam falls below the stopping cutoff.
 
-Full bibliography in [References](../dev/about.md#references).
+Full bibliography in [References](about.md#references).
 
 ### Atomic data provenance
 
