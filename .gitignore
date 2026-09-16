@@ -17,6 +17,7 @@ dist/
 venv/
 site/
 .pytest_cache/
+.ruff_cache/
 .coverage
 htmlcov/
 .DS_Store
