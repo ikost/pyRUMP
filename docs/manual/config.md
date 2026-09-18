@@ -55,9 +55,7 @@ needs the fallback that `MEV`/`THETA`/etc. got in 1.1.0.
 #### `DATA`
 
 ```
-Your wish? help data
-  DATA  show or change the atomic data directory
-  usage: DATA [dir]
+usage: DATA [dir]
 ```
 
 With no argument, prints the directory the atomic tables (`atom4.dat`,
@@ -68,9 +66,7 @@ recompute — for comparing two table sets without restarting pyRUMP.
 #### `FAITHFUL` `[new]`
 
 ```
-Your wish? help faithful
-  FAIThful  toggle faithful (bug-for-bug) vs corrected physics (FAITHFUL OFF to correct)
-  usage: FAITHFUL [on|off]
+usage: FAITHFUL [on|off]
 ```
 
 Toggles the session between the shipped C's bug-for-bug behaviour (the
@@ -82,9 +78,7 @@ Has no original-RUMP counterpart, hence `[new]`.
 #### `SCREENING` `[new]`
 
 ```
-Your wish? help screening
-  SCREening  select the Rutherford screening correction: NONE, LECUYER (default) or ANDERSEN
-  usage: SCREENING [none|lecuyer|andersen]
+usage: SCREENING [none|lecuyer|andersen]
 ```
 
 Selects the Rutherford screening correction. `LECUYER` is RUMP's own and
@@ -96,9 +90,7 @@ a few hundred keV or at small scattering angles.
 #### `MODE` `[new]`
 
 ```
-Your wish? help mode
-  MODE  SIM/PERT thickness convention, COMP or ATOMS -- see MODE with no argument
-  usage: MODE [Comp|Atoms]
+usage: MODE [Comp|Atoms]
 ```
 
 Sets how `SIM`/`PERT` describe a layer's thickness. `Comp` is RUMP's own

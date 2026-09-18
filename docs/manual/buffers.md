@@ -14,9 +14,7 @@ Lists the buffers, marking the active one.
 #### `READ`
 
 ```
-Your wish? help read
-  REad  read a file into a buffer
-  usage: GET <file|n>
+usage: GET <file|n>
 ```
 
 Cross-referenced from [Core workflow](shell.md#get-read): `READ <file>`
@@ -26,9 +24,7 @@ buffer number.
 #### `POINTAT`
 
 ```
-Your wish? help pointat
-  POintat  point at a buffer by number
-  usage: POINTAT <n>
+usage: POINTAT <n>
 ```
 
 Points at buffer *n*, by number only — unlike `GET`, which also accepts a
@@ -37,9 +33,7 @@ filename.
 #### `RELEASE` / `NEWALL`
 
 ```
-Your wish? help release
-  RELEASE  release the active buffer
-  usage: RELEASE [n]
+usage: RELEASE [n]
 ```
 
 `RELEASE` drops one buffer (default: active); `NEWALL` drops all of them.
@@ -47,9 +41,7 @@ Your wish? help release
 #### `EMPTY`
 
 ```
-Your wish? help empty
-  EMPty  reset a buffer to blank, or open a new one
-  usage: EMPTY [n]
+usage: EMPTY [n]
 ```
 
 Scrolls a fresh blank buffer into buffer 1 (default), or resets buffer *n*
@@ -58,13 +50,8 @@ in place.
 #### `COPY` / `MOVE`
 
 ```
-Your wish? help copy
-  COPY  copy one buffer to another
-  usage: COPY <source> <target>
-
-Your wish? help move
-  MOVE  exchange two buffers
-  usage: MOVE <a> <b>
+usage: COPY <source> <target>
+usage: MOVE <a> <b>
 ```
 
 `COPY` duplicates a buffer; `MOVE` exchanges two.
@@ -76,13 +63,8 @@ Your wish? copy 0 2              /* snapshot the simulation into buffer 2 */
 #### `WRITE` / `WRASCII`
 
 ```
-Your wish? help write
-  WRITE  write the active buffer to a .rbs file
-  usage: WRITE <file>
-
-Your wish? help wrascii
-  WRAscii  write the active buffer as text
-  usage: WRASCII <file>
+usage: WRITE <file>
+usage: WRASCII <file>
 ```
 
 Saves the active buffer, binary or text.
@@ -111,9 +93,7 @@ Prints the active buffer's full parameter set.
 #### `BEAM`
 
 ```
-Your wish? help beam
-  BEAM  incident beam species, e.g. 4He++
-  usage: BEAM 4He++
+usage: BEAM 4He++
 ```
 
 Sets the beam species and charge state.
@@ -121,9 +101,7 @@ Sets the beam species and charge state.
 #### `MEV`
 
 ```
-Your wish? help mev
-  MEV  beam energy
-  usage: MEV <energy>
+usage: MEV <energy>
 ```
 
 Sets the beam energy, MeV.
@@ -131,9 +109,7 @@ Sets the beam energy, MeV.
 #### `THETA`
 
 ```
-Your wish? help theta
-  THEta  sample tilt
-  usage: THETA <deg>
+usage: THETA <deg>
 ```
 
 Sets the sample tilt.
@@ -141,9 +117,7 @@ Sets the sample tilt.
 #### `PHI`
 
 ```
-Your wish? help phi
-  PHI  supplement of the scattering angle
-  usage: PHI <deg>
+usage: PHI <deg>
 ```
 
 Sets 180° minus the scattering angle.
@@ -151,9 +125,7 @@ Sets 180° minus the scattering angle.
 #### `PSI`
 
 ```
-Your wish? help psi
-  PSI  exit angle
-  usage: PSI <deg>
+usage: PSI <deg>
 ```
 
 Sets the exit angle (GENERAL geometry only).
@@ -161,9 +133,7 @@ Sets the exit angle (GENERAL geometry only).
 #### `GEOMETRY`
 
 ```
-Your wish? help geometry
-  GEOMetry  cornell, ibm or general
-  usage: GEOMETRY cornell|ibm|general
+usage: GEOMETRY cornell|ibm|general
 ```
 
 Sets the detector geometry convention.
@@ -171,9 +141,7 @@ Sets the detector geometry convention.
 #### `CONVERSION`
 
 ```
-Your wish? help conversion
-  CONVersion  keV per channel and offset
-  usage: CONVERSION <keV/ch> [keV(0)]
+usage: CONVERSION <keV/ch> [keV(0)]
 ```
 
 Sets the energy calibration: slope and, optionally, offset together.
@@ -181,9 +149,7 @@ Sets the energy calibration: slope and, optionally, offset together.
 #### `SLOPE` `[new]`
 
 ```
-Your wish? help slope
-  SLOpe  keV/channel alone, independent of CONVERSION's offset
-  usage: SLOPE <keV/ch>
+usage: SLOPE <keV/ch>
 ```
 
 Sets the calibration slope alone, independent of `CONVERSION`'s offset.
@@ -191,9 +157,7 @@ Sets the calibration slope alone, independent of `CONVERSION`'s offset.
 #### `OFFSET` `[new]`
 
 ```
-Your wish? help offset
-  OFFset  keV(0) alone, independent of CONVERSION's keV/ch
-  usage: OFFSET <keV(0)>
+usage: OFFSET <keV(0)>
 ```
 
 Sets the calibration offset alone, independent of `CONVERSION`'s slope.
@@ -201,9 +165,7 @@ Sets the calibration offset alone, independent of `CONVERSION`'s slope.
 #### `CORRECTION`
 
 ```
-Your wish? help correction
-  CORrection  normalization fudge factor
-  usage: CORRECTION <factor>
+usage: CORRECTION <factor>
 ```
 
 Sets the normalization fudge factor that absorbs charge-integration error
@@ -214,9 +176,7 @@ a fit instead of you setting it by hand — see
 #### `CHARGE`
 
 ```
-Your wish? help charge
-  CHarge  beam dose
-  usage: CHARGE <uC>
+usage: CHARGE <uC>
 ```
 
 Sets the integrated beam dose.
@@ -224,9 +184,7 @@ Sets the integrated beam dose.
 #### `CURRENT`
 
 ```
-Your wish? help current
-  CURRent  average beam current, for pileup
-  usage: CURRENT <nA>
+usage: CURRENT <nA>
 ```
 
 Sets the average beam current — enables pile-up modeling together with
@@ -235,9 +193,7 @@ Sets the average beam current — enables pile-up modeling together with
 #### `CHOFF`
 
 ```
-Your wish? help choff
-  CHOff  channel number of the first data point
-  usage: CHOFF <n>
+usage: CHOFF <n>
 ```
 
 Sets the channel number of the first data point.
@@ -245,9 +201,7 @@ Sets the channel number of the first data point.
 #### `FWHM`
 
 ```
-Your wish? help fwhm
-  FWHM  detector resolution
-  usage: FWHM <keV>
+usage: FWHM <keV>
 ```
 
 Sets the detector resolution.
@@ -255,9 +209,7 @@ Sets the detector resolution.
 #### `OMEGA`
 
 ```
-Your wish? help omega
-  OMEGA  detector solid angle
-  usage: OMEGA <msr>
+usage: OMEGA <msr>
 ```
 
 Sets the detector solid angle.
@@ -265,9 +217,7 @@ Sets the detector solid angle.
 #### `TAU`
 
 ```
-Your wish? help tau
-  TAU  MCA shaping time
-  usage: TAU <us>
+usage: TAU <us>
 ```
 
 Sets the MCA shaping time constant.
@@ -275,9 +225,7 @@ Sets the MCA shaping time constant.
 #### `IDENTIFIER`
 
 ```
-Your wish? help identifier
-  IDEntifier  description of the spectrum
-  usage: IDENTIFIER <text>
+usage: IDENTIFIER <text>
 ```
 
 Sets a free-text spectrum description.
@@ -285,9 +233,7 @@ Sets a free-text spectrum description.
 #### `DATE`
 
 ```
-Your wish? help date
-  DATE  when the spectrum was measured
-  usage: DATE <text>
+usage: DATE <text>
 ```
 
 Sets when the spectrum was measured.
@@ -295,9 +241,7 @@ Sets when the spectrum was measured.
 #### `FILENAME`
 
 ```
-Your wish? help filename
-  FILEname  record the buffer's source filename
-  usage: FILENAME <name>
+usage: FILENAME <name>
 ```
 
 Sets the recorded source filename.
@@ -305,9 +249,7 @@ Sets the recorded source filename.
 #### `SWALLOW`
 
 ```
-Your wish? help swallow
-  SWALLOW  read the following macro lines as channel data
-  usage: SWALLOW [-twocolumn]
+usage: SWALLOW [-twocolumn]
 ```
 
 Used inside an `XEQ` macro, reads the macro file's following lines straight

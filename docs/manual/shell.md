@@ -39,9 +39,7 @@ first — typing `?` at the RUMP prompt reproduces this same structure.
 #### `?` / `HELP`
 
 ```
-Your wish? help help
-  HELP  list the commands
-  usage: ? [name]
+usage: ? [name]
 ```
 
 Lists every command at the current level, one section per table — e.g. at
@@ -74,9 +72,7 @@ machine.
 #### `LS` / `DIRECTORY` / `SL`
 
 ```
-Your wish? help ls
-  LS  list files, optionally matching a pattern
-  usage: LS [pattern]
+usage: LS [pattern]
 ```
 
 Lists files, optionally matching a glob (`ls *.rbs`). `SL` is a bare
@@ -85,9 +81,7 @@ synonym, not shown in `?`'s listing but still usable.
 #### `LL`
 
 ```
-Your wish? help ll
-  LL  long listing with size and date
-  usage: LL [pattern]
+usage: LL [pattern]
 ```
 
 Long listing: size and modification time, columned. Deliberately not Unix
@@ -97,9 +91,7 @@ the same on every platform.
 #### `CD` / `CHDIR`
 
 ```
-Your wish? help cd
-  CD  change directory (no argument: home)
-  usage: CD [directory]
+usage: CD [directory]
 ```
 
 Changes directory; with no argument, goes home.
@@ -107,9 +99,7 @@ Changes directory; with no argument, goes home.
 #### `PUSHDIR` / `POPDIR`
 
 ```
-Your wish? help pushdir
-  PUSHDir  change directory, remembering this one
-  usage: PUSHDIR [dir]
+usage: PUSHDIR [dir]
 ```
 
 `PUSHDIR <dir>` remembers the current directory before changing to `<dir>`
@@ -122,9 +112,7 @@ Prints the working directory.
 #### `TYPE` / `CAT` / `MORE`
 
 ```
-Your wish? help type
-  TYpe  display a text file
-  usage: TYPE <file>
+usage: TYPE <file>
 ```
 
 Shows a text file, paged a screenful at a time when there's an actual
@@ -138,9 +126,7 @@ Clears the screen.
 #### `XEQ` / `CALL` / `EXECUTE`
 
 ```
-Your wish? help xeq
-  XEq  read RC43 .RBS file or execute a command file
-  usage: XEQ <file>
+usage: XEQ <file>
 ```
 
 Runs a file of commands through the same interpreter the prompt uses, so an
@@ -160,9 +146,7 @@ Your wish? xeq acquired.rbs     /* text macro -- replayed as commands      */
 #### `ECHO` / `QUIET`
 
 ```
-Your wish? help echo
-  ECHO  echo commands as they run
-  usage: ECHO [off]
+usage: ECHO [off]
 ```
 
 `ECHO [off]` toggles whether commands are echoed as they run — most useful
@@ -172,9 +156,7 @@ original's own off-synonym for `ECHO`.
 #### `SCRIPT` / `LOGFILE` / `RECORD`
 
 ```
-Your wish? help script
-  SCRIPT  record commands to a file for replay
-  usage: SCRIPT [file|off]
+usage: SCRIPT [file|off]
 ```
 
 Logs what you type into a file, for later replay with `XEQ`; `SCRIPT OFF`
@@ -191,9 +173,7 @@ session — see [Config](config.md).
 #### `GET` / `READ`
 
 ```
-Your wish? help get
-  GET  point at a buffer, or read a file into one
-  usage: GET <file|n>
+usage: GET <file|n>
 ```
 
 Reads a file into a buffer, or points at buffer *n* (`READ` reads a file
@@ -254,9 +234,7 @@ full name.
 #### `PLOT`
 
 ```
-Your wish? help plot
-  PLot  erase and plot a buffer or file
-  usage: PLOT [buffer|file]
+usage: PLOT [buffer|file]
 ```
 
 Erases and plots a buffer (default: active) or file. The plot is one
