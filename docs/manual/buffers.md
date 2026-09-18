@@ -57,7 +57,20 @@ usage: WRITE <file>
 usage: WRASCII <file>
 ```
 
-Saves the active buffer, binary or text.
+Saves the active buffer. `WRITE` writes the full RUMP binary `.rbs`
+format -- identifier, comments, date, dead-time correction, accelerator
+parameters, calibration, geometry, and counts -- the same self-describing
+format `GET` reads (see [File formats](file-formats.md)). It always writes
+compression mode 0 (unpacked floats) at format version 1.0, RUMP's own
+default; raising it to 1.1 is gated behind `CONFIG WRITE_LEVEL` in the
+original, which pyRUMP doesn't currently expose as a command.
+
+`WRASCII` writes far less: just the identifier (if any), then one count per
+line at six decimal places, no channel column -- none of `WRITE`'s
+beam/geometry/calibration metadata. `GET`ting a `WRASCII` file back reads as
+an ordinary [plain ASCII spectrum](file-formats.md), so it picks up your
+`~/.pyrumprc` defaults rather than round-tripping the original buffer's real
+settings.
 
 ### Sample & instrument parameters
 
