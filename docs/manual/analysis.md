@@ -8,9 +8,7 @@ convention (not RUMP's own `first`-relative channel numbering).
 #### `CURSOR`
 
 ```
-Your wish? help cursor
-  CURsor  read channel/energy/yield at the nearest data point
-  usage: CURSOR <channel>
+usage: CURSOR <channel>
 ```
 
 Reads the channel, energy and yield at the nearest sampled channel in the
@@ -25,9 +23,7 @@ actually there" the original's cursor served.
 #### `ELEMENT`
 
 ```
-Your wish? help element
-  ELement  expected energy/channel of an element's surface peak
-  usage: ELEMENT el [el ...]
+usage: ELEMENT el [el ...]
 ```
 
 Prints the expected K, energy and channel of each element's surface edge.
@@ -35,9 +31,7 @@ Prints the expected K, energy and channel of each element's surface edge.
 #### `MATRIX`
 
 ```
-Your wish? help matrix
-  MATrix  expected energy, channel and matrix height
-  usage: MATRIX el
+usage: MATRIX el
 ```
 
 Prints the expected energy, channel **and matrix height** for one element.
@@ -45,9 +39,7 @@ Prints the expected energy, channel **and matrix height** for one element.
 #### `WHATISIT`
 
 ```
-Your wish? help whatisit
-  WHATisit  identify elements near a channel
-  usage: WHATISIT <channel>
+usage: WHATISIT <channel>
 ```
 
 Identifies the elements whose surface edge is nearest a channel.
@@ -55,9 +47,7 @@ Identifies the elements whose surface edge is nearest a channel.
 #### `INFO`
 
 ```
-Your wish? help info
-  INFo  detailed report on an element
-  usage: INFO el
+usage: INFO el
 ```
 
 Full report: density, K, cross section, stopping factors, isotopes.
@@ -65,9 +55,7 @@ Full report: density, K, cross section, stopping factors, isotopes.
 #### `INTEGRAL`
 
 ```
-Your wish? help integral
-  INTegral  sum counts over a channel range
-  usage: INTEGRAL lo hi
+usage: INTEGRAL lo hi
 ```
 
 Gross/net counts over a channel range (background-corrected net).
@@ -75,9 +63,7 @@ Gross/net counts over a channel range (background-corrected net).
 #### `THICKNESS`
 
 ```
-Your wish? help thickness
-  THICkness  integral plus thickness conversion
-  usage: THICKNESS lo hi element
+usage: THICKNESS lo hi element
 ```
 
 `INTEGRAL` plus conversion to atoms/cm² and Angstroms.
@@ -110,9 +96,7 @@ these — see the [known-limitations note](../dev/about.md#milestones).
 #### `BACKGROUND`
 
 ```
-Your wish? help background
-  BACKground  fit and subtract a polynomial background
-  usage: BACKGROUND lo1 hi1 lo2 hi2 order [-inplace] [-noplot]
+usage: BACKGROUND lo1 hi1 lo2 hi2 order [-inplace] [-noplot]
 ```
 
 Fits and strips a polynomial background.
@@ -120,9 +104,7 @@ Fits and strips a polynomial background.
 #### `SMOOTH`
 
 ```
-Your wish? help smooth
-  SMOoth  smooth the active buffer (-sv, -conv, -fft)
-  usage: SMOOTH [-sv|-conv|-fft] [-range lo hi] [n]
+usage: SMOOTH [-sv|-conv|-fft] [-range lo hi] [n]
 ```
 
 Smooths the active buffer. `-conv`'s characteristic width uses RUMP's own
@@ -135,9 +117,7 @@ mode is active.
 #### `FFT`
 
 ```
-Your wish? help fft
-  FFT  FFT smooth (same as SMOOTH -FFT -RANGE)
-  usage: FFT lo hi width
+usage: FFT lo hi width
 ```
 
 Same as `SMOOTH -fft -range lo hi width`.
@@ -145,9 +125,7 @@ Same as `SMOOTH -fft -range lo hi width`.
 #### `WIDTH_THICK`
 
 ```
-Your wish? help width_thick
-  WIDth_thick  thickness from a peak's half-height width
-  usage: WIDTH_THICK ch1 ch2 element
+usage: WIDTH_THICK ch1 ch2 element
 ```
 
 Computes thickness from a peak's half-height width.
@@ -155,9 +133,7 @@ Computes thickness from a peak's half-height width.
 #### `CALIBRATE`
 
 ```
-Your wish? help calibrate
-  CALibrate  energy-calibrate from two known peaks
-  usage: CALIBRATE ch1 el1 ch2 el2 [energy_eV marker_channel]
+usage: CALIBRATE ch1 el1 ch2 el2 [energy_eV marker_channel]
 ```
 
 Sets keV/channel and keV(0) from two known peaks — see the `THICKNESS`
@@ -166,9 +142,7 @@ example above, which chains a `CALIBRATE` into it.
 #### `INTSET`
 
 ```
-Your wish? help intset
-  INTSET  change INTEGRAL/THICKNESS rounding and alpha mode
-  usage: INTSET [Round|Interp|Surface|Estimated|Query|?]
+usage: INTSET [Round|Interp|Surface|Estimated|Query|?]
 ```
 
 Picks two independent modes that both `INTEGRAL` and `THICKNESS` honor:
