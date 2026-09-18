@@ -27,6 +27,7 @@ dependencies = [
     "numpy>=1.26",
     "scipy>=1.11",
     "matplotlib>=3.8",
+    "pyreadline3>=3.4; sys_platform == 'win32'",
 ]
 
 [project.optional-dependencies]

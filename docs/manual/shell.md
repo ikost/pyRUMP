@@ -65,7 +65,11 @@ and runs there.
 
 Wildcards are expanded by the command itself, never by an OS shell, so `ls
 *.rbs` behaves the same on Linux, macOS and Windows. Tab completion works on
-both command names and paths.
+both command names and paths, backed by the standard library `readline`
+module. Windows has no built-in `readline`, so pyRUMP pulls in
+[pyreadline3](https://pypi.org/project/pyreadline3/) there automatically as
+a dependency; without it (e.g. an old install predating this), tab silently
+does nothing.
 
 There is deliberately **no shell escape** (the original's `!` / `DOS` /
 `CSH`): it would let any `.cmd` macro run arbitrary commands on your
