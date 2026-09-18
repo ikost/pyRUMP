@@ -22,6 +22,7 @@ from pathlib import Path
 
 import numpy as np
 
+from .. import __version__
 from ..model.detector import yield_normalisation
 from . import terminal_focus
 from .dispatch import CommandError
@@ -125,6 +126,7 @@ def _rebuilt_figure(session, n_axes: int, build, *, default_size: tuple[float, f
         plt.ion()
         figure = plt.figure()
         figure.set_size_inches(*default_size)
+        figure.canvas.manager.set_window_title(f"pyRUMP {__version__}")
     if len(figure.axes) != n_axes:
         figure.clf()
         build(figure)
