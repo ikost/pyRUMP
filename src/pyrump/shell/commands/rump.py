@@ -1612,7 +1612,7 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     # Buffers
     ("BUFFERS", 3, cmd_buffers, "display the buffer status"),
     ("GET", 3, cmd_get, "point at a buffer, or read a file into one"),
-    ("READ", 2, cmd_get, "read a file into a buffer"),
+    ("READ", -2, cmd_get, "synonym for GET"),
     ("POINTAT", 2, cmd_pointat, "point at a buffer by number"),
     ("RELEASE", 7, cmd_release, "release the active buffer"),
     ("EMPTY", 3, cmd_empty, "reset a buffer to blank, or open a new one"),
@@ -1683,6 +1683,7 @@ for _name, _minlen, _handler, _help in _ENTRIES:
     TABLE.add(_name, _minlen, _handler, _help)
 TABLE.note_synonym("COMPARE", "CMP")
 TABLE.note_synonym("FIGSAVE", "HCOPY")
+TABLE.note_synonym("GET", "READ")
 
 # ---------------------------------------------------------------------------
 # Sections for the ``?``/``HELP`` listing, most important first. Display only
@@ -1699,7 +1700,7 @@ _HELP_GROUPS: list[tuple[str, list[str]]] = [
       "LOG", "NORMALIZE", "RAW", "LABELS", "STRUCTLABEL", "COMPFRAC",
       "ENERGY", "AXIS", "BLOWUP", "EXPAND", "PARAMETERS", "DISPLAY"]),
     ("Buffers",
-     ["BUFFERS", "READ", "POINTAT", "RELEASE", "EMPTY", "NEWALL", "COPY",
+     ["BUFFERS", "POINTAT", "RELEASE", "EMPTY", "NEWALL", "COPY",
       "MOVE", "WRITE", "WRASCII"]),
     ("Sample & instrument parameters",
      ["ACTIVE", "BEAM", "MEV", "THETA", "PHI", "PSI", "GEOMETRY",

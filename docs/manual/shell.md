@@ -20,46 +20,31 @@ Your wish? display
 Your wish? quit
 ```
 
-Command names and their **minimum abbreviations** follow the original
+Command names and their **minimum abbreviations** as well as some useful synonyms for backward compatibility with original RUMP follow the original
 (`REGion`, `OVerlay`), so `reg 100 400` and `region 100 400` are the same
-command. `?` lists everything, with the required characters upper-cased. One
-exception: `COMPARE` requires its full name at every level, since a partial
-abbreviation collided with `COMPOSITION` in SIM and PERT; `CMP` works
+command. `help` or `?` lists everything, with the required characters upper-cased. One
+exception: `compare` requires its full name at every level, since a partial
+abbreviation collided with `COMPOSITION` in SIM and PERT; `cmp` works
 everywhere instead as an explicit synonym.
 
 Commands tagged `[new]` below have no original-RUMP counterpart — see the
-[Changelog](https://github.com/ikost/pyRUMP/releases)'s versioning note for what that means for
-`pip install`.
-
-The sections below follow `?`'s own grouping and order, most important
-first — typing `?` at the RUMP prompt reproduces this same structure.
+[Changelog](https://github.com/ikost/pyRUMP/releases)'s versioning note for what that means for.
 
 ## General system commands
 
-#### `?` / `HELP`
+####  `HELP` / `?` 
 
 ```
-usage: ? [name]
+help [name]
 ```
 
-Lists every command at the current level, one section per table — e.g. at
-the RUMP level, "Core workflow", "Settings", and so on, matching the
-original's own grouping (`rump.c:351-360`). `HELP <name>` (or `? <name>`)
-describes one command instead. A name this level doesn't know falls through
-to whatever a sub-level would resolve it to, so `HELP THICK` works from the
-RUMP prompt even though `THICK` is a `PERT` command.
+Lists every command at the current level . `HELP <name>` (or `? <name>`)
+describes one command instead. 
 
-#### `QUIT` / `BYE`
+#### `QUIT` / `BYE` / 'q'
 
-Leaves pyRUMP. Run interactively (not from an `XEQ` macro, which has no one
-at the keyboard to answer), it asks "Really quit pyRUMP? [y/N]" first;
-anything but `y`/`yes` cancels.
+Leaves pyRUMP or goes one level up from `SIM` and `PERT`. It asks "Really quit pyRUMP? [y/N]" first; anything but `y`/`yes` cancels.
 
-The rest of this section is a port of RUMP's own filesystem commands
-(`lexp/system.c:175`), so you can move to your data rather than restarting
-pyRUMP in the right directory. Reachable from every level — as in the
-original, a command `SIM`/`PERT` doesn't know returns you to the RUMP level
-and runs there.
 
 Wildcards are expanded by the command itself, never by an OS shell, so `ls
 *.rbs` behaves the same on Linux, macOS and Windows. Tab completion works on
@@ -76,16 +61,16 @@ machine.
 #### `LS` / `DIRECTORY` / `SL`
 
 ```
-usage: LS [pattern]
+LS [pattern]
 ```
 
 Lists files, optionally matching a glob (`ls *.rbs`). `SL` is a bare
-synonym, not shown in `?`'s listing but still usable.
+synonym, not shown in `?`'s listing but still usable. Tab autocompletion and wildcards is implemented.
 
 #### `LL`
 
 ```
-usage: LL [pattern]
+LL [pattern]
 ```
 
 Long listing: size and modification time, columned. Deliberately not Unix
@@ -95,7 +80,7 @@ the same on every platform.
 #### `CD` / `CHDIR`
 
 ```
-usage: CD [directory]
+CD [directory]
 ```
 
 Changes directory; with no argument, goes home.
@@ -103,7 +88,7 @@ Changes directory; with no argument, goes home.
 #### `PUSHDIR` / `POPDIR`
 
 ```
-usage: PUSHDIR [dir]
+PUSHDIR [dir]
 ```
 
 `PUSHDIR <dir>` remembers the current directory before changing to `<dir>`
@@ -113,10 +98,10 @@ usage: PUSHDIR [dir]
 
 Prints the working directory.
 
-#### `TYPE` / `CAT` / `MORE`
+####  `CAT` / `MORE` / `TYPE` 
 
 ```
-usage: TYPE <file>
+CAT <file>
 ```
 
 Shows a text file, paged a screenful at a time when there's an actual
@@ -130,7 +115,7 @@ Clears the screen.
 #### `XEQ` / `CALL` / `EXECUTE`
 
 ```
-usage: XEQ <file>
+XEQ <file>
 ```
 
 Runs a file of commands through the same interpreter the prompt uses, so an
@@ -150,7 +135,7 @@ Your wish? xeq acquired.rbs     /* text macro -- replayed as commands      */
 #### `ECHO` / `QUIET`
 
 ```
-usage: ECHO [off]
+ECHO [off]
 ```
 
 `ECHO [off]` toggles whether commands are echoed as they run — most useful
@@ -160,7 +145,7 @@ original's own off-synonym for `ECHO`.
 #### `SCRIPT` / `LOGFILE` / `RECORD`
 
 ```
-usage: SCRIPT [file|off]
+SCRIPT [file|off]
 ```
 
 Logs what you type into a file, for later replay with `XEQ`; `SCRIPT OFF`
@@ -177,11 +162,11 @@ session — see [Config](config.md).
 #### `GET` / `READ`
 
 ```
-usage: GET <file|n>
+GET <file|n>
 ```
 
-Reads a file into a buffer, or points at buffer *n* (`READ` reads a file
-only). Reading a file you don't already have open always lands it in buffer
+Reads a file into a buffer, or points at buffer *n*. `READ` is a synonym,
+usable wherever `GET` is. Reading a file you don't already have open always lands it in buffer
 1 and becomes ACTIVE, pushing every other data buffer up one slot -- matching
 the original, where buffer 1 is "whatever was read most recently," not a
 fixed slot. Unlike the original, though, nothing ever falls off the end and
@@ -238,7 +223,7 @@ full name.
 #### `PLOT`
 
 ```
-usage: PLOT [buffer|file]
+ PLOT [buffer|file]
 ```
 
 Erases and plots a buffer (default: active) or file. The plot is one
@@ -267,7 +252,7 @@ Plotting & display commands (`OVERLAY`, `REPLOT`, `FIGSAVE`, `REGION`,
 `STRUCTLABEL`, `COMPFRAC`, `ENERGY`, `AXIS`, `BLOWUP`, `PARAMETERS`,
 `DISPLAY`) have moved to [Plotting & display](plotting.md).
 
-Buffers (`BUFFERS`, `READ`, `POINTAT`, `RELEASE`/`NEWALL`, `EMPTY`, `COPY`/
+Buffers (`BUFFERS`, `POINTAT`, `RELEASE`/`NEWALL`, `EMPTY`, `COPY`/
 `MOVE`, `WRITE`/`WRASCII`) and sample & instrument parameters (`ACTIVE`,
 `BEAM`, `MEV`, `THETA`, `PHI`, `PSI`, `GEOMETRY`, `CONVERSION`, `SLOPE`,
 `OFFSET`, `CORRECTION`, `CHARGE`, `CURRENT`, `CHOFF`, `FWHM`, `OMEGA`, `TAU`,

@@ -11,16 +11,6 @@ read file gets slotted in.
 
 Lists the buffers, marking the active one.
 
-#### `READ`
-
-```
-usage: GET <file|n>
-```
-
-Cross-referenced from [Core workflow](shell.md#get-read): `READ <file>`
-reads a file into a buffer, same as `GET` except it never accepts a bare
-buffer number.
-
 #### `POINTAT`
 
 ```
