@@ -46,18 +46,6 @@ describes one command instead.
 Leaves pyRUMP or goes one level up from `SIM` and `PERT`. It asks "Really quit pyRUMP? [y/N]" first; anything but `y`/`yes` cancels.
 
 
-Wildcards are expanded by the command itself, never by an OS shell, so `ls
-*.rbs` behaves the same on Linux, macOS and Windows. Tab completion works on
-both command names and paths, backed by the standard library `readline`
-module. Windows has no built-in `readline`, so pyRUMP pulls in
-[pyreadline3](https://pypi.org/project/pyreadline3/) there automatically as
-a dependency; without it (e.g. an old install predating this), tab silently
-does nothing.
-
-There is deliberately **no shell escape** (the original's `!` / `DOS` /
-`CSH`): it would let any `.cmd` macro run arbitrary commands on your
-machine.
-
 #### `LS` / `DIRECTORY` / `SL`
 
 ```
@@ -65,7 +53,7 @@ LS [pattern]
 ```
 
 Lists files, optionally matching a glob (`ls *.rbs`). `SL` is a bare
-synonym, not shown in `?`'s listing but still usable. Tab autocompletion and wildcards is implemented.
+synonym, not shown in `?`'s listing but still usable. Tab autocompletion and wildcards are implemented.
 
 #### `LL`
 
@@ -75,7 +63,7 @@ LL [pattern]
 
 Long listing: size and modification time, columned. Deliberately not Unix
 permission bits — they carry no meaning on Windows, and this listing looks
-the same on every platform.
+the same on every platform. 
 
 #### `CD` / `CHDIR`
 
@@ -84,6 +72,8 @@ CD [directory]
 ```
 
 Changes directory; with no argument, goes home.
+Tab autocompletion and wildcards are implemented.
+
 
 #### `PUSHDIR` / `POPDIR`
 
@@ -240,28 +230,9 @@ Forces buffer 0 (the simulation) to recompute. Rarely needed by hand —
 `SIM`/`PERT` changes already trigger it — but useful after something that
 doesn't, e.g. reloading the atomic tables with `DATA`.
 
-#### `RETURN`
+#### `RETURN` / 'Q'
 
 Leaves `SIM` or `PERT` back to the RUMP level. Typing a command neither
 sub-level recognizes does the same thing implicitly — it falls through to
 RUMP and runs there — so `RETURN` is only needed to get back with nothing
 else to run.
-
-Plotting & display commands (`OVERLAY`, `REPLOT`, `FIGSAVE`, `REGION`,
-`EXPAND`, `COUNTS`, `LINEAR`/`SQRT`/`LOG`, `NORMALIZE`/`RAW`, `LABELS`,
-`STRUCTLABEL`, `COMPFRAC`, `ENERGY`, `AXIS`, `BLOWUP`, `PARAMETERS`,
-`DISPLAY`) have moved to [Plotting & display](plotting.md).
-
-Buffers (`BUFFERS`, `POINTAT`, `RELEASE`/`NEWALL`, `EMPTY`, `COPY`/
-`MOVE`, `WRITE`/`WRASCII`) and sample & instrument parameters (`ACTIVE`,
-`BEAM`, `MEV`, `THETA`, `PHI`, `PSI`, `GEOMETRY`, `CONVERSION`, `SLOPE`,
-`OFFSET`, `CORRECTION`, `CHARGE`, `CURRENT`, `CHOFF`, `FWHM`, `OMEGA`, `TAU`,
-`IDENTIFIER`, `DATE`, `FILENAME`, `SWALLOW`) have moved to
-[Buffers & instrument parameters](buffers.md).
-
-Analysis tools (`CURSOR`, `ELEMENT`, `MATRIX`, `WHATISIT`, `INFO`,
-`INTEGRAL`, `THICKNESS`, `BACKGROUND`, `SMOOTH`, `FFT`, `WIDTH_THICK`,
-`CALIBRATE`, `INTSET`) have moved to [Analysis tools](analysis.md).
-
-Settings (`DATA`, `FAITHFUL`, `SCREENING`, `MODE`, `PROFILE`) have moved to
-[Config](config.md#settings).
