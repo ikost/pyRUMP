@@ -43,6 +43,27 @@ Your wish? get measured.rbs     /* binary format -- reads records directly */
 Your wish? xeq acquired.rbs     /* text macro -- replayed as commands      */
 ```
 
-See [Quick start](../getting-started/index.md#data-loading) for both formats
-worked end to end, including what each of `GET`/`XEQ` prints when pointed at
-the other one's file by mistake.
+**Plain ASCII spectrum** (`GET`) is anything `GET` is pointed at that isn't
+one of the binary extensions above (`.rbs`, `.rump`, `.frs`, `.fres`,
+`.pixe`) -- the format is sniffed from the file's content, not its name, so
+`.dat`, `.asc`, `.ascii`, `.txt`, or no extension at all all work the same
+way. Three dialects are recognized automatically:
+
+* **one column** -- just the counts, one per line, in channel order
+* **two column** -- `channel value` pairs
+* **tab-delimited** -- as exported by a spreadsheet
+
+Any leading lines that aren't numbers become the identifier; RUMP's own
+`WRASCII` output (a keyword header block ending in the literal line
+`Swallow`, then one count per line) is also recognized and its header parsed
+back into metadata. A plain ASCII file carries no beam/geometry/detector
+metadata of its own, so `GET`ting one fills in your `~/.pyrumprc` defaults
+instead -- see [Config](config.md#pyrumprc).
+
+```
+Your wish? get counts.dat       /* one count per line, channel order       */
+```
+
+See [Quick start](../getting-started/index.md#data-loading) for both binary
+formats worked end to end, including what each of `GET`/`XEQ` prints when
+pointed at the other one's file by mistake.

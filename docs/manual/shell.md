@@ -156,7 +156,11 @@ GET <file|n>
 ```
 
 Reads a file into a buffer, or points at buffer *n*. `READ` is a synonym,
-usable wherever `GET` is. Reading a file you don't already have open always lands it in buffer
+usable wherever `GET` is. Besides RUMP's own binary format, `GET` also reads
+plain ASCII spectra -- a bare list of channel counts, one per line, or a
+couple of other column layouts -- sniffed from the file's content rather
+than its extension; see [File formats](file-formats.md) for the dialects and
+what metadata they get. Reading a file you don't already have open always lands it in buffer
 1 and becomes ACTIVE, pushing every other data buffer up one slot -- matching
 the original, where buffer 1 is "whatever was read most recently," not a
 fixed slot. Unlike the original, though, nothing ever falls off the end and
