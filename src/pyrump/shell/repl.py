@@ -84,8 +84,8 @@ def execute_line(session: Session, line: str, stack: list[str]) -> None:
 
     Falls outwards through the mode stack, popping levels as it goes -- RUMP's
     automatic return from SIM and PERT -- and finally to the general system
-    commands, mirroring the main loop at rump.c:283-302 where ``LexSystem`` is
-    tried after every RUMP table has missed.
+    commands, which run in place without changing the stack (see the note
+    below).
     """
     text = strip_comment(line)
     if not text:
@@ -108,11 +108,12 @@ def execute_line(session: Session, line: str, stack: list[str]) -> None:
         _invoke(session, command, rest, stack)
         return
 
-    # The system tier sits below every mode. Reaching it means no RUMP-level
-    # table matched, which in the C also means SIM/PERT have been left behind.
+    # The system tier sits below every mode, and unlike a mode's own tables,
+    # matching here does not leave SIM/PERT -- sim2.c:473 and pert2.c:198 both
+    # just "continue" their loop after a general command runs, the same way
+    # the top-level RUMP loop does at rump.c:283-291.
     command = tables_for("system").match(name)
     if command is not None:
-        del stack[1:]
         _invoke(session, command, rest, stack)
         return
 

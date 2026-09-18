@@ -162,7 +162,7 @@ the original, where buffer 1 is "whatever was read most recently," not a
 fixed slot. Unlike the original, though, nothing ever falls off the end and
 gets destroyed to make room: the buffer list just keeps growing. Re-`GET`ting
 a file already open in some buffer just re-selects it in place, without
-scrolling anything (`cmds.htm`'s documented `PLOT` behaviour). Buffer 0 has
+scrolling anything (`cmds.htm`'s documented `PLOT` behavior). Buffer 0 has
 **no simulate command**: it is recomputed whenever the sample or the active
 buffer's parameters change, which is how RUMP behaved.
 

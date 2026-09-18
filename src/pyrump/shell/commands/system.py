@@ -244,7 +244,10 @@ def cmd_cls(session, args: ArgReader) -> None:
     """
     args.done()
     if enable_ansi():
-        print("\x1b[2J\x1b[H", end="")
+        # flush=True: readline draws the next prompt through its own buffer,
+        # not Python's -- an unflushed clear can land after that prompt and
+        # leave the cursor in the wrong place.
+        print("\x1b[2J\x1b[H", end="", flush=True)
     else:  # pragma: no cover - pre-Windows-10 console
         os.system("cls")  # noqa: S605 - fixed string, no user input
 

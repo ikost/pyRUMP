@@ -335,11 +335,13 @@ def test_xeq_runs_a_macro_at_minlen_two(session, tree, tmp_path):
 
 
 def test_system_commands_are_reachable_from_sim(session, tree):
-    """SIM does not know PWD, so RUMP is returned to -- then LexSystem runs it."""
+    """SIM does not know CD, so it falls through to the system table -- but,
+    per sim2.c:473 (``if (LexSystem(0,token)) continue;``), running it there
+    does not leave SIM."""
     os.chdir(tree)
     stack = ["rump", "sim"]
     run(session, "cd data", stack=stack)
-    assert stack == ["rump"]
+    assert stack == ["rump", "sim"]
     assert Path.cwd() == (tree / "data").resolve()
 
 
