@@ -147,9 +147,9 @@ Standing per-user defaults (the `FAITHFUL` toggle, default experiment
 settings, plot state) are set once via `~/.pyrumprc` rather than every
 session — see [Config](config.md).
 
-### Core workflow
+## Core workflow
 
-#### `GET` / `READ`
+### `GET` / `READ`
 
 ```
 GET <file|n>
@@ -173,14 +173,14 @@ Your wish? get 0                /* point back at the simulation       */
 Your wish? copy 0 2              /* snapshot the simulation into buffer 2 */
 ```
 
-#### `XEQ`
+### `XEQ`
 
 Cross-referenced here from [General system commands](#xeq-call-execute):
 `XEQ <file>` runs a command file, and loads data about as often as it runs a
 macro, so it belongs alongside `GET` as much as alongside the filesystem
 commands it's filed under.
 
-#### `SIM`
+### `SIM`
 
 Enters the sample-description editor: its own `SIM Command:` prompt, for
 building or editing the layered target `PERT` fits against and `COMPARE`
@@ -195,14 +195,14 @@ Your wish? sim thick 1 500 A
   layer 1 thickness = 500 A
 ```
 
-#### `PERT`
+### `PERT`
 
 Enters the fitting sub-processor: its own `PERT Command:` prompt, for
 selecting what varies and running the least-squares search. Same one-shot
 form as `SIM` — `PERT GO` re-runs the last selection without entering the
 prompt. See [SIM and PERT](sim-pert.md).
 
-#### `COMPARE` / `CMP`
+### `COMPARE` / `CMP`
 
 Active buffer vs. the simulation, with Poisson residuals and a reduced
 chi-square readout (over `PERT`'s error windows if set, else the visible
@@ -210,7 +210,7 @@ chi-square readout (over `PERT`'s error windows if set, else the visible
 alike — see the abbreviation note above for why `COMPARE` itself needs its
 full name.
 
-#### `PLOT`
+### `PLOT`
 
 ```
  PLOT [buffer|file]
@@ -224,13 +224,13 @@ persistent matplotlib window whose state survives between commands — see
 Your wish? plot 1               /* erase and plot buffer 1            */
 ```
 
-#### `RECALCULATE`
+### `RECALCULATE`
 
 Forces buffer 0 (the simulation) to recompute. Rarely needed by hand —
 `SIM`/`PERT` changes already trigger it — but useful after something that
 doesn't, e.g. reloading the atomic tables with `DATA`.
 
-#### `RETURN` / 'Q'
+### `RETURN` / 'Q'
 
 Leaves `SIM` or `PERT` back to the RUMP level. Typing a command neither
 sub-level recognizes does the same thing implicitly — it falls through to
