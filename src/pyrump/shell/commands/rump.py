@@ -369,11 +369,25 @@ def cmd_wrascii(session, args: ArgReader) -> None:
     """``WRASCII <file>`` -- write the active buffer as text, matching
     RUMP's own ``WRASCII`` (bmanip.c:595-650): a keyword header carrying
     every parameter, the literal line ``Swallow``, then one count per line --
-    plain text, unlike the binary format `WRITE` uses."""
+    plain text, unlike the binary format `WRITE` uses.
+
+    Defaults to a ``.dat`` extension when none is given. A ``.rbs``/``.RBS``
+    extension here is a footgun rather than an error: `GET` only tells an
+    RC43 macro apart from this by checking whether a file under that
+    extension is plain text at all, not by its content, so it would refuse
+    this output as a suspected macro (see file-formats.md).
+    """
     from ...io.ascii import write_ascii
 
     target = Path(args.token("an output file"))
     args.done()
+    if not target.suffix:
+        target = target.with_suffix(".dat")
+    elif target.suffix.lower() == ".rbs":
+        print(
+            f"  WARNING: {target} -- GET will refuse this as a suspected RC43 "
+            "macro; use a different extension (e.g. .dat) to GET it back"
+        )
     buffer = session.buffers.require_active()
     write_ascii(target, buffer.spectrum.counts, header=_wrascii_header(session, buffer))
     print(f"wrote {target}")

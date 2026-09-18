@@ -77,7 +77,10 @@ anything that isn't the binary format) only ever picks up the first
 non-numeric line as the identifier and ignores the rest, so `GET`ting a
 `WRASCII` file back -- in pyRUMP or the original -- still falls back to your
 `~/.pyrumprc` defaults for beam/geometry/calibration, not the header's own
-values.
+values. `[new]` A bare filename with no extension gets `.dat` added
+automatically; `.rbs`/`.RBS` is a footgun rather than a hard error --
+`WRASCII` still writes the file but warns, since `GET` would otherwise
+mistake it for an RC43 macro and refuse it (see [File formats](file-formats.md)).
 
 ### Sample & instrument parameters
 

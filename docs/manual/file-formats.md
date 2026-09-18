@@ -92,8 +92,10 @@ output are plain text, and `GET` only tells them apart by checking whether a
 file with a `.rbs`/`.RBS` extension is printable text at all (not by its
 content), giving `WRASCII` output that same extension makes `GET` reject it
 as a suspected RC43 macro -- `use XEQ, not GET, to load it` -- even though it
-isn't one. Use `.dat`/`.txt`/`.asc` (or no extension) for `WRASCII` output
-you intend to `GET` back.
+isn't one. `WRASCII` defaults to a `.dat` extension when you don't give one
+of your own, and warns if you explicitly ask for `.rbs`/`.RBS`, but the
+warning doesn't stop the write -- rename it before `GET`ting it back if you
+want that to work.
 
 See [Quick start](../getting-started/index.md#data-loading) for both binary
 formats worked end to end, including what each of `GET`/`XEQ` prints when

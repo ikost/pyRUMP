@@ -183,6 +183,23 @@ def test_wrascii_writes_rumps_own_text_format(session, tmp_path):
 
 
 @needs_data
+def test_wrascii_defaults_to_dat_extension(session, tmp_path):
+    run(session, f"wrascii {tmp_path / 'buffer'}")
+    assert (tmp_path / "buffer.dat").exists()
+
+
+@needs_data
+def test_wrascii_warns_about_an_rbs_extension(session, tmp_path, capsys):
+    """.rbs/.RBS makes GET mistake this output for an RC43 macro and refuse
+    it (see file-formats.md), so it's worth a warning rather than a silent
+    footgun."""
+    target = tmp_path / "buffer.rbs"
+    run(session, f"wrascii {target}")
+    assert target.exists()  # still written -- just warned about
+    assert "GET will refuse this" in capsys.readouterr().out
+
+
+@needs_data
 def test_normalize_and_raw_toggle(session):
     run(session, "normalize")
     assert session.plot.normalized is True
