@@ -54,11 +54,14 @@ way. Three dialects are recognized automatically:
 * **tab-delimited** -- as exported by a spreadsheet
 
 Any leading lines that aren't numbers become the identifier; RUMP's own
-`WRASCII` output (a keyword header block ending in the literal line
-`Swallow`, then one count per line) is also recognized and its header parsed
-back into metadata. A plain ASCII file carries no beam/geometry/detector
-metadata of its own, so `GET`ting one fills in your `~/.pyrumprc` defaults
-instead -- see [Config](config.md#pyrumprc).
+[`WRASCII`](buffers.md#write-wrascii) output (a keyword header block ending
+in the literal line `Swallow`, then one count per line) is also recognized
+this way, matching what RUMP's own plain-ASCII reader does with it: only the
+first non-numeric line becomes the identifier, the rest is read but not
+otherwise acted on. So `GET`ting a plain ASCII file -- `WRASCII`'s own output
+included -- always fills in your `~/.pyrumprc` defaults for
+beam/geometry/detector metadata, never the header's own values
+-- see [Config](config.md#pyrumprc).
 
 ```
 Your wish? get counts.dat       /* one count per line, channel order       */

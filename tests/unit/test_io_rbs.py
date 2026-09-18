@@ -299,6 +299,24 @@ def test_ascii_two_column(tmp_path):
     assert np.allclose(result.channels, [10, 11])
 
 
+def test_write_ascii_header_mode_round_trips(tmp_path):
+    """The ``header`` kwarg writes RUMP's WRASCII dialect, readable back."""
+    path = tmp_path / "wrascii.dat"
+    write_ascii(
+        path,
+        np.array([1.0, 2.0, 3.0]),
+        header="Spectrum    RBS\nIdent      'hdr test'\n",
+    )
+    text = path.read_text()
+    assert text.startswith("Spectrum    RBS\nIdent      'hdr test'\nSwallow\n")
+    assert text.endswith("3.000000\n\n")
+
+    result = read_ascii(path)
+    assert np.allclose(result.counts, [1.0, 2.0, 3.0])
+    assert result.identifier == "hdr test"
+    assert result.metadata["Spectrum"] == "RBS"
+
+
 def test_ascii_reads_rump_wrascii_output(tmp_path):
     """The keyword header ends at the literal line 'Swallow'."""
     path = tmp_path / "c.dat"

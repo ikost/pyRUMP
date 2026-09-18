@@ -162,6 +162,27 @@ def test_yield_scale_commands(session):
 
 
 @needs_data
+def test_wrascii_writes_rumps_own_text_format(session, tmp_path):
+    """bmanip.c:595-650's keyword header, not a bare counts dump -- verified
+    byte-for-byte against the real binary in test_io_rbs's oracle tests."""
+    out = tmp_path / "buffer.dat"
+    run(session, f"wrascii {out}")
+
+    text = out.read_text()
+    lines = text.splitlines()
+    assert lines[0] == "Empty File 'test'"
+    assert lines[1] == "Spectrum    RBS"
+    assert "Swallow" in lines
+    assert lines[lines.index("Swallow") + 1] == "1.562500"  # 100/64 counts
+
+    from pyrump.io.ascii import read_ascii
+
+    result = read_ascii(out)
+    assert result.metadata["Spectrum"] == "RBS"
+    assert np.allclose(result.counts, session.buffers[1].spectrum.counts)
+
+
+@needs_data
 def test_normalize_and_raw_toggle(session):
     run(session, "normalize")
     assert session.plot.normalized is True

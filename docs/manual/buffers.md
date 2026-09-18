@@ -65,12 +65,19 @@ compression mode 0 (unpacked floats) at format version 1.0, RUMP's own
 default; raising it to 1.1 is gated behind `CONFIG WRITE_LEVEL` in the
 original, which pyRUMP doesn't currently expose as a command.
 
-`WRASCII` writes far less: just the identifier (if any), then one count per
-line at six decimal places, no channel column -- none of `WRITE`'s
-beam/geometry/calibration metadata. `GET`ting a `WRASCII` file back reads as
-an ordinary [plain ASCII spectrum](file-formats.md), so it picks up your
-`~/.pyrumprc` defaults rather than round-tripping the original buffer's real
-settings.
+`WRASCII` writes RUMP's own plain-text dialect instead (bmanip.c:595-650): a
+keyword header -- identifier, date, charge/energy, calibration, angles,
+detector solid angle/correction, channel offset/FWHM, current, geometry and
+beam code -- then the literal line `Swallow`, then one count per line. It's
+an ordinary text file, editable like the RC43 macros `XEQ` reads (see
+[File formats](file-formats.md)), and matches the real RUMP binary's output
+byte-for-byte for the same buffer. That said, the header is only for a human
+reading the file: RUMP's own plain-ASCII reader (what `GET` falls back to for
+anything that isn't the binary format) only ever picks up the first
+non-numeric line as the identifier and ignores the rest, so `GET`ting a
+`WRASCII` file back -- in pyRUMP or the original -- still falls back to your
+`~/.pyrumprc` defaults for beam/geometry/calibration, not the header's own
+values.
 
 ### Sample & instrument parameters
 

@@ -326,14 +326,56 @@ def cmd_write(session, args: ArgReader) -> None:
     print(f"wrote {target}")
 
 
+#: bmanip.c:619-627's geometry-name strings, keyed by our own GeometryKind.
+_WRASCII_GEOMETRY_NAMES = {
+    GeometryKind.IBM: "IBM",
+    GeometryKind.CORNELL: "Cornell",
+    GeometryKind.GENERAL: "General",
+}
+
+
+def _wrascii_beam_code(session, beam) -> str:
+    """``4He++`` -- nearest-integer mass, element symbol, one sign per unit of
+    charge state (rdwr.c:540 ``RbsBeamCode``)."""
+    symbol = session.table.by_z(beam.z).symbol
+    sign = "+" if beam.charge_state >= 0 else "-"
+    return f"{round(beam.mass)}{symbol}{sign * abs(beam.charge_state)}"
+
+
+def _wrascii_header(session, buffer) -> str:
+    """The keyword block RUMP's own ``WRASCII`` writes ahead of the counts
+    (bmanip.c:619-641), reproduced field-for-field."""
+    c, g, m, b = buffer.calibration, buffer.geometry, buffer.measurement, buffer.beam
+    geometry_name = _WRASCII_GEOMETRY_NAMES.get(g.kind, "??")
+    # RUMP stores the fully qualified path it read the file from here, not
+    # just the basename `buffer.name` keeps for display elsewhere.
+    filename = str(buffer.path) if buffer.path is not None else buffer.name
+    return (
+        f"Empty File '{filename}'\n"
+        f"Spectrum    RBS\n"
+        f"Ident      '{buffer.identifier}'\n"
+        f"Date       '{buffer.date}'\n"
+        f"Charge      {m.charge_uC:.6f}     MeV  {b.e0_MeV:.6f}\n"
+        f"Conversion {c.kevch:.6f} {c.kev0:.6f}\n"
+        f"Theta       {g.theta:.6f}     Phi  {g.phi:.6f}\n"
+        f"Omega       {m.omega_msr:.6f}     Corr {m.correction:.6f}\n"
+        f"Choff       {c.first:.6f}     FWHM {m.fwhm_keV:.6f}\n"
+        f"Current {m.current_nA:.6f}\n"
+        f"Geometry {geometry_name}        Beam {_wrascii_beam_code(session, b)}\n"
+    )
+
+
 def cmd_wrascii(session, args: ArgReader) -> None:
-    """``WRASCII <file>`` -- write the active buffer as text."""
+    """``WRASCII <file>`` -- write the active buffer as text, matching
+    RUMP's own ``WRASCII`` (bmanip.c:595-650): a keyword header carrying
+    every parameter, the literal line ``Swallow``, then one count per line --
+    plain text, unlike the binary format `WRITE` uses."""
     from ...io.ascii import write_ascii
 
     target = Path(args.token("an output file"))
     args.done()
     buffer = session.buffers.require_active()
-    write_ascii(target, buffer.spectrum.counts, identifier=buffer.identifier)
+    write_ascii(target, buffer.spectrum.counts, header=_wrascii_header(session, buffer))
     print(f"wrote {target}")
 
 

@@ -98,9 +98,23 @@ def write_ascii(
     identifier: str = "",
     two_column: bool = False,
     first_channel: int = 0,
+    header: str | None = None,
 ) -> None:
-    """Write a one- or two-column ASCII spectrum."""
+    """Write a one- or two-column ASCII spectrum.
+
+    With ``header``, writes RUMP's own ``WRASCII`` dialect instead: that text
+    verbatim, then the literal line ``Swallow``, then one count per line, a
+    trailing blank line, and nothing else -- ``identifier``/``two_column``/
+    ``first_channel`` are ignored, since the header already carries the
+    identifier and RUMP's ``WRASCII`` has no two-column form.
+    """
     counts = np.asarray(counts, dtype=np.float64)
+    if header is not None:
+        stripped = header.rstrip("\n")
+        body = "\n".join(f"{value:.6f}" for value in counts)
+        Path(path).write_text(f"{stripped}\nSwallow\n{body}\n\n")
+        return
+
     lines: list[str] = []
     if identifier:
         lines.append(identifier)
