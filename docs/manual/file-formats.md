@@ -67,6 +67,34 @@ beam/geometry/detector metadata, never the header's own values
 Your wish? get counts.dat       /* one count per line, channel order       */
 ```
 
+It's tempting to read `WRASCII`'s header (`Ident`/`Date`/`Charge`/`Conversion`/
+`Theta`/... ending in `Swallow`) as the same kind of thing as an RC43 macro,
+since the vocabulary and the `Swallow` terminator look alike -- but it isn't
+one, and `XEQ`ing it fails immediately:
+
+```
+Your wish? xeq buffer.dat
+ERROR: buffer.dat:2: unrecognized command: Spectrum
+```
+
+An RC43 macro's lines are real RUMP commands (`IDENTIFIER`, `CONVERSION`,
+`MEV`, ...), meant to be replayed by the interpreter. `WRASCII`'s header
+lines (`Spectrum`, `Ident`, ...) come from one hardcoded `fprintf` in the
+original (`bmanip.c:619-641`) and were only ever meant to be read by a human
+-- not one of them is a real command, so only `GET`'s lenient plain-ASCII
+reader (which just treats any non-numeric line other than the first as
+ignorable junk) can do anything with the file at all. `WRITE`/`GET` (binary)
+and `WRASCII`/`GET` (text) are the two real pairs; there's no `WRASCII`/`XEQ`
+pair to match RC43's `XEQ`-only dialect.
+
+One consequence worth watching for: because both RC43 macros and `WRASCII`
+output are plain text, and `GET` only tells them apart by checking whether a
+file with a `.rbs`/`.RBS` extension is printable text at all (not by its
+content), giving `WRASCII` output that same extension makes `GET` reject it
+as a suspected RC43 macro -- `use XEQ, not GET, to load it` -- even though it
+isn't one. Use `.dat`/`.txt`/`.asc` (or no extension) for `WRASCII` output
+you intend to `GET` back.
+
 See [Quick start](../getting-started/index.md#data-loading) for both binary
 formats worked end to end, including what each of `GET`/`XEQ` prints when
 pointed at the other one's file by mistake.
