@@ -2,9 +2,15 @@
 
 ## Install
 
+Requires Python 3.9 or later. Check your version with `python3 --version`,
+then install pyRUMP from PyPI:
+
 ```bash
 pip install pyrump
 ```
+
+numpy, scipy, and matplotlib are installed automatically, along with the
+physics data tables pyRUMP needs at runtime.
 
 ## Quick start
 
