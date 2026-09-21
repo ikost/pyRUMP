@@ -42,6 +42,15 @@ replaces the dozen-plus hardware-specific printer and plotter drivers GENPLOT us
 (`deskjet`, `epson`, `hpgl`, `laserjet`, `postdrv`, `tektrx`, `xdriver`, and more) with a
 single plotting API that targets any output device.
 
+Rewriting RUMP from scratch with AI assistance is also a chance to move past a straight
+port. A handful of bugs in the original C are already fixed rather than just reproduced
+(kept honest by validating both against the C oracle — see [RUMP quirks and
+defects](dev/rump-quirks.md)). New physics has been added, like Andersen screening
+alongside RUMP's original L'Ecuyer correction (see the [`SCREENING`](manual/config.md#screening-new)
+command). And the user workflow is gaining new commands beyond what RUMP ever had, like
+automatic per-fit [`REPORT`](manual/sim-pert.md#pert-commands) generation. More input
+formats — reading spectra from SimNRA and NDF — are also planned.
+
 The original RUMP ecosystem included **RUMPX**, an X-Window GUI popular among Windows
 users two decades ago. pyRUMP doesn't have a GUI counterpart yet — the author prefers
 CLI tools — but a Python equivalent could be added later if there's real demand for it.
