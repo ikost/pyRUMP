@@ -32,6 +32,16 @@ HTML manual and no active support; the distribution was previously available via
 pyRUMP reproduces the simulation physics and data-analysis flow as a tested, importable
 Python library, with both a classical RUMP CLI and a Python API. Plotting uses matplotlib;
 fitting uses scipy/numpy.
+
+Each of these was a deliberate choice. The original C code needed a separate makefile per
+platform (`makeaix`, `makelnx`, `makeosx`, `makesgi`, `makesolaris`, ...); Python collapses
+that into one `pip install` that runs unmodified on Windows, macOS, and Linux. scipy and
+numpy provide compiled, vectorized numerical routines, so the least-squares fitting and
+data analysis stay fast without any hand-written C. And matplotlib's backend system
+replaces the dozen-plus hardware-specific printer and plotter drivers GENPLOT used to ship
+(`deskjet`, `epson`, `hpgl`, `laserjet`, `postdrv`, `tektrx`, `xdriver`, and more) with a
+single plotting API that targets any output device.
+
 The original RUMP ecosystem included **RUMPX**, an X-Window GUI popular among Windows
 users two decades ago. pyRUMP doesn't have a GUI counterpart yet — the author prefers
 CLI tools — but a Python equivalent could be added later if there's real demand for it.
