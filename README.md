@@ -16,6 +16,16 @@ reproduces RUMP's physics as a tested, importable Python library, with both
 a batch CLI and RUMP's own interactive shell. It runs on Windows, macOS, and
 Linux.
 
+Rewriting from scratch with AI assistance is also a chance to move past a
+straight port: a handful of bugs in the original C are fixed rather than
+just reproduced (validated against the C oracle — see
+[RUMP quirks and defects](https://ikost.github.io/pyRUMP/dev/rump-quirks/)),
+new physics has been added (Andersen screening alongside RUMP's own
+L'Ecuyer correction, via [`SCREENING`](https://ikost.github.io/pyRUMP/manual/config/#screening-new)),
+and the workflow is gaining commands RUMP never had, like automatic
+per-fit [`REPORT`](https://ikost.github.io/pyRUMP/manual/sim-pert/#pert-commands)
+generation. More input formats — SimNRA and NDF — are planned.
+
 ## Quick start
 
 ```bash
@@ -61,12 +71,12 @@ ruff check .
 ```
 
 Oracle-comparison tests (`pytest -m oracle`) need the RUMP C source, which
-isn't redistributed here — see [Design and validation](https://ikost.github.io/pyRUMP/validation/).
+isn't redistributed here — see [Design and validation](https://ikost.github.io/pyRUMP/dev/validation/).
 They skip cleanly when it's absent, so it's not needed for everyday development.
 
 ## Licensing and provenance
 
 pyRUMP is MIT licensed, and an **independent reimplementation**: it is not
 affiliated with, endorsed by, or derived from the RUMP source distribution.
-See [Licensing and provenance](https://ikost.github.io/pyRUMP/about/#licensing-and-provenance)
+See [Licensing and provenance](https://ikost.github.io/pyRUMP/dev/about/#licensing-and-provenance)
 for the full story, including bundled data-table provenance.
