@@ -175,7 +175,7 @@ composition-degeneracy caveat worth reading before your first real fit.
 
 ### Command line
 
-Or drive it as one-off batch commands, without the interactive shell:
+You can drive pyRUMP as one-off batch commands, without the interactive shell:
 
 ```bash
 pyrump simulate sample.lcm --energy 2.0 --beam 4He -o out.rbs
