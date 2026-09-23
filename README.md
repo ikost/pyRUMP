@@ -1,7 +1,7 @@
 # [pyRUMP](https://ikost.github.io/pyRUMP/)
 
 [![PyPI](https://img.shields.io/pypi/v/pyrump.svg)](https://pypi.org/project/pyrump/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/ikost/pyRUMP/blob/main/LICENSE)
 
 ![Measured spectrum compared against a pyRUMP simulation, showing a Si / Ru / Mn2.74Pt1 / Ru stack](https://raw.githubusercontent.com/ikost/pyRUMP/main/docs/assets/mnpt-fit.png)
 *Measured data (black) vs. a pyRUMP simulation (red) of a Si / Ru / Mn<sub>2.74</sub>Pt<sub>1</sub> / Ru stack.*
