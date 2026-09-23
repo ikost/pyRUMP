@@ -85,9 +85,10 @@ PERT Command: go
 
 `GO` now opens with "Fitting `<ID>`: `<structure>`" *before* the fit, and
 closes with the same `<ID>` (bare, never the buffer's raw path/label) and the
-structure *after* -- `<ID>` is the active data buffer's own file stem (see
-`REPORT`), so it's stable even if a WRASCII macro stamped a full path into the
-buffer's name via `FILENAME`.
+structure *after* -- `<ID>` is the first word of the active data buffer's
+`IDENTIFIER`, falling back to its file stem when it has none (see `REPORT`),
+so it's stable even if a WRASCII macro stamped a full path into the buffer's
+name via `FILENAME`.
 
 Fitted values are written back into the sample description, so `SIM SHOW` and
 `SIM SAVE` reflect them. Two differences from the original: the data may be in
@@ -137,7 +138,7 @@ values or narrow the window rather than trust the numbers as a settled fit.
 | `SINGLE` / `MULTI` | fit one parameter at a time / all together (default) |
 | `VOLUME [off]` | print a line per model evaluation during `GO` |
 | `AUTOCMP [off]` | run `COMPARE` automatically at the end of `GO` (default off) |
-| `REPORT [off]` | after every `GO`, save `<sample>.report` (fit results, appended), `<sample>.pert` (`PERT SAVE`), `<sample>.lcm` (`SIM SAVE`) and `<sample>.png` (`FIGSAVE`) -- `<sample>` is the active data buffer's own file stem, so switching samples with `XEQ`/`GET` routes later fits to different files automatically (default off) |
+| `REPORT [off]` | after every `GO`, save `<sample>.report` (fit results, appended), `<sample>.pert` (`PERT SAVE`), `<sample>.lcm` (`SIM SAVE`) and `<sample>.png` (`FIGSAVE`) -- `<sample>` is the first word of the active data buffer's `IDENTIFIER` (its file stem if it has none), the same sample ID `GO` prints and the plot legend shows, so switching samples with `XEQ`/`GET` -- or renaming one with `IDENTIFIER` -- routes later fits to different files automatically (default off) |
 | `THICKNESS <layer> [<min> <max>]` | vary a layer's thickness, optionally bounded |
 | `COMPOSITION <layer> <El> [<min> <max>]` | vary one element's composition in a layer (must already be declared there) |
 | `SPECIES <layer> <El> [<min> <max>]` | vary the `EQUATION` species composition (must already be declared there) |

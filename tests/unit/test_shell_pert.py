@@ -837,13 +837,17 @@ def test_report_off_by_default_writes_no_file(session, tmp_path, monkeypatch):
         (r"c:\RBS\data\2026\08\MA8410.RBS", "", "MA8410"),
         ("/home/user/data/MA8410.RBS", "", "MA8410"),
         ("", "MA8410.RBS  170 Degree RBS LT =  1890.547 RT  1894.26 Gain  2", "MA8410"),
+        (r"c:\RBS\data\2026\08\TaPWY26-2x.RBS", "WY26-21", "WY26-21"),
+        ("MA8410.RBS", "Ta2.5 annealed", "Ta2.5"),
         ("", "", "buffer"),
     ],
 )
 def test_report_path_sanitizes_a_messy_name_or_identifier(name, identifier, expected):
-    """A WRASCII macro's own FILENAME line can stamp a full Windows path
-    straight into buffer.name (see cmd_filename) -- REPORT must still land
-    on a bare, safe filename."""
+    """The spectrum's IDENTIFIER names the sample, over the file it came
+    from; either may be a full path (a WRASCII macro's own FILENAME line
+    stamps one straight into buffer.name, see cmd_filename) or carry a
+    trailing comment -- REPORT must still land on a bare, safe filename, and
+    only a spectrum-file extension is dropped."""
     from types import SimpleNamespace
 
     from pyrump.shell.commands.pert import _report_path

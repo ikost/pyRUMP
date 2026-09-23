@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from pathlib import Path
 
 import numpy as np
 
@@ -309,18 +308,25 @@ def mark_matrix(session, buffer, energy_keV: float, channel: float, height: floa
     return True
 
 
-def buffer_stem(buffer) -> str:
-    """A short, filesystem- and legend-safe name for this buffer's spectrum.
+#: Extensions buffer_stem drops -- the spectrum formats GET reads. Anything
+#: else after a dot is part of the sample name (``Ta2.5``), not a suffix.
+_SPECTRUM_SUFFIXES = {".rbs", ".dat", ".asc", ".ascii", ".txt", ".xls"}
 
-    Defends against a buffer's name/identifier holding a full path rather
-    than a bare filename -- e.g. a WRASCII macro's own ``FILENAME`` line
-    stamping a Windows path (``C:\\RBS\\data\\...\\MA8410.RBS``) straight into
+
+def buffer_stem(buffer) -> str:
+    """A short, filesystem- and legend-safe sample ID for this buffer.
+
+    The spectrum's own ``IDENTIFIER`` names the sample, so it wins; the
+    buffer's name (usually the file it came from) is only the fallback for a
+    spectrum without one. Either may hold a full path rather than a bare
+    filename -- e.g. a WRASCII macro's own ``FILENAME`` line stamping a
+    Windows path (``C:\\RBS\\data\\...\\MA8410.RBS``) straight into
     ``buffer.name``. Splits on both slash conventions regardless of host
     OS (``Path.stem`` alone only understands the platform's own separator),
     then keeps just the first whitespace-separated token, so a descriptive
     trailing comment (``"MA8410.RBS  170 Degree RBS LT = ..."``) doesn't
-    leak in either. Falls back from ``name`` to ``identifier``; ``""`` if
-    neither yields anything usable, leaving the fallback to the caller.
+    leak in either, and drops a spectrum-file extension. ``""`` if neither
+    yields anything usable, leaving the fallback to the caller.
     """
 
     def sanitize(text: str) -> str:
@@ -328,9 +334,12 @@ def buffer_stem(buffer) -> str:
             return ""
         tail = re.split(r"[\\/]", text.strip())[-1]
         tail = tail.split()[0] if tail.split() else tail
-        return Path(tail).stem
+        stem, dot, suffix = tail.rpartition(".")
+        if dot and stem and f".{suffix.lower()}" in _SPECTRUM_SUFFIXES:
+            return stem
+        return tail
 
-    return sanitize(buffer.name) or sanitize(buffer.identifier)
+    return sanitize(buffer.identifier) or sanitize(buffer.name)
 
 
 def buffer_label(session, buffer, index: int) -> str:
