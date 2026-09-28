@@ -211,16 +211,16 @@ def cmd_type(session, args: ArgReader) -> None:
                 return
 
 
-def enable_ansi() -> bool:
-    """Make ANSI escapes work on this console. True if they can be used.
+def console_mode() -> int | None:
+    """stdout's Windows console mode, or ``None`` if stdout is not a console.
 
-    Linux and macOS terminals always can. Windows 10+ can once
-    ``ENABLE_VIRTUAL_TERMINAL_PROCESSING`` is set on the console handle, which
-    Python does not do for us; older consoles cannot, and fall back to ``cls``.
-    Called once at shell start-up, and again lazily by CLS.
+    ``None`` covers both "not Windows" and "Windows, but stdout is a pipe or a
+    file" -- the distinction that matters to :func:`enable_ansi` and
+    :func:`cmd_cls`, because a stream that is not a console cannot be cleared
+    by anything that drives a console.
     """
     if os.name != "nt":
-        return True
+        return None
     try:
         import ctypes
 
@@ -228,9 +228,46 @@ def enable_ansi() -> bool:
         handle = kernel32.GetStdHandle(-11)  # STD_OUTPUT_HANDLE
         mode = ctypes.c_uint32()
         if not kernel32.GetConsoleMode(handle, ctypes.byref(mode)):
-            return False
+            return None
+        return mode.value
+    except Exception:
+        return None
+
+
+def enable_ansi() -> bool:
+    """Make ANSI escapes work on this console. True if they can be used.
+
+    Linux and macOS terminals always can, and return before any of the Windows
+    handling below. There, three cases have to be told apart, and only the last
+    wants ``cls``:
+
+    * **stdout is not a console at all.** ``GetConsoleMode`` fails, but that
+      says nothing about ANSI: this is how mintty/Git Bash and IDE run panels
+      present stdout, and those understand escapes perfectly well. ``TERM`` is
+      what tells such a terminal from a plain file redirect. Escapes are in
+      fact the *only* thing that can clear one -- ``cls`` owns no console there
+      and writes a bare form feed instead, which xterm-family terminals render
+      as a line feed, so the screen survives and the cursor just drops a line.
+    * **a console that accepts ENABLE_VIRTUAL_TERMINAL_PROCESSING** -- Windows
+      10 and up, which Python does not enable for us.
+    * **a pre-Windows-10 console**, which accepts neither and needs ``cls``.
+
+    Called once at shell start-up, and again lazily by CLS.
+    """
+    if os.name != "nt":
+        return True
+    mode = console_mode()
+    if mode is None:
+        # Redirected. An ANSI terminal if TERM says so; otherwise a file, with
+        # no screen to clear by any means.
+        return bool(os.environ.get("TERM"))
+    try:
+        import ctypes
+
+        kernel32 = ctypes.windll.kernel32
+        handle = kernel32.GetStdHandle(-11)  # STD_OUTPUT_HANDLE
         return bool(
-            kernel32.SetConsoleMode(handle, mode.value | 0x0004)
+            kernel32.SetConsoleMode(handle, mode | 0x0004)
         )  # ENABLE_VIRTUAL_TERMINAL_PROCESSING
     except Exception:
         return False
@@ -240,7 +277,10 @@ def cmd_cls(session, args: ArgReader) -> None:
     """Clear the screen.
 
     One ANSI sequence everywhere it is supported; ``cls`` only for the older
-    Windows consoles that cannot be switched into virtual-terminal mode.
+    Windows consoles that cannot be switched into virtual-terminal mode. When
+    stdout is redirected with no terminal behind it there is no screen to
+    clear and this does nothing -- ``cls`` there would write a stray form feed
+    into the stream rather than clear anything.
     """
     args.done()
     if enable_ansi():
@@ -248,7 +288,7 @@ def cmd_cls(session, args: ArgReader) -> None:
         # not Python's -- an unflushed clear can land after that prompt and
         # leave the cursor in the wrong place.
         print("\x1b[2J\x1b[H", end="", flush=True)
-    else:  # pragma: no cover - pre-Windows-10 console
+    elif console_mode() is not None:  # pragma: no cover - legacy console
         os.system("cls")  # noqa: S605 - fixed string, no user input
 
 

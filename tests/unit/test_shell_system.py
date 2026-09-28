@@ -286,9 +286,11 @@ def test_cls_uses_ansi_when_available(session, capsys, monkeypatch):
 
 
 def test_cls_falls_back_to_the_windows_console(session, monkeypatch):
-    """The pre-Windows-10 path, exercised without a real console."""
+    """The pre-Windows-10 path, exercised without a real console: a console
+    that answers GetConsoleMode but refuses virtual-terminal mode."""
     called = []
     monkeypatch.setattr(system, "enable_ansi", lambda: False)
+    monkeypatch.setattr(system, "console_mode", lambda: 0x0003)
     monkeypatch.setattr(system.os, "system", lambda cmd: called.append(cmd))
     run(session, "cls")
     assert called == ["cls"]
@@ -297,6 +299,60 @@ def test_cls_falls_back_to_the_windows_console(session, monkeypatch):
 def test_enable_ansi_is_true_off_windows(monkeypatch):
     monkeypatch.setattr(system.os, "name", "posix")
     assert system.enable_ansi() is True
+
+
+def test_enable_ansi_trusts_term_when_stdout_is_not_a_console(monkeypatch):
+    """mintty/Git Bash hand native Python a pipe, so GetConsoleMode fails --
+    but the terminal on the far end is an ANSI one, and escapes are the only
+    thing that can clear it."""
+    monkeypatch.setattr(system.os, "name", "nt")
+    monkeypatch.setattr(system, "console_mode", lambda: None)
+    monkeypatch.setenv("TERM", "xterm-256color")
+    assert system.enable_ansi() is True
+
+
+def test_enable_ansi_is_false_for_a_plain_redirect(monkeypatch):
+    """No console and no TERM: output is a file, and nothing can clear it."""
+    monkeypatch.setattr(system.os, "name", "nt")
+    monkeypatch.setattr(system, "console_mode", lambda: None)
+    monkeypatch.delenv("TERM", raising=False)
+    assert system.enable_ansi() is False
+
+
+def test_cls_clears_a_pipe_with_ansi_rather_than_a_form_feed(session, capsys, monkeypatch):
+    """The regression: CLS used to take the cls branch whenever stdout was not
+    a console, and cmd's cls -- owning no console there -- wrote a lone form
+    feed into the stream. xterm-family terminals render that as a line feed, so
+    the screen was never cleared and the cursor merely dropped a line."""
+    monkeypatch.setattr(system.os, "name", "nt")
+    monkeypatch.setattr(system, "console_mode", lambda: None)
+    monkeypatch.setenv("TERM", "xterm-256color")
+    monkeypatch.setattr(
+        system.os, "system",
+        lambda cmd: pytest.fail("cls must not run when stdout is not a console"),
+    )
+
+    run(session, "cls")
+
+    out = capsys.readouterr().out
+    assert out == "\x1b[2J\x1b[H"
+    assert chr(12) not in out  # no form feed
+
+
+def test_cls_does_nothing_when_output_is_a_plain_file(session, capsys, monkeypatch):
+    """Redirected to a file there is no screen to clear, so CLS must write
+    neither escapes nor a form feed into it."""
+    monkeypatch.setattr(system.os, "name", "nt")
+    monkeypatch.setattr(system, "console_mode", lambda: None)
+    monkeypatch.delenv("TERM", raising=False)
+    monkeypatch.setattr(
+        system.os, "system",
+        lambda cmd: pytest.fail("cls must not run for a file redirect"),
+    )
+
+    run(session, "cls")
+
+    assert capsys.readouterr().out == ""
 
 
 # -- macros and session logging -------------------------------------------
