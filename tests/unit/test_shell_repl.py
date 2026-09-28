@@ -56,9 +56,11 @@ class FakeStdin:
 
 
 def test_a_terminal_still_goes_through_input(session, monkeypatch):
-    """On a tty nothing changes: readline's editing, history and completion
-    are worth more than pumping, and the toolkit's input hook covers the
-    window anyway."""
+    """On a tty nothing is threaded: readline's editing, history and
+    completion are worth more than pumping, and the toolkit's input hook
+    covers the plot window anyway. Pinned on a non-Windows platform so it
+    tests the routing, not read_prompt's own platform split."""
+    monkeypatch.setattr(repl.sys, "platform", "linux")
     monkeypatch.setattr(repl.sys, "stdin", type("T", (), {"isatty": lambda self: True})())
     monkeypatch.setattr("builtins.input", lambda prompt="": f"typed after {prompt!r}")
 
@@ -107,3 +109,41 @@ def test_the_plot_window_is_pumped_while_the_prompt_waits(session, monkeypatch):
 
     assert repl._read_line(session, "> ") == "PLOT"
     assert pumps and pumps[0] is session
+
+# -- read_prompt: who draws the prompt ---------------------------------------
+
+
+def test_the_prompt_is_written_by_us_on_windows(monkeypatch, capsys):
+    """pyreadline3 must be handed an empty prompt, with the text already on
+    screen -- that is the point: it never computes coordinates of its own, so
+    it cannot get them wrong."""
+    seen = []
+    monkeypatch.setattr(repl.sys, "platform", "win32")
+    monkeypatch.setattr("builtins.input", lambda prompt="": seen.append(prompt) or "PLOT")
+
+    assert repl.read_prompt("Feed me! ") == "PLOT"
+    assert seen == [""]
+    assert capsys.readouterr().out == "Feed me! "
+
+
+def test_gnu_readline_still_gets_the_prompt(monkeypatch, capsys):
+    """GNU readline places the prompt correctly and needs it to lay the line
+    out, so Linux and macOS keep the plain input() call."""
+    seen = []
+    monkeypatch.setattr(repl.sys, "platform", "linux")
+    monkeypatch.setattr("builtins.input", lambda prompt="": seen.append(prompt) or "QUIT")
+
+    assert repl.read_prompt("Yes Master? ") == "QUIT"
+    assert seen == ["Yes Master? "]
+    assert capsys.readouterr().out == ""
+
+
+def test_a_terminal_draws_its_prompt_through_read_prompt(session, monkeypatch):
+    """The tty branch of _read_line must go through read_prompt, or Windows
+    loses the fix the moment it is reached from the REPL."""
+    calls = []
+    monkeypatch.setattr(repl.sys, "stdin", type("T", (), {"isatty": lambda self: True})())
+    monkeypatch.setattr(repl, "read_prompt", lambda prompt: calls.append(prompt) or "PLOT")
+
+    assert repl._read_line(session, "Next? ") == "PLOT"
+    assert calls == ["Next? "]

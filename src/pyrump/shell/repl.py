@@ -279,14 +279,41 @@ def _start_stdin_reader() -> "queue.Queue[str | None]":
     return lines
 
 
+def read_prompt(prompt: str) -> str:
+    """Write the prompt ourselves, rather than letting readline place it.
+
+    Windows has no readline, so pyRUMP leans on pyreadline3 for history and
+    tab completion. Unlike GNU readline, pyreadline3 does not let Python write
+    the prompt: it draws it through direct Win32 console calls and remembers
+    the coordinates, so it can repaint the line while editing. In VS Code's
+    terminal that bookkeeping drifts from what is actually on screen, and it
+    strands the cursor mid-way along an earlier line -- the text comes out
+    right, only the cursor is wrong.
+
+    Handing it an empty prompt, with the text already written, makes it start
+    from wherever the terminal just left the cursor instead of computing a
+    position of its own. Editing, history and completion are untouched; the
+    cost is that a repaint mid-edit redraws only what was typed, without the
+    prompt in front of it.
+
+    GNU readline has no such trouble and is given the prompt as before -- it
+    needs it to lay the line out correctly.
+    """
+    if sys.platform != "win32":
+        return input(prompt)
+    sys.stdout.write(prompt)
+    sys.stdout.flush()
+    return input("")
+
+
 def _read_line(session, prompt: str) -> str:
     """One line from the user, keeping the plot window alive while we wait.
 
-    On a real terminal this is plain :func:`input`: readline (or pyreadline3 on
-    Windows) provides history and tab completion, and the GUI toolkit's own
-    ``PyOS_InputHook`` -- which CPython invokes only on the interactive
-    readline path -- runs the event loop between keystrokes, so the figure
-    stays responsive on its own.
+    On a real terminal this defers to :func:`read_prompt`, so readline (or
+    pyreadline3 on Windows) provides history and tab completion, and the GUI
+    toolkit's own ``PyOS_InputHook`` -- which CPython invokes only on the
+    interactive readline path -- runs the event loop between keystrokes, so
+    the figure stays responsive on its own.
 
     When stdin is *not* a tty that hook is never reached, because :func:`input`
     bypasses ``PyOS_Readline`` entirely. The window then goes unpumped for the
@@ -306,7 +333,7 @@ def _read_line(session, prompt: str) -> str:
     except (AttributeError, ValueError):  # pragma: no cover - exotic stdin
         interactive_stdin = False
     if interactive_stdin:
-        return input(prompt)
+        return read_prompt(prompt)
 
     from . import plotting
 
