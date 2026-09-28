@@ -159,9 +159,9 @@ def test_describe_returns_none_for_an_unmatched_token(table):
     assert table.describe("wiggle") is None
 
 
-def test_describe_gives_the_title_and_help_line(table):
+def test_describe_gives_the_help_line_without_the_table_title(table):
     text = table.describe("reset")
-    assert text == "Main Level Commands\n  RESET  RESET help"
+    assert text == "  RESET  RESET help"
 
 
 def _documented(session, args):
@@ -171,7 +171,7 @@ def _documented(session, args):
 def test_describe_adds_a_usage_line_from_the_handler_docstring():
     built = CommandTable("t")
     built.add("FROB", 2, _documented, "frob two values")
-    assert built.describe("frob") == "t\n  FRob  frob two values\n  usage: FROB a b"
+    assert built.describe("frob") == "  FRob  frob two values\n  usage: FROB a b"
 
 
 def test_describe_has_no_usage_line_without_a_docstring(table):

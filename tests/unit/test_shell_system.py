@@ -581,9 +581,7 @@ def test_help_describes_a_command_in_the_current_table(session, capsys):
 def test_help_falls_through_to_the_system_tier(session, capsys):
     """PWD only exists in the system table, not the RUMP one."""
     run(session, "help pwd")
-    out = capsys.readouterr().out
-    assert "General System Commands" in out
-    assert "print the working directory" in out
+    assert "print the working directory" in capsys.readouterr().out
 
 
 def test_help_resolves_abbreviations_like_any_other_command(session, capsys):
@@ -597,7 +595,7 @@ def test_help_reports_thickness_differently_per_mode(session, capsys):
     assert "integral plus thickness conversion" in capsys.readouterr().out
 
     run(session, "sim", "help thickness", stack=["rump"])
-    assert "set this layer's thickness" in capsys.readouterr().out
+    assert "thickness, unit A unless given" in capsys.readouterr().out
 
 
 def test_help_on_an_unknown_command_names_it_instead_of_erroring_on_extra_args(session):
@@ -620,3 +618,56 @@ def test_help_omits_the_usage_line_when_the_handler_has_none(session, capsys):
     """PWD's handler has no docstring at all -- nothing to invent here."""
     run(session, "help pwd")
     assert "usage:" not in capsys.readouterr().out
+
+
+# -- HELP and the thickness MODE ---------------------------------------------
+
+
+def test_sim_help_groups_every_command_with_none_left_over(session, capsys):
+    run(session, "sim", "help", stack=["rump"])
+    out = capsys.readouterr().out
+    assert "  Layer contents -- MODE COMP" in out
+    assert "  Layer contents -- MODE ATOMS" in out
+    assert "Other" not in out
+    assert "needs MODE" not in out
+
+
+@pytest.mark.parametrize("level", ["sim", "pert"])
+def test_sim_and_pert_help_list_only_their_commands(session, capsys, level):
+    run(session, level, "help", stack=["rump"])
+    assert "example" not in capsys.readouterr().out
+
+
+def test_help_on_a_gated_command_says_how_to_switch(session, capsys):
+    run(session, "sim", "help atoms", stack=["rump"])
+    out = capsys.readouterr().out
+    assert "usage: ATOMS <element>" in out
+    assert "currently COMP, switch with MODE ATOMS" in out
+
+    session.thickness_mode = "atoms"
+    run(session, "sim", "help atoms", stack=["rump"])
+    assert "needs MODE ATOMS -- active now" in capsys.readouterr().out
+
+
+def test_pert_help_on_a_gated_selector_gives_its_own_usage(session, capsys):
+    run(session, "pert", "help thickness", stack=["rump"])
+    out = capsys.readouterr().out
+    assert "usage: THICKNESS <layer> [<min> <max>]" in out
+    assert "needs MODE COMP -- active now" in out
+
+
+def test_help_mode_gives_an_example_of_each_convention(session, capsys):
+    session.thickness_mode = "atoms"
+    run(session, "help mode")
+    out = capsys.readouterr().out
+    assert "Main Level Commands" not in out
+    assert "usage: MODE [Comp|Atoms]" in out
+    assert "now:   ATOMS" in out
+    assert "COMP example:   THICK 500 A" in out
+    assert "ATOMS example:  ATOMS Mn 150 Pt 150 /" in out
+
+
+def test_a_gated_command_names_itself_in_full_when_refused(session):
+    with pytest.raises(CommandError, match="THICKNESS needs MODE COMP"):
+        session.thickness_mode = "atoms"
+        run(session, "sim", "thick 5", stack=["rump"])

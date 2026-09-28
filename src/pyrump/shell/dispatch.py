@@ -256,7 +256,7 @@ class CommandTable:
         command = self.match(token)
         if command is None:
             return None
-        lines = [self.title, f"  {command.display}  {command.help}".rstrip()]
+        lines = [f"  {command.display}  {command.help}".rstrip()]
         usage = _usage(command.handler)
         if usage:
             lines.append(f"  usage: {usage}")

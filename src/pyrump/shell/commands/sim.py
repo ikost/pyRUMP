@@ -25,7 +25,7 @@ from ...script.lcm import (
     write_lcm,
 )
 from ..dispatch import ArgReader, CommandError, CommandTable
-from .rump import Return, cmd_compare
+from .rump import Return, cmd_compare, describe_topic, needs_mode
 
 
 def editor_for(session) -> SampleEditor:
@@ -50,21 +50,19 @@ def _apply(session, verb: str, args: ArgReader) -> None:
     session.touch()
 
 
-def _editor_command(verb: str, *, requires_mode: str | None = None):
-    """``requires_mode``, if given, gates this command on ``session.thickness_mode``
-    ("comp" or "atoms") -- see ``MODE`` (:mod:`pyrump.shell.commands.rump`).
+def _editor_command(verb: str, *, usage: str | None = None, requires_mode: str | None = None):
+    """``usage`` becomes the handler's docstring, so ``HELP <name>`` shows it
+    (see :func:`~pyrump.shell.dispatch._usage`). ``requires_mode``, if given,
+    gates this command on ``session.thickness_mode`` ("comp" or "atoms") --
+    see ``MODE`` (:mod:`pyrump.shell.commands.rump`).
     """
 
     def handler(session, args: ArgReader) -> None:
-        if requires_mode is not None and session.thickness_mode != requires_mode:
-            raise CommandError(
-                f"{verb.upper()} needs MODE {requires_mode.upper()} "
-                f"(currently {session.thickness_mode}) -- switch with "
-                f"MODE {requires_mode.upper()}"
-            )
         _apply(session, verb, args)
 
-    return handler
+    if usage is not None:
+        handler.__doc__ = f"``{usage}``"
+    return handler if requires_mode is None else needs_mode(requires_mode)(handler)
 
 
 def cmd_maxpth(session, args: ArgReader) -> None:
@@ -381,15 +379,14 @@ def cmd_help(session, args: ArgReader) -> None:
     topic = args.optional()
     args.done()
     if topic is None:
-        print(TABLE.help_text())
+        leftover = TABLE.uncovered(_HELP_GROUPS)
+        groups = [*_HELP_GROUPS, ("Other", leftover)] if leftover else _HELP_GROUPS
+        print(TABLE.grouped_help_text(groups))
         return
     from .rump import TABLE as RUMP_TABLE
     from .system import TABLE as SYSTEM_TABLE
 
-    text = TABLE.describe(topic) or RUMP_TABLE.describe(topic) or SYSTEM_TABLE.describe(topic)
-    if text is None:
-        raise CommandError(f"no help for {topic!r} -- try HELP with no argument")
-    print(text)
+    print(describe_topic(session, topic, (TABLE, RUMP_TABLE, SYSTEM_TABLE)))
 
 
 def cmd_return(session, args: ArgReader) -> None:
@@ -413,10 +410,10 @@ def execute_in_sim(session, args: ArgReader) -> None:
 TABLE = CommandTable("SIM Commands")
 
 _ENTRIES: list[tuple[str, int, object, str]] = [
-    ("?", 1, cmd_help, "list the SIM commands"),
+    ("?", -1, cmd_help, "synonym for HELP"),
     ("HELP", 2, cmd_help, "list the SIM commands"),
     ("RETURN", 3, cmd_return, "return to the RUMP level"),
-    ("ABORT", 5, cmd_abort, "return to the RUMP level"),
+    ("ABORT", -5, cmd_abort, "synonym for RETURN"),
     ("QUIT", -1, cmd_return, "synonym for RETURN (not exit pyRUMP)"),
     ("Q", -1, cmd_return, "synonym for RETURN"),
     # Layer navigation
@@ -431,13 +428,17 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("SHOW", 2, cmd_show, "display the sample"),
     ("STATUS", 2, cmd_status, "summarise the SIM parameters"),
     # Layer contents
-    ("THICKNESS", 2, _editor_command("thick", requires_mode="comp"),
-     "set this layer's thickness (needs MODE COMP)"),
-    ("COMPOSITION", 1, _editor_command("composition", requires_mode="comp"),
-     "set this layer's composition, e.g. In 2 O 3 / (needs MODE COMP)"),
-    ("ATOMS", 3, _editor_command("atoms", requires_mode="atoms"),
-     "set composition+thickness at once, in 1e15 at/cm^2 per element, "
-     "e.g. Mn 2 Pt 1 / (needs MODE ATOMS)"),
+    ("THICKNESS", 2, _editor_command(
+        "thick", usage="THICKNESS <value> [<unit>]", requires_mode="comp"),
+     "thickness, unit A unless given (see DENSITY)"),
+    ("COMPOSITION", 1, _editor_command(
+        "composition", usage="COMPOSITION <element> <n> [<element> <n> ...] /",
+        requires_mode="comp"),
+     "stoichiometry, e.g. In 2 O 3 /"),
+    ("ATOMS", 3, _editor_command(
+        "atoms", usage="ATOMS <element> <1e15 at/cm^2> [<element> <1e15 at/cm^2> ...] /",
+        requires_mode="atoms"),
+     "1e15 at/cm^2 per element, e.g. Mn 150 Pt 150 /"),
     ("SPECIES", 2, _editor_command("species"), "impurity species for EQUATION"),
     ("EQUATION", 2, _editor_command("equation"), "impurity distribution equation"),
     ("EQLIST", 3, cmd_equation_help, "list the known equations"),
@@ -445,10 +446,11 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("SUBLAYER", 3, _editor_command("sublayer"), "sublayers in this layer"),
     ("STHICKNESS", 3, _editor_command("sthick"), "thickness of each sublayer"),
     # Global sample parameters
-    ("MAXPTH", 3, cmd_maxpth, "maximum internal layer thickness, or show it with no argument"),
+    ("MAXPTH", 3, cmd_maxpth, "maximum internal layer thickness (no argument: show it)"),
     ("STRAGGLE", 4, _editor_command("straggle"), "Bohr straggling multiplier"),
     ("ABSORBER", 3, _editor_command("absorber"), "stopper-foil layer count"),
-    ("MULTIPLE", 3, _editor_command("multiple"), "multiple-scattering amount"),
+    ("MULTIPLE", 3, _editor_command("multiple", usage="MULTIPLE <strength>"),
+     "ad-hoc low-energy tail, not real physics (0 = off)"),
     # Files and plotting
     ("GET", 3, cmd_get, "read a sample description from a file"),
     ("SAVE", 2, cmd_save, "write the sample description to a file"),
@@ -460,7 +462,22 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
 
 for _name, _minlen, _handler, _help in _ENTRIES:
     TABLE.add(_name, _minlen, _handler, _help)
-TABLE.note_synonym("RETURN", "QUIT", "Q")
+TABLE.note_synonym("HELP", "?")
+TABLE.note_synonym("RETURN", "QUIT", "Q", "ABORT")
 TABLE.note_synonym("OPEN", "INSERT")
 TABLE.note_synonym("CLOSE", "DELETE", "CLEAR")
 TABLE.note_synonym("COMPARE", "CMP")
+
+#: How ``HELP`` lays out the table -- display only; matching still runs over
+#: ``_ENTRIES`` in order. The mode headings stand in for a "(needs MODE ...)"
+#: on each line; ``HELP <name>`` still says whether that mode is active.
+_HELP_GROUPS: list[tuple[str, list[str]]] = [
+    ("Getting around", ["HELP", "RETURN", "SHOW", "STATUS"]),
+    ("Layers", ["LAYER", "NEXT", "OPEN", "CLOSE", "RESET"]),
+    ("Layer contents -- MODE COMP", ["THICKNESS", "COMPOSITION"]),
+    ("Layer contents -- MODE ATOMS", ["ATOMS"]),
+    ("Profiles and interfaces",
+     ["SPECIES", "EQUATION", "EQLIST", "FUZZ", "SUBLAYER", "STHICKNESS"]),
+    ("Sample-wide", ["MAXPTH", "STRAGGLE", "ABSORBER", "MULTIPLE"]),
+    ("Files and plotting", ["GET", "SAVE", "DENSITY", "SPLOT", "COMPARE"]),
+]

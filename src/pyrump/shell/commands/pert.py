@@ -42,7 +42,7 @@ from ...fit.parameters import (
 from ...fit.windows import MAX_ERROR_WINDOWS, Window, WindowSet
 from ..dispatch import ArgReader, CommandError, CommandTable
 from .. import plotting
-from .rump import Return, cmd_compare
+from .rump import Return, cmd_compare, describe_topic, needs_mode
 from .sim import describe as _describe_sample
 from .sim import editor_for
 
@@ -216,19 +216,9 @@ def _add(session, entry: Vary) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _require_mode(session, mode: str, command: str) -> None:
-    """Gate a PERT selector on ``session.thickness_mode`` -- see ``MODE``
-    (:mod:`pyrump.shell.commands.rump`).
-    """
-    if session.thickness_mode != mode:
-        raise CommandError(
-            f"{command} needs MODE {mode.upper()} "
-            f"(currently {session.thickness_mode}) -- switch with MODE {mode.upper()}"
-        )
-
-
+@needs_mode("comp")
 def cmd_thickness(session, args: ArgReader) -> None:
-    _require_mode(session, "comp", "THICKNESS")
+    """``THICKNESS <layer> [<min> <max>]`` -- vary a layer's thickness."""
     layer = _layer_argument(session, args)
     bound = _optional_bounds(args)
     args.done()
@@ -272,8 +262,11 @@ def _layer_element(session, layer: int, symbol: str, kind: str) -> str:
     )
 
 
+@needs_mode("comp")
 def cmd_composition(session, args: ArgReader) -> None:
-    _require_mode(session, "comp", "COMPOSITION")
+    """``COMPOSITION <layer> <element> [<min> <max>]`` -- vary one element's
+    stoichiometry in a layer.
+    """
     layer = _layer_argument(session, args)
     symbol = args.token("an element symbol")
     bound = _optional_bounds(args)
@@ -297,8 +290,10 @@ def cmd_composition(session, args: ArgReader) -> None:
     )
 
 
+@needs_mode("atoms")
 def cmd_atoms(session, args: ArgReader) -> None:
-    """``ATOMS layer element`` -- vary one element's own areal density.
+    """``ATOMS <layer> <element> [<min> <max>]`` -- vary one element's own
+    areal density.
 
     Unlike ``COMPOSITION``, the layer's total thickness is re-derived as the
     sum of its composition row on every trial, so the other elements' own
@@ -307,7 +302,6 @@ def cmd_atoms(session, args: ArgReader) -> None:
     composition values are already each element's 1e15 at/cm^2 -- set up
     with ``SIM ATOMS``.
     """
-    _require_mode(session, "atoms", "ATOMS")
     layer = _layer_argument(session, args)
     symbol = args.token("an element symbol")
     bound = _optional_bounds(args)
@@ -635,10 +629,7 @@ def cmd_help(session, args: ArgReader) -> None:
     from .rump import TABLE as RUMP_TABLE
     from .system import TABLE as SYSTEM_TABLE
 
-    text = TABLE.describe(topic) or RUMP_TABLE.describe(topic) or SYSTEM_TABLE.describe(topic)
-    if text is None:
-        raise CommandError(f"no help for {topic!r} -- try HELP with no argument")
-    print(text)
+    print(describe_topic(session, topic, (TABLE, RUMP_TABLE, SYSTEM_TABLE)))
 
 
 def cmd_return(session, args: ArgReader) -> None:
@@ -897,7 +888,7 @@ def cmd_go(session, args: ArgReader) -> None:
 TABLE = CommandTable("PERT Commands")
 
 _ENTRIES: list[tuple[str, int, object, str]] = [
-    ("?", 1, cmd_help, "list the PERT commands"),
+    ("?", -1, cmd_help, "synonym for HELP"),
     ("HELP", 1, cmd_help, "list the PERT commands"),
     ("RETURN", 1, cmd_return, "return to the RUMP level"),
     ("QUIT", -1, cmd_return, "synonym for RETURN (not exit pyRUMP)"),
@@ -945,6 +936,7 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
 
 for _name, _minlen, _handler, _help in _ENTRIES:
     TABLE.add(_name, _minlen, _handler, _help)
+TABLE.note_synonym("HELP", "?")
 TABLE.note_synonym("RETURN", "QUIT", "Q")
 TABLE.note_synonym("SLOPE", "KEV/CH")
 TABLE.note_synonym("OFFSET", "KEV(0)")

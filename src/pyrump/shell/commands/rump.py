@@ -8,6 +8,7 @@ session.
 
 from __future__ import annotations
 
+import functools
 import sys
 from pathlib import Path
 
@@ -217,10 +218,36 @@ def cmd_help(session, args: ArgReader) -> None:
         print(SYSTEM_TABLE.help_text(exclude={"XEQ"} if xeq else ()))
         print(TABLE.grouped_help_text(groups[1:], show_title=False))
         return
-    text = TABLE.describe(topic) or SYSTEM_TABLE.describe(topic)
-    if text is None:
+    print(describe_topic(session, topic, (TABLE, SYSTEM_TABLE)))
+
+
+def describe_topic(session, topic: str, tables) -> str:
+    """``HELP <name>`` for any tier: the first of ``tables`` that knows it.
+
+    ``tables`` runs from the current tier outwards, the way an unrecognised
+    command escapes a mode (repl.py's ``execute_line``). On top of the table's
+    own entry, a command gated by :func:`needs_mode` says whether it is usable
+    right now and how to switch, and ``MODE`` itself gets :func:`mode_help`.
+    """
+    for table in tables:
+        command = table.match(topic)
+        if command is not None:
+            break
+    else:
         raise CommandError(f"no help for {topic!r} -- try HELP with no argument")
-    print(text)
+    lines = [table.describe(topic)]
+    gate = getattr(command.handler, "requires_mode", None)
+    if command.handler is cmd_mode:
+        lines.append(mode_help(session))
+    elif gate is not None:
+        if session.thickness_mode == gate:
+            lines.append(f"  needs MODE {gate.upper()} -- active now")
+        else:
+            lines.append(
+                f"  needs MODE {gate.upper()} -- currently "
+                f"{session.thickness_mode.upper()}, switch with MODE {gate.upper()}"
+            )
+    return "\n".join(lines)
 
 
 def cmd_quit(session, args: ArgReader) -> None:
@@ -1326,6 +1353,40 @@ def cmd_intset(session, args: ArgReader) -> None:
         raise CommandError(f"intset: unrecognized mode {token!r}; use INTSET ? for help")
 
 
+def mode_help(session) -> str:
+    """The current thickness MODE and an example of each, for ``HELP MODE``."""
+    return "\n".join([
+        f"  now:   {session.thickness_mode.upper()}",
+        "  COMP example:   THICK 500 A",
+        "                  COMP Mn 1 Pt 1 /",
+        "  ATOMS example:  ATOMS Mn 150 Pt 150 /   (1e15 at/cm^2 per element)",
+    ])
+
+
+def needs_mode(mode: str):
+    """Gate a SIM/PERT handler on ``session.thickness_mode`` (see ``MODE``).
+
+    The wrapped handler carries ``requires_mode`` so :func:`describe_topic`
+    can say, for ``HELP <name>``, whether it is usable right now.
+    """
+
+    def wrap(handler):
+        @functools.wraps(handler)
+        def gated(session, args: ArgReader) -> None:
+            if session.thickness_mode != mode:
+                raise CommandError(
+                    f"{args.command.upper()} needs MODE {mode.upper()} "
+                    f"(currently {session.thickness_mode}) -- switch with "
+                    f"MODE {mode.upper()}"
+                )
+            handler(session, args)
+
+        gated.requires_mode = mode
+        return gated
+
+    return wrap
+
+
 def cmd_mode(session, args: ArgReader) -> None:
     """``MODE [Comp|Atoms]`` -- how SIM/PERT describe a layer's thickness.
 
@@ -1835,7 +1896,7 @@ TABLE = CommandTable("Main Level Commands")
 
 _ENTRIES: list[tuple[str, int, object, str]] = [
     # Session
-    ("?", 1, cmd_help, "list the commands"),
+    ("?", -1, cmd_help, "synonym for HELP"),
     ("HELP", 4, cmd_help, "list the commands"),
     ("QUIT", 1, cmd_quit, "leave pyRUMP"),
     ("BYE", -2, cmd_quit, "leave pyRUMP"),
@@ -1944,7 +2005,7 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("PROFILE", 3, cmd_profile, "not implemented -- never was, in the original"),
     ("INTSET", 6, cmd_intset, "change INTEGRAL/THICKNESS rounding and alpha mode"),
     ("MODE", 4, cmd_mode,
-     "SIM/PERT thickness convention, COMP or ATOMS -- see MODE with no argument"),
+     "how SIM/PERT enter a layer: COMP or ATOMS"),
     ("CALIBRATE", 3, cmd_calibrate, "energy-calibrate from two known peaks"),
     ("DISPLAY", 3, cmd_display, "plot the sample composition against depth"),
     ("FFT", 3, cmd_fft, "FFT smooth (same as SMOOTH -FFT -RANGE)"),
@@ -1952,6 +2013,7 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
 
 for _name, _minlen, _handler, _help in _ENTRIES:
     TABLE.add(_name, _minlen, _handler, _help)
+TABLE.note_synonym("HELP", "?")
 TABLE.note_synonym("COMPARE", "CMP")
 TABLE.note_synonym("FIGSAVE", "HCOPY")
 TABLE.note_synonym("GET", "READ")
@@ -1965,7 +2027,7 @@ TABLE.note_synonym("WRITENRA", "WN")
 # ---------------------------------------------------------------------------
 
 _HELP_GROUPS: list[tuple[str, list[str]]] = [
-    ("Getting started", ["?", "HELP", "QUIT"]),
+    ("Getting started", ["HELP", "QUIT"]),
     ("Core workflow",
      ["GET", "SIM", "PERT", "COMPARE", "PLOT", "RECALCULATE", "RETURN"]),
     ("Plotting & display",
