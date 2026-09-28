@@ -155,6 +155,44 @@ def state_for(session) -> PertState:
     return session.pert
 
 
+#: The MODE each mode-specific selection kind needs (see ``MODE``); every
+#: other kind works in either.
+_KIND_MODE = {"thickness": "comp", "composition": "comp", "atoms": "atoms"}
+
+
+def _wrong_mode(entry: Vary, mode: str) -> bool:
+    return _KIND_MODE.get(entry.kind, mode) != mode
+
+
+def drop_other_mode(session, mode: str) -> str | None:
+    """Drop every PERT selection that needs a MODE other than ``mode``.
+
+    MODE converts each layer to the other convention, so a selection made
+    for the old one no longer means what it did: an ATOMS variable would
+    read a COMP fraction as an areal density, and vice versa. Called by
+    MODE; returns the one line to tell the user, or None if nothing was
+    selected that way.
+    """
+    state = session.pert
+    if state is None:
+        return None
+    dropped = [v for v in state.varying if _wrong_mode(v, mode)]
+    if not dropped:
+        return None
+    state.varying = [v for v in state.varying if not _wrong_mode(v, mode)]
+
+    by_layer: dict[int, list[str]] = {}
+    for v in dropped:
+        by_layer.setdefault(v.layer, []).append(f"{v.kind} {v.symbol}".rstrip())
+    groups = "; ".join(
+        f"{', '.join(names)} (layer {layer + 1})" for layer, names in by_layer.items()
+    )
+    needs = "ATOMS needs MODE ATOMS" if mode == "comp" else (
+        "THICKNESS/COMPOSITION need MODE COMP"
+    )
+    return f"  PERT: dropped {groups} -- {needs}"
+
+
 def layers_at_risk(session, from_index: int) -> list[str]:
     """Names of PERT selections whose layer is at or after ``from_index``.
 
@@ -734,6 +772,12 @@ def cmd_go(session, args: ArgReader) -> None:
     state = state_for(session)
     if not state.varying:
         raise CommandError("nothing selected to vary")
+    stale = [v.name for v in state.varying if _wrong_mode(v, session.thickness_mode)]
+    if stale:
+        raise CommandError(
+            f"go: {', '.join(stale)} do not match MODE "
+            f"{session.thickness_mode.upper()} -- CLEAR them or switch MODE"
+        )
     if not session.script.layers:
         raise CommandError("no sample described: use SIM to build one")
 

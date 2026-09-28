@@ -76,7 +76,9 @@ PERT Command: show
 #### `GO`
 
 Runs the fit and prints the result (see [Reading the fit report](#reading-the-fit-report)).
-Needs a sample, a data buffer, and at least one varying parameter.
+Needs a sample, a data buffer, and at least one varying parameter. Refuses to
+run if a varying parameter does not match the current
+[`MODE`](config.md#mode-new) (switching `MODE` normally drops those).
 
 ```
 PERT Command: go

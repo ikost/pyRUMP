@@ -95,7 +95,9 @@ usage: COMPFRAC [off]
 ```
 
 Shows each layer's composition as atomic fraction (sums to 1) instead of raw
-stoichiometry, in both `STRUCTLABEL` and SIM/PERT `SHOW`.
+stoichiometry, in both `STRUCTLABEL` and SIM/PERT `SHOW`. `SHOW` in MODE
+ATOMS is the exception: it keeps each element's 10¹⁵ at/cm², with the
+fractions in brackets.
 
 #### `ENERGY`
 

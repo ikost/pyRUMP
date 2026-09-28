@@ -362,6 +362,86 @@ def test_show_prints_the_sample_description(session, capsys):
     assert "Si" in output
 
 
+# -- MODE switching with selections in place ---------------------------------
+
+
+@needs_data
+def test_mode_atoms_drops_thickness_and_composition_selections(session, capsys):
+    """MODE converts every layer, so a COMP selection no longer means what
+    it did -- it is dropped, the mode-neutral ones stay, and MODE says so."""
+    run(session, "pert", "thick 1", "comp 1 Au", "fwhm", "return", "mode atoms")
+    assert [v.name for v in session.pert.varying] == ["fwhm"]
+    assert (
+        "  PERT: dropped thickness, composition Au (layer 1)"
+        " -- THICKNESS/COMPOSITION need MODE COMP"
+    ) in capsys.readouterr().out
+
+
+@needs_data
+def test_mode_comp_drops_atoms_selections_grouped_by_layer(session, capsys):
+    run(session, "mode atoms", "pert", "atoms 1 Au", "atoms 2 Si", "fwhm", "return")
+    capsys.readouterr()
+    run(session, "mode comp")
+    assert [v.name for v in session.pert.varying] == ["fwhm"]
+    assert (
+        "  PERT: dropped atoms Au (layer 1); atoms Si (layer 2)"
+        " -- ATOMS needs MODE ATOMS"
+    ) in capsys.readouterr().out
+
+
+@needs_data
+def test_mode_with_nothing_to_drop_says_nothing_about_pert(session, capsys):
+    run(session, "pert", "fwhm", "return", "mode atoms")
+    assert "PERT:" not in capsys.readouterr().out
+
+
+@needs_data
+def test_go_refuses_a_selection_that_does_not_match_the_mode(session):
+    """An ATOMS variable would read a COMP fraction as an areal density and
+    collapse the layer -- GO must refuse rather than fit it."""
+    run(session, "mode atoms", "pert", "window 355 375", "atoms 1 Au", "return")
+    session.thickness_mode = "comp"
+    with pytest.raises(CommandError, match="layer 1 atoms Au do not match MODE COMP"):
+        run(session, "pert", "go")
+
+
+def _show_line(output: str, number: int) -> str:
+    return next(
+        line for line in output.splitlines()
+        if re.match(rf"^ [ >]\s*{number}\s", line)
+    )
+
+
+@needs_data
+def test_show_brackets_what_mode_would_turn_each_layer_into(session, capsys):
+    """The bracket is the other MODE's view of the layer: switching MODE
+    must land on exactly it, and bracket the old view in return."""
+    run(session, "sim", "layer 1", "thick 150 A", "comp Au 3 Si 1 /", "return")
+    capsys.readouterr()
+    run(session, "sim show")
+    comp_line = _show_line(capsys.readouterr().out, 1)
+    bracket = re.search(r"\[(.*)\]", comp_line).group(1)
+    assert "/CM2" in bracket
+
+    run(session, "mode atoms")
+    capsys.readouterr()
+    run(session, "pert", "show")
+    atoms_line = _show_line(capsys.readouterr().out, 1)
+    main = re.match(r"^ [ >]\s*1\s+(.*?)\s+\[", atoms_line).group(1)
+    assert main.split() == bracket.split()
+    assert atoms_line.endswith("[150 A  Au 0.750 Si 0.250]")
+
+
+@needs_data
+def test_show_in_atoms_mode_keeps_areal_densities_under_compfrac(session, capsys):
+    """COMPFRAC would turn MODE ATOMS's at/cm^2 values into fractions --
+    those are already in the brackets, so SHOW keeps the real values."""
+    run(session, "compfrac", "mode atoms", "sim", "layer 2", "atoms Si 3000 /", "return")
+    capsys.readouterr()
+    run(session, "sim show")
+    assert "Si 3000" in _show_line(capsys.readouterr().out, 2)
+
+
 # -- optional search bounds --------------------------------------------------
 
 

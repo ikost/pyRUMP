@@ -102,7 +102,19 @@ by stoichiometric ratio — `SIM`/`PERT`'s `THICKNESS` and `COMPOSITION`.
 setting, so a fit can never mix the two conventions on the same layer.
 Switching recalculates every layer between the two conventions through each
 layer's own atomic density — not a relabelling — so the simulated spectrum
-is unchanged either way. With no argument, prints the current mode.
+is unchanged either way. [`SIM SHOW`](sim.md#show) previews the result in
+brackets. With no argument, prints the current mode.
+
+PERT variables chosen for the old mode (`THICKNESS`/`COMPOSITION`, or
+`ATOMS`) no longer fit the converted layers, so switching drops them and
+says which. Variables that work in either mode (`FWHM`, `OFFSET`, …) stay.
+
+```
+Your wish? mode comp
+  recalculated 1 layer(s) to Angstroms (density-based)
+  mode: comp
+  PERT: dropped atoms Mn, atoms Pt (layer 1) -- ATOMS needs MODE ATOMS
+```
 
 #### `PROFILE`
 

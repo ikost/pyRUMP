@@ -1173,7 +1173,8 @@ def cmd_compfrac(session, args: ArgReader) -> None:
     """``COMPFRAC [off]`` -- show each layer's composition as atomic fraction
     (summing to 1) instead of raw stoichiometry -- "Mn 0.75 Pt 0.25"
     instead of "Mn 3 Pt 1". Affects STRUCTLABEL's layer structure and the
-    SIM/PERT SHOW table alike. Cosmetic only: it reformats the display,
+    SIM/PERT SHOW table alike -- except SHOW in MODE ATOMS, which keeps each
+    element's 1e15 at/cm^2 (the fractions are in its brackets). Cosmetic only: it reformats the display,
     nothing the SIM sample or PERT fit parameters actually store
     (script/lcm.py's normalized_composition)."""
     token = args.optional()
@@ -1402,8 +1403,10 @@ def cmd_mode(session, args: ArgReader) -> None:
     Switching actually recalculates every layer between the two conventions
     (:func:`pyrump.script.lcm.recalculate_thickness_mode`), through each
     layer's own atomic density -- not a relabelling -- so the simulated
-    spectrum is unchanged either way. With no argument, prints the current
-    mode.
+    spectrum is unchanged either way. PERT selections made for the old mode
+    (THICKNESS/COMPOSITION, or ATOMS) no longer fit the converted layers,
+    so they are dropped, and MODE says which. With no argument, prints the
+    current mode.
     """
     token = args.optional()
     args.done()
@@ -1418,6 +1421,7 @@ def cmd_mode(session, args: ArgReader) -> None:
         return
 
     from ...script.lcm import recalculate_thickness_mode
+    from .pert import drop_other_mode
 
     changed = recalculate_thickness_mode(
         session.script, session.table, session.densities, to_atoms=(choice == "atoms")
@@ -1428,6 +1432,9 @@ def cmd_mode(session, args: ArgReader) -> None:
         target = "atoms/cm^2" if choice == "atoms" else "Angstroms"
         print(f"  recalculated {changed} layer(s) to {target} (density-based)")
     print(f"  mode: {choice}")
+    dropped = drop_other_mode(session, choice)
+    if dropped:
+        print(dropped)
 
 
 def cmd_element(session, args: ArgReader) -> None:

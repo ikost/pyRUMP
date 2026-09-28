@@ -53,20 +53,34 @@ Goes back to the RUMP level. Inside SIM, `QUIT` does not exit pyRUMP.
 
 #### `SHOW`
 
-Lists the layers, surface first, then the sample-wide settings.
+Lists the layers, surface first, then the sample-wide settings. The brackets
+show each layer in the other [`MODE`](config.md#mode-new) — exactly what
+switching `MODE` would turn it into. In MODE COMP that is each element's
+areal density in 10¹⁵ at/cm²:
 
 ```
 SIM Command: show
- >  1            40 A        Ru 1
-    2           331 A        Mn 2.73 Pt 1
-    3            40 A        Ru 1
-    4           330 A        Si 1 O 2
-    5          1000 nm       Si 1
+ >  1            40 A        Ru 1           [29 /CM2  Ru 29.03]
+    2           331 A        Mn 2.73 Pt 1   [254 /CM2  Mn 186.11 Pt 68.05]
+    3            40 A        Ru 1           [29 /CM2  Ru 29.03]
+    4           330 A        Si 1 O 2       [149 /CM2  Si 49.57 O 99.13]
+    5          1000 nm       Si 1           [4978 /CM2  Si 4977.69]
   maxpth 1000   straggle 0   multiple 0   absorber 0
 ```
 
-With `COMPFRAC` on, compositions show as atomic fractions (see
-[Plotting & display](plotting.md)).
+In MODE ATOMS it is the thickness in Angstroms and the composition as
+fractions of 1:
+
+```
+SIM Command: show
+ >  1            29 /CM2     Ru 29.03             [40 A  Ru 1]
+    2           254 /CM2     Mn 186.11 Pt 68.05   [331 A  Mn 0.732 Pt 0.268]
+    ...
+```
+
+With `COMPFRAC` on, MODE COMP compositions show as atomic fractions (see
+[Plotting & display](plotting.md)). MODE ATOMS always shows each element's
+10¹⁵ at/cm², since the fractions are already in the brackets.
 
 #### `STATUS`
 

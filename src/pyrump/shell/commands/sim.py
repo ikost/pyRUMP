@@ -22,6 +22,7 @@ from ...script.lcm import (
     normalized_composition,
     read_lcm,
     thickness_label,
+    thickness_mode_views,
     write_lcm,
 )
 from ..dispatch import ArgReader, CommandError, CommandTable
@@ -176,31 +177,67 @@ def cmd_show(session, args: ArgReader) -> None:
     print(describe(session, editor_for(session)))
 
 
+def _pairs(composition: dict[str, float], *, normalize: bool) -> str:
+    return " ".join(
+        f"{symbol} {composition_value(value, normalize=normalize)}"
+        for symbol, value in composition.items()
+    )
+
+
 def describe(session, editor: SampleEditor) -> str:
     """The ``SHOW`` listing: the sample as RUMP prints it.
 
     Composition renders as atomic fraction instead of raw stoichiometry
     when ``COMPFRAC`` is on, matching the plot legend (see
-    :func:`pyrump.script.lcm.normalized_composition`).
+    :func:`pyrump.script.lcm.normalized_composition`) -- except in MODE
+    ATOMS, where the values *are* each element's 1e15 at/cm^2 and stay so.
+
+    Each layer ends with the other MODE's view of it in brackets -- what
+    ``MODE`` would turn it into (:func:`pyrump.script.lcm.thickness_mode_views`):
+    at/cm^2 per element in MODE COMP, Angstroms and fractions of 1 in MODE
+    ATOMS.
     """
     script = editor.script
-    fraction = session.plot.composition_fraction
+    atoms_mode = session.thickness_mode == "atoms"
+    fraction = session.plot.composition_fraction and not atoms_mode
+    try:
+        others = thickness_mode_views(
+            script, session.table, session.densities, to_atoms=not atoms_mode
+        )
+    except KeyError:
+        # An element the table doesn't know: nothing to convert through,
+        # but the listing itself is still worth showing.
+        others = [None] * len(script.layers)
+    compositions = [
+        _pairs(
+            normalized_composition(layer.composition) if fraction else layer.composition,
+            normalize=fraction,
+        )
+        for layer in script.layers
+    ]
+    # Pad so the brackets line up in one column.
+    width = max((len(c) for c in compositions), default=0)
     lines = []
     if script.description:
         lines.append(f"  {script.description}")
     if not script.layers:
         lines.append("  (empty space)")
-    for index, layer in enumerate(script.layers):
+    for index, (layer, composition, other) in enumerate(
+        zip(script.layers, compositions, others)
+    ):
         mark = ">" if index == editor.current else " "
-        values = normalized_composition(layer.composition) if fraction else layer.composition
-        composition = " ".join(
-            f"{symbol} {composition_value(value, normalize=fraction)}"
-            for symbol, value in values.items()
-        )
-        lines.append(
+        line = (
             f" {mark}{index + 1:3d}  {thickness_label(layer.thickness):>12s}"
             f" {layer.unit:<8s} {composition}"
         )
+        if other is not None:
+            thickness, unit, values = other
+            line = (
+                f"{line:<{len(line) - len(composition) + width}s}"
+                f"   [{thickness_label(thickness)} {unit}"
+                f"  {_pairs(values, normalize=atoms_mode)}]"
+            )
+        lines.append(line)
         if layer.species:
             species = " ".join(
                 f"{symbol} {value:g}" for symbol, value in layer.species.items()

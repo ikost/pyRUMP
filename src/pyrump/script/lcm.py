@@ -512,42 +512,66 @@ def recalculate_thickness_mode(
     fractions of 1. A layer with no thickness or composition yet is left
     alone. Returns how many layers were actually changed.
     """
+    changed = 0
+    views = thickness_mode_views(script, periodic_table, densities, to_atoms=to_atoms)
+    for layer, view in zip(script.layers, views):
+        if view is None:
+            continue
+        layer.thickness, layer.unit, layer.composition = view
+        changed += 1
+    return changed
+
+
+def thickness_mode_views(
+    script: Script,
+    periodic_table: PeriodicTable,
+    densities: DensityTable,
+    *,
+    to_atoms: bool,
+) -> list[tuple[float, str, dict[str, float]] | None]:
+    """Each layer as the other thickness convention would hold it.
+
+    One ``(thickness, unit, composition)`` per layer, or None for a layer
+    with no thickness or composition yet -- what
+    :func:`recalculate_thickness_mode` writes back, without touching
+    ``script``. SIM SHOW uses it to print the other mode's view of each
+    layer, so the two can never disagree.
+    """
     from ..atomic.density import layer_atomic_density
 
     symbols = script.elements
     if not symbols:
-        return 0
+        return [None] * len(script.layers)
     element_z = [periodic_table.by_symbol(s).z for s in symbols]
     atomic_densities = [periodic_table.by_z(z).atomic_density for z in element_z]
 
-    changed = 0
+    views: list[tuple[float, str, dict[str, float]] | None] = []
     for layer in script.layers:
         row = [layer.composition.get(s, 0.0) for s in symbols]
         total = sum(row)
         if total <= 0:
+            views.append(None)
             continue
         density = layer_atomic_density(row, atomic_densities)
         areal_total = _to_areal(layer.thickness, layer.unit, density, total, densities)
         if areal_total <= 0:
+            views.append(None)
             continue
         fractions = [value / total for value in row]
 
         if to_atoms:
-            layer.composition = {
+            composition = {
                 symbol: value * areal_total
                 for symbol, value in zip(symbols, fractions)
                 if value
             }
-            layer.thickness = areal_total
-            layer.unit = "/CM2"
+            views.append((areal_total, "/CM2", composition))
         else:
-            layer.composition = {
+            composition = {
                 symbol: value for symbol, value in zip(symbols, fractions) if value
             }
-            layer.thickness = areal_total / density
-            layer.unit = "A"
-        changed += 1
-    return changed
+            views.append((areal_total / density, "A", composition))
+    return views
 
 
 def _to_areal(
