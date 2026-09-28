@@ -283,12 +283,12 @@ def read_prompt(prompt: str) -> str:
     """Write the prompt ourselves, rather than letting readline place it.
 
     Windows has no readline, so pyRUMP leans on pyreadline3 for history and
-    tab completion. Unlike GNU readline, pyreadline3 does not let Python write
-    the prompt: it draws it through direct Win32 console calls and remembers
-    the coordinates, so it can repaint the line while editing. In VS Code's
-    terminal that bookkeeping drifts from what is actually on screen, and it
-    strands the cursor mid-way along an earlier line -- the text comes out
-    right, only the cursor is wrong.
+    tab completion. Unlike GNU readline or editline, pyreadline3 does not let
+    Python write the prompt: it draws it through direct Win32 console calls
+    and remembers the coordinates, so it can repaint the line while editing.
+    In VS Code's terminal that bookkeeping drifts from what is actually on
+    screen, and it strands the cursor mid-way along an earlier line -- the
+    text comes out right, only the cursor is wrong.
 
     Handing it an empty prompt, with the text already written, makes it start
     from wherever the terminal just left the cursor instead of computing a
@@ -296,8 +296,9 @@ def read_prompt(prompt: str) -> str:
     cost is that a repaint mid-edit redraws only what was typed, without the
     prompt in front of it.
 
-    GNU readline has no such trouble and is given the prompt as before -- it
-    needs it to lay the line out correctly.
+    GNU readline (Linux) and editline (macOS's usual backend) have no such
+    trouble and are given the prompt as before -- they need it to lay the
+    line out correctly.
     """
     if sys.platform != "win32":
         return input(prompt)

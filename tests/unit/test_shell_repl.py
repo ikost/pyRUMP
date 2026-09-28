@@ -127,8 +127,8 @@ def test_the_prompt_is_written_by_us_on_windows(monkeypatch, capsys):
 
 
 def test_gnu_readline_still_gets_the_prompt(monkeypatch, capsys):
-    """GNU readline places the prompt correctly and needs it to lay the line
-    out, so Linux and macOS keep the plain input() call."""
+    """GNU readline and editline place the prompt correctly and need it to
+    lay the line out, so Linux and macOS keep the plain input() call."""
     seen = []
     monkeypatch.setattr(repl.sys, "platform", "linux")
     monkeypatch.setattr("builtins.input", lambda prompt="": seen.append(prompt) or "QUIT")
