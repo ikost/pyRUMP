@@ -100,3 +100,63 @@ want that to work.
 See [Quick start](../getting-started/index.md#data-loading) for both binary
 formats worked end to end, including what each of `GET`/`XEQ` prints when
 pointed at the other one's file by mistake.
+
+### SIMNRA (.xnra)
+
+SIMNRA's `.xnra` is IDF XML (the IBA Data Format) with SIMNRA's own
+extensions. `GETNRA` reads the spectrum, instrument settings and sample,
+and `WRITENRA` writes them (see [Buffers](buffers.md#getnra-writenra-new)).
+`GET`, `PLOT`, `OVERLAY` and the batch CLI read the spectrum alone.
+
+| SIMNRA | pyRUMP |
+|---|---|
+| beam particle, Z, mass, energy | `BEAM`, `MEV` |
+| incidence angle α | `THETA` |
+| scattering angle | `PHI` = 180 − scattering angle |
+| exit angle β | `PSI` |
+| geometry type Cornell / IBM / general | `GEOMETRY` |
+| calibration offset, keV/channel | `OFFSET`, `SLOPE` |
+| first channel number | `CHOFF` |
+| detector resolution (FWHM) | `FWHM` |
+| solid angle, fluence | `OMEGA`, `CHARGE` (see below) |
+| live time | shown by `ACTIVE` |
+| layers: thickness (10¹⁵ at/cm²), atomic fractions | SIM layers in `/CM2` |
+
+**Dose: SIMNRA has no separate solid angle.** Its fluence is the number of
+particles times the solid angle in msr, and it writes the solid angle as
+1 msr. RUMP's yield depends only on the product OMEGA × CHARGE (divided by
+the charge state and `CORRECTION`), so `GETNRA` keeps the product: OMEGA 1,
+CHARGE = fluence × e, charge state 1, `CORRECTION` 1. For example, MnPt.RBS
+has CHARGE 16 µC and OMEGA 2.7 msr. SIMNRA imports that as a fluence of
+2.69633×10¹⁴ = 16 µC × 2.7 / e, and `GETNRA` reads it back as OMEGA 1 msr,
+CHARGE 43.2 µC. If you know the two separately, set them with `OMEGA` and
+`CHARGE`. `WRITENRA` does the reverse: fluence = OMEGA × CHARGE /
+(charge state × `CORRECTION` × e), solid angle 1 msr.
+
+**Geometry is read exactly as SIMNRA saved it.** SIMNRA's calculation uses
+the three angles α, scattering angle and β. The only step that isn't a copy
+is IBM, where RUMP's exit angle is THETA + PHI and so depends on THETA's
+sign. SIMNRA doesn't store that sign, so `GETNRA` takes it from the file's
+own β. `WRITENRA` writes the β that pyRUMP actually simulates with.
+
+Check the geometry after importing a RUMP `.RBS` file into SIMNRA, because
+SIMNRA takes the angles from the file's header as given. MnPt.RBS's header
+says `Geometry General, Theta -9, Phi 11, Psi 20`, and SIMNRA shows that as
+IBM with β = 20°. The measurement was really in Cornell geometry, which
+gives β = arccos(cos 9° · cos 11°) = 14.2°. pyRUMP loads what the `.xnra`
+says; `GEOMETRY CORNELL` corrects it, and a later `WRITENRA` writes the
+right β.
+
+**Not carried over.** `GETNRA` prints a `WARNING:` line for each of these
+when a file uses it:
+
+* a quadratic calibration term (RUMP's calibration is linear)
+* layer roughness, porosity and correction factors, substrate roughness
+* a technique other than RBS (the counts load, but buffer 0 won't describe them)
+* a stopping foil in front of the detector, or a beam foil
+* beam energy spread
+* more than one spectrum (only the first is loaded)
+* isotopes in a layer (`28Si`, `2D`), read as the natural element
+
+SIMNRA's own physics choices (stopping tables, straggling model, screening)
+are listed after loading; pyRUMP uses its own.

@@ -65,7 +65,9 @@ pyrump convert spectrum.dat spectrum.txt --two-column
 ```
 
 Writing `.rbs` requires beam and geometry metadata, so it only works from a
-`.rbs` source — ASCII files do not carry it.
+`.rbs` or SIMNRA `.xnra` source — ASCII files do not carry it. An `.xnra` input
+contributes its measured spectrum and metadata (see
+[File formats](file-formats.md#simnra-xnra)).
 
 ### `pyrump plot`
 

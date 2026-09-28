@@ -58,23 +58,29 @@ def read_into_buffer(session, path: Path) -> int:
     from ...cli._common import read_spectrum
     from ...io.rbs import RbsSpectrum
 
-    path = Path(path).expanduser()
-    if not path.exists() and not path.suffix:
-        # RUMP defaults the extension to .RBS.
-        candidate = path.with_suffix(".rbs")
-        if candidate.exists():
-            path = candidate
-    if not path.exists():
-        raise CommandError(f"no such file: {path}")
-    # Resolve once, here: buffers must hold absolute paths so that a CD between
-    # two GETs of the same file does not load it into a second buffer.
-    path = path.resolve()
+    # RUMP defaults the extension to .RBS.
+    path = _input_path(path, ".rbs")
 
     existing = session.buffers.find_path(path)
     if existing is not None:
         session.buffers.active = existing
         session.touch()
         return existing
+
+    if path.suffix.lower() == ".xnra":
+        # Read here rather than through read_spectrum, to keep the document
+        # for WRITENRA and to print the notices on the shell's own stdout.
+        xnra = _read_xnra(path)
+        if xnra.spectrum is None:
+            raise CommandError(
+                f"{path.name} holds only a SIMNRA simulation: "
+                f"GETNRA {path.name} -simulation loads it"
+            )
+        _print_notices(xnra.notices)
+        slot = session.buffers.scroll_in(_xnra_buffer(xnra, path))
+        session.buffers.active = slot
+        session.touch()
+        return slot
 
     try:
         source = read_spectrum(path)
@@ -101,6 +107,49 @@ def read_into_buffer(session, path: Path) -> int:
     session.buffers.active = slot
     session.touch()
     return slot
+
+
+def _input_path(path: Path, default_suffix: str) -> Path:
+    """An existing input file, trying ``default_suffix`` when none is given.
+
+    Resolved once, here: buffers must hold absolute paths so that a CD between
+    two GETs of the same file does not load it into a second buffer.
+    """
+    path = Path(path).expanduser()
+    if not path.exists() and not path.suffix:
+        candidate = path.with_suffix(default_suffix)
+        if candidate.exists():
+            path = candidate
+    if not path.exists():
+        raise CommandError(f"no such file: {path}")
+    return path.resolve()
+
+
+def _read_xnra(path: Path):
+    from ...io.xnra import read_xnra
+
+    try:
+        return read_xnra(path)
+    except (ValueError, OSError) as error:
+        raise CommandError(f"could not read {path}: {error}") from None
+
+
+def _xnra_buffer(xnra, path: Path) -> Buffer:
+    """The measured spectrum of a read ``.xnra``, keeping its document."""
+    buffer = Buffer.from_rbs(xnra.spectrum, path)
+    buffer.source_xml = xnra.xml
+    return buffer
+
+
+def _print_notices(notices: list[str]) -> None:
+    for notice in notices:
+        print(f"  WARNING: {notice}")
+
+
+def _interactive(session) -> bool:
+    """Someone is at the keyboard to answer a question -- not inside a macro
+    (XEQ), and not reading from a pipe."""
+    return session.xeq_depth == 0 and sys.stdin.isatty()
 
 
 def _buffer_argument(session, args: ArgReader, *, read: bool = True) -> tuple[int, object]:
@@ -177,7 +226,7 @@ def cmd_help(session, args: ArgReader) -> None:
 def cmd_quit(session, args: ArgReader) -> None:
     # A macro (XEQ) has no one at the keyboard to answer, so only the
     # interactive prompt asks for confirmation.
-    if session.xeq_depth == 0 and sys.stdin.isatty():
+    if _interactive(session):
         answer = input("Really quit pyRUMP? [y/N] ").strip().lower()
         if answer not in ("y", "yes"):
             return
@@ -324,6 +373,168 @@ def cmd_write(session, args: ArgReader) -> None:
     buffer = session.buffers.require_active()
     write_rbs(target, buffer.to_rbs())
     print(f"wrote {target}")
+
+
+def _buffer_index(session, buffer) -> int:
+    return next(i for i, b in enumerate(session.buffers.slots) if b is buffer)
+
+
+def cmd_getnra(session, args: ArgReader) -> None:
+    """``GETNRA <file> [-data] [-simulation]`` -- read a SIMNRA ``.xnra``
+    file: the measured spectrum into buffer 1, and the sample into SIM.
+
+    ``-data`` leaves SIM alone. ``-simulation`` also loads SIMNRA's own
+    simulated spectrum into a buffer of its own, to OVERLAY against pyRUMP's
+    buffer 0 -- and is the only way to open a file holding just a simulation.
+    Replacing an existing SIM sample asks first, except inside a macro.
+    """
+    from ...io.xnra import describe_physics
+    from ...script.lcm import SampleEditor, structure_label
+
+    token = args.token("an .xnra file")
+    data_only = with_simulation = False
+    while args:
+        option = args.token().lower()
+        if len(option) >= 2 and "-data".startswith(option):
+            data_only = True
+        elif len(option) >= 2 and "-simulation".startswith(option):
+            with_simulation = True
+        else:
+            raise CommandError(f"getnra: unrecognized option {option!r} (-data, -simulation)")
+
+    path = _input_path(Path(token), ".xnra")
+    xnra = _read_xnra(path)
+    _print_notices(xnra.notices)
+    if xnra.spectrum is None and not with_simulation:
+        raise CommandError(
+            f"{path.name} holds only a SIMNRA simulation: GETNRA {token} -simulation loads it"
+        )
+
+    # SIMNRA's curve goes in first, so the measured data lands on top (buffer 1).
+    simulated = None
+    if with_simulation:
+        if xnra.simulation is None:
+            print("  the file holds no calculated SIMNRA simulation")
+        else:
+            simulated = Buffer.from_rbs(xnra.simulation)
+            simulated.name = xnra.simulation.identifier
+            session.buffers.scroll_in(simulated)
+    measured = None
+    if xnra.spectrum is not None:
+        existing = session.buffers.find_path(path)
+        if existing is None:
+            measured = _xnra_buffer(xnra, path)
+            session.buffers.scroll_in(measured)
+        else:
+            measured = session.buffers[existing]
+    if measured is None and simulated is None:
+        raise CommandError(f"{path.name}: nothing to load")
+    session.buffers.active = _buffer_index(session, measured or simulated)
+
+    if simulated is not None:
+        index = _buffer_index(session, simulated)
+        print(f"  SIMNRA simulation -> buffer {index} (OVERLAY {index} to compare)")
+    elif xnra.simulation is not None and not with_simulation:
+        print(f"  the file also holds a SIMNRA simulation: GETNRA {token} -simulation loads it")
+
+    g = xnra.geometry
+    print(
+        f"  geometry {g.kind.name}: theta {g.theta:g}, phi {g.phi:g}"
+        f" (scattering angle {g.scattering_angle:g}), psi {g.psi:g} (exit angle)"
+    )
+
+    if data_only:
+        print("  SIM sample left unchanged (-data)")
+    elif xnra.script is None:
+        print("  the file describes no sample: SIM sample unchanged")
+    else:
+        new = structure_label(xnra.script)
+        replace_it = True
+        if session.script.layers:
+            old = structure_label(session.script)
+            if _interactive(session):
+                answer = input(f"Replace SIM sample {old} with {new}? [y/N] ").strip().lower()
+                replace_it = answer in ("y", "yes")
+            else:
+                print(f"  replacing SIM sample {old}")
+        if replace_it:
+            session.script = xnra.script
+            session.editor = SampleEditor(session.script)
+            print(f"  SIM sample from {path.name}: {new}")
+        else:
+            print("  SIM sample kept")
+
+    differences = describe_physics(xnra.physics, session.settings.screening)
+    if differences:
+        print("  SIMNRA's own physics, which pyRUMP does not share:")
+        for line in differences:
+            print(f"    {line}")
+    session.touch()
+    print(f"active buffer is now {session.buffers.active}")
+
+
+def cmd_writenra(session, args: ArgReader) -> None:
+    """``WRITENRA <file>`` -- write the active buffer, the SIM sample and the
+    simulation (buffer 0) as a SIMNRA ``.xnra`` file.
+
+    A buffer read from an ``.xnra`` is written over its own original
+    document, so SIMNRA settings pyRUMP does not model are kept.
+    """
+    from ... import __version__
+    from ...io.xnra import exit_angle, fluence, layers_from_script, write_xnra
+
+    target = Path(args.token("an output file")).expanduser()
+    args.done()
+    if not target.suffix:
+        target = target.with_suffix(".xnra")
+    buffer = session.buffers.require_active()
+
+    notices: list[str] = []
+    layers = simulation = None
+    if session.script.layers:
+        try:
+            layers, notices = layers_from_script(
+                session.script, session.table, session.densities, buffer.geometry
+            )
+        except (ValueError, KeyError) as error:
+            raise CommandError(f"writenra: the SIM sample cannot be written: {error}") from None
+        if session.buffers.active != 0:
+            try:
+                simulation = session.simulation().spectrum.counts
+            except (ValueError, KeyError) as error:
+                notices.append(f"simulation not written: {error}")
+
+    try:
+        notices += write_xnra(
+            target,
+            buffer,
+            layers=layers,
+            simulation=simulation,
+            screening=session.settings.screening,
+            periodic_table=session.table,
+            base=buffer.source_xml,
+            description=session.script.description,
+            version=__version__,
+        )
+    except ValueError as error:
+        raise CommandError(f"writenra: {error}") from None
+
+    _print_notices(notices)
+    g, m = buffer.geometry, buffer.measurement
+    print(
+        f"  geometry {g.kind.name}: incidence {abs(g.theta):g}, scattering angle"
+        f" {g.scattering_angle:g}, exit {exit_angle(g):.4g} (degrees)"
+    )
+    print(
+        f"  fluence {fluence(m):.6g} particles x msr"
+        f" (OMEGA {m.omega_msr:g} msr x CHARGE {m.charge_uC:g} uC; SIMNRA solid angle 1 msr)"
+    )
+    parts = ["spectrum"]
+    if layers is not None:
+        parts.append(f"{len(layers)} sample layers")
+    if simulation is not None:
+        parts.append("simulation")
+    print(f"wrote {target}: {', '.join(parts)}")
 
 
 #: bmanip.c:619-627's geometry-name strings, keyed by our own GeometryKind.
@@ -1676,6 +1887,10 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("COPY", 4, cmd_copy, "copy one buffer to another"),
     ("MOVE", 4, cmd_move, "exchange two buffers"),
     ("WRITE", 5, cmd_write, "write the active buffer to a .rbs file"),
+    ("GETNRA", 4, cmd_getnra, "read a SIMNRA .xnra file: spectrum, and sample into SIM"),
+    ("GN", -2, cmd_getnra, "synonym for GETNRA"),
+    ("WRITENRA", 6, cmd_writenra, "write the active buffer, sample and simulation as SIMNRA .xnra"),
+    ("WN", -2, cmd_writenra, "synonym for WRITENRA"),
     ("WRASCII", 3, cmd_wrascii, "write the active buffer as text"),
     ("RECALCULATE", 6, cmd_recalculate, "force the simulation to recompute"),
     # Parameters
@@ -1740,6 +1955,8 @@ for _name, _minlen, _handler, _help in _ENTRIES:
 TABLE.note_synonym("COMPARE", "CMP")
 TABLE.note_synonym("FIGSAVE", "HCOPY")
 TABLE.note_synonym("GET", "READ")
+TABLE.note_synonym("GETNRA", "GN")
+TABLE.note_synonym("WRITENRA", "WN")
 
 # ---------------------------------------------------------------------------
 # Sections for the ``?``/``HELP`` listing, most important first. Display only
@@ -1757,7 +1974,7 @@ _HELP_GROUPS: list[tuple[str, list[str]]] = [
       "ENERGY", "AXIS", "BLOWUP", "EXPAND", "PARAMETERS", "DISPLAY"]),
     ("Buffers",
      ["BUFFERS", "POINTAT", "RELEASE", "EMPTY", "NEWALL", "COPY",
-      "MOVE", "WRITE", "WRASCII"]),
+      "MOVE", "WRITE", "WRASCII", "GETNRA", "WRITENRA"]),
     ("Sample & instrument parameters",
      ["ACTIVE", "BEAM", "MEV", "THETA", "PHI", "PSI", "GEOMETRY",
       "CONVERSION", "SLOPE", "OFFSET", "CORRECTION", "CHARGE", "CURRENT", "CHOFF",

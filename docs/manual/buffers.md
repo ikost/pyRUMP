@@ -82,6 +82,44 @@ automatically; `.rbs`/`.RBS` is a footgun rather than a hard error --
 `WRASCII` still writes the file but warns, since `GET` would otherwise
 mistake it for an RC43 macro and refuse it (see [File formats](file-formats.md)).
 
+#### `GETNRA` / `WRITENRA` `[new]`
+
+```
+usage: GETNRA <file> [-data] [-simulation]      (short: GN)
+usage: WRITENRA <file>                          (short: WN)
+```
+
+Read and write SIMNRA's `.xnra` files (see
+[File formats](file-formats.md#simnra-xnra) for the field mapping).
+
+`GETNRA` loads the measured spectrum into buffer 1, the same as `GET`, and the
+file's sample into SIM. If SIM already holds a sample, it asks before
+replacing it. Inside an `XEQ` macro there is nobody to answer, so it replaces
+the sample and says so. It prints every setting it had to ignore or convert,
+the geometry in RUMP's terms, and the SIMNRA physics settings that pyRUMP
+doesn't share, so differences between the two simulations are expected
+rather than surprising.
+
+* `-data` loads only the spectrum and leaves SIM alone.
+* `-simulation` (or `-sim`) also loads SIMNRA's own simulated spectrum into a
+  buffer of its own, after the measured data, to `OVERLAY` against pyRUMP's
+  buffer 0. A file that holds only a simulation needs this flag.
+
+`GET` also reads `.xnra` files, but only the spectrum; it never touches SIM.
+
+`WRITENRA` writes the active buffer, the SIM sample and the simulation
+(buffer 0). A bare filename gets `.xnra` added. A buffer read from an `.xnra`
+file is written over its original document, so SIMNRA settings pyRUMP
+doesn't model (cross-section choices, layer roughness, plot scaling) are
+kept. A graded layer is written as the uniform sublayers pyRUMP simulates it
+with, since SIMNRA has no profiles.
+
+```
+Your wish? gn MnPt.xnra       /* spectrum -> buffer 1, sample -> SIM */
+Your wish? compare            /* pyRUMP's simulation against the data */
+Your wish? wn MnPt-pyrump     /* writes MnPt-pyrump.xnra for SIMNRA   */
+```
+
 ### Sample & instrument parameters
 
 Each buffer carries its own beam, geometry, calibration and measurement

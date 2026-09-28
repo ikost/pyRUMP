@@ -8,6 +8,7 @@ expensive enough that README.md warns to build it once and reuse it.
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 
 
@@ -60,13 +61,23 @@ def load_tables(data: Path):
 
 
 def read_spectrum(path: str | Path):
-    """Read a spectrum by extension: ``.rbs`` and friends binary, else ASCII."""
+    """Read a spectrum by extension: ``.rbs`` and friends binary, ``.xnra``
+    SIMNRA (the measured spectrum only), else ASCII."""
     from pyrump.io.ascii import read_ascii
     from pyrump.io.rbs import read_rbs
 
     path = Path(path)
     if path.suffix.lower() in (".rbs", ".rump", ".frs", ".fres", ".pixe"):
         return read_rbs(path)
+    if path.suffix.lower() == ".xnra":
+        from pyrump.io.xnra import XnraFormatError, read_xnra
+
+        source = read_xnra(path)
+        if source.spectrum is None:
+            raise XnraFormatError(f"{path.name} holds only a SIMNRA simulation, no measured spectrum")
+        for notice in source.notices:
+            print(f"  WARNING: {notice}", file=sys.stderr)
+        return source.spectrum
     return read_ascii(path)
 
 

@@ -59,6 +59,10 @@ class Buffer:
     date: str = ""
     livetime: str = ""
     comments: list[str] = field(default_factory=list)
+    #: The SIMNRA document this buffer was read from (GETNRA/GET of an
+    #: ``.xnra``), so WRITENRA can keep the SIMNRA settings pyRUMP does not
+    #: model. ``None`` for every other source.
+    source_xml: bytes | None = None
 
     @property
     def calibration(self) -> Calibration:

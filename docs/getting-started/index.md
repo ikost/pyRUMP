@@ -20,6 +20,9 @@ pyrump                         # the interactive shell, from any directory
 
 ### Data loading
 
+pyRUMP reads RUMP's binary `.rbs`, RC43 acquisition macros, plain ASCII, and
+SIMNRA's `.xnra` files.
+
 Anything ending in `.rbs`/`.RBS` might be one of two unrelated things: RUMP's
 own binary spectrum format, or a plain-text acquisition macro that just
 happens to share the extension. `GET` and `XEQ` load them, respectively —
@@ -89,6 +92,27 @@ Your wish? xeq 2A.rbs
 .../2A.rbs is not a text command file (...) -- binary spectrum data belongs
 with GET, not XEQ
 ```
+
+**Example 3 — a SIMNRA file (.xnra)**
+
+`examples/MnPt.xnra` is the same measurement saved by SIMNRA 7.04, with a
+sample fitted in SIMNRA. `GETNRA` (`GN` for short) loads the spectrum into
+buffer 1 and the sample into SIM:
+
+```
+Your wish? gn MnPt.xnra
+  WARNING: SIMNRA stores charge x solid angle together: loaded as OMEGA 1 msr,
+  CHARGE 43.2 uC. If you know them separately, set them with OMEGA and CHARGE
+  geometry IBM: theta 9, phi 11 (scattering angle 169), psi 20 (exit angle)
+  SIM sample from MnPt.xnra: Si [5000/CM2] - Ru [27/CM2] - Mn0.73Pt0.27 [241/CM2] - Ru [26/CM2]
+  ...
+active buffer is now 1
+Your wish? compare
+```
+
+`WRITENRA` (`WN`) writes the result back for SIMNRA. See
+[File formats](../manual/file-formats.md#simnra-xnra) for what carries over
+and what doesn't.
 
 ### Plotting
 
