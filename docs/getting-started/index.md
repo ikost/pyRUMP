@@ -154,7 +154,7 @@ Buffer 0 is always the simulation and recomputes itself whenever the sample
 or the active buffer's parameters change — there is no "simulate" command,
 exactly as in the original.
 
-See [SIM and PERT](../manual/sim-pert.md) in the manual for the full `SIM`
+See [SIM](../manual/sim.md) in the manual for the full `SIM`
 command set — editing layers interactively, depth-profile equations,
 straggling and more.
 
@@ -172,8 +172,8 @@ Your wish? pert get MnPt.pert go
 
   fit took 0.18 s
 
-  reduced chi-square 12.3538 on 397 dof
-  35 evaluations, `xtol` termination condition is satisfied.
+  reduced chi-square 12.3538 on 397 dof   (was 61.8545)
+  35 evaluations, converged
   kev(0)                            48.4324  +/- 0.04736   (was 48)
   layer 2 thickness                     250  +/- 0.5042   (was 254)
   layer 2 composition Mn             2.8231  +/- 0.01217   (was 2.73495)
@@ -193,7 +193,7 @@ Your wish? figsave fit.png
 
 ![MnPt data vs. the fitted simulation, with residuals](../assets/mnpt-fit.png)
 
-See [SIM and PERT](../manual/sim-pert.md) in the manual for the full `PERT`
+See [PERT](../manual/pert.md) in the manual for the full `PERT`
 command set — bounded fits, `WINDOW`/`NORMALIZE`, `REPORT`, and the
 composition-degeneracy caveat worth reading before your first real fit.
 

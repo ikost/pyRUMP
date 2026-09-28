@@ -188,15 +188,16 @@ commands it's filed under.
 
 Enters the sample-description editor: its own `SIM Command:` prompt, for
 building or editing the layered target `PERT` fits against and `COMPARE`
-plots. See [SIM and PERT](sim-pert.md).
+plots. See [SIM](sim.md).
 
-`SIM <command>` runs one SIM command without leaving the RUMP level and
-returning, e.g. `sim thick 500 A` — handy inside a one-line macro, or when
-you only need to tweak one thing:
+`SIM <command>` runs one SIM command without leaving the RUMP level, e.g.
+`sim thick 500 A` sets the current layer's thickness — handy inside a
+one-line macro, or when you only need to tweak one thing:
 
 ```
-Your wish? sim thick 1 500 A
-  layer 1 thickness = 500 A
+Your wish? sim layer 2
+  you are now working on layer # 2 of 5
+Your wish? sim thick 500 A
 ```
 
 ### `PERT`
@@ -204,7 +205,7 @@ Your wish? sim thick 1 500 A
 Enters the fitting sub-processor: its own `PERT Command:` prompt, for
 selecting what varies and running the least-squares search. Same one-shot
 form as `SIM` — `PERT GO` re-runs the last selection without entering the
-prompt. See [SIM and PERT](sim-pert.md).
+prompt. See [PERT](pert.md).
 
 ### `COMPARE` / `CMP`
 

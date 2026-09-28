@@ -1,0 +1,430 @@
+## PERT — fitting
+
+`PERT` fits the [`SIM`](sim.md) sample to the active data buffer by least
+squares. You choose which parameters may vary and which channels count, then
+run `GO`. Fitted values are written back into the sample, so `SIM SHOW` and
+`SIM SAVE` show them.
+
+`PERT` opens its own `PERT Command:` prompt. A command PERT does not
+recognise is passed to the RUMP level, which also takes you back there. From
+the RUMP level, `PERT <command>` runs a single PERT command without entering
+the prompt:
+
+```
+Your wish? pert get MnPt.pert go      /* load a saved setup and fit */
+```
+
+```
+Your wish? pert
+PERT Command: window 800 1200         /* fit these channels only        */
+PERT Command: thickness 2             /* vary layer 2's thickness       */
+PERT Command: composition 2 Mn        /* and its Mn content             */
+PERT Command: go
+```
+
+Two differences from the original: the data may be in any buffer, not just
+buffer 1, and `MULTI` is the default.
+
+### Getting around
+
+#### `HELP` / `?`
+
+```
+usage: HELP [<name>]
+```
+
+Lists the PERT commands. `HELP <name>` describes one command, with its
+usage; a name PERT does not know is looked up at the RUMP level.
+
+```
+PERT Command: help thickness
+```
+
+#### `RETURN` / `QUIT` / `Q`
+
+Goes back to the RUMP level. Inside PERT, `QUIT` does not exit pyRUMP.
+
+#### `PARMS`
+
+Shows the current setup: fit mode, windows, and what is varying.
+
+```
+PERT Command: parms
+  mode        multiple variable
+  autocmp     off
+  report      off
+  error win   [1] 800-1200
+  norm win    (none)
+  varying:
+    [1] kev(0)
+    [2] layer 2 thickness
+    [3] layer 2 composition Mn
+    [4] fwhm  bounds 18-25
+```
+
+#### `SHOW`
+
+Lists the sample, the same as [`SIM SHOW`](sim.md#show). Useful to check
+layer numbers before selecting parameters.
+
+```
+PERT Command: show
+```
+
+### Running a fit
+
+#### `GO`
+
+Runs the fit and prints the result (see [Reading the fit report](#reading-the-fit-report)).
+Needs a sample, a data buffer, and at least one varying parameter.
+
+```
+PERT Command: go
+```
+
+#### `SINGLE` / `MULTI`
+
+`MULTI` (the default) fits all varying parameters together. `SINGLE` fits
+them one at a time, in the order they were selected.
+
+```
+PERT Command: single
+  single-variable mode
+```
+
+#### `VOLUME`
+
+```
+usage: VOLUME [off]
+```
+
+Prints a line for every simulation `GO` runs, so a long fit visibly makes
+progress. Off by default.
+
+```
+PERT Command: volume
+  messages on
+```
+
+#### `AUTOCMP` `[new]`
+
+```
+usage: AUTOCMP [off]
+```
+
+Runs `COMPARE` at the end of every `GO`. Off by default; `GET` and `CLEAR`
+keep the setting.
+
+```
+PERT Command: autocmp
+  autocmp on
+```
+
+#### `REPORT` `[new]`
+
+```
+usage: REPORT [off]
+```
+
+After every `GO`, saves a record of the fit, named after the sample: the
+first word of the data buffer's `IDENTIFIER`, or its file name. Off by
+default; `GET` and `CLEAR` keep the setting.
+
+* `<sample>.report` — the fit result, appended, so refits keep a history
+* `<sample>.pert` — the PERT setup, as `SAVE` writes it
+* `<sample>.lcm` — the fitted sample, as `SIM SAVE` writes it
+* `<sample>.png` — the `COMPARE` plot
+
+```
+PERT Command: report
+  report on
+```
+
+#### `COMPARE` / `CMP`
+
+Plots the active buffer against the simulation, with residuals, the same as
+[`COMPARE`](shell.md#compare-cmp) at the RUMP level.
+
+```
+PERT Command: cmp
+```
+
+### Saving and clearing
+
+#### `GET`
+
+```
+usage: GET <file> [GO]
+```
+
+Replays a saved `.pert` setup, replacing the current one. A trailing `GO`
+runs the fit right after. `.pert` is added when the name has no extension.
+
+```
+PERT Command: get MnPt go
+```
+
+#### `SAVE`
+
+```
+usage: SAVE <file>
+```
+
+Writes the current setup (windows, fit mode, varying parameters and their
+bounds) to a `.pert` file, as the PERT commands that recreate it.
+
+```
+PERT Command: save usual
+wrote usual.pert
+```
+
+#### `CLEAR` `[new]`
+
+```
+usage: CLEAR [<n>]
+```
+
+Forgets the whole setup, or only varying parameter *n*, numbered as `PARMS`
+lists them.
+
+```
+PERT Command: clear 3                 /* stop varying parameter [3] */
+```
+
+### Windows
+
+#### `WINDOW`
+
+```
+usage: WINDOW <first> <last>
+usage: WINDOW CLEAR [<n>]
+```
+
+Adds an error window: only these channels count in the fit. Up to 10
+windows; with none, the whole spectrum counts. `WINDOW CLEAR` removes all
+windows, `WINDOW CLEAR <n>` only window *n*. With no argument, shows the
+setup like `PARMS`.
+
+```
+PERT Command: window 800 1200
+  error windows [1] 800-1200
+```
+
+#### `NORMALIZE`
+
+```
+usage: NORMALIZE <first> <last>
+usage: NORMALIZE CLEAR
+```
+
+Scales the data to the simulation over these channels, to absorb a charge or
+dose error. After `GO`, the scale is stored in the buffer's
+[`CORRECTION`](buffers.md#correction). Cannot be combined with varying
+`CORRECTION`.
+
+```
+PERT Command: normalize 300 400
+  normalisation window 300-400
+```
+
+### Parameters
+
+Each command below adds one parameter to vary; selecting the same one again
+replaces it. Layer numbers are the ones `SHOW` lists.
+
+Every parameter takes an optional `<min> <max>` bound at the end: give both
+or neither. The fit stays inside the bound. `PARMS` shows it, and
+`SAVE`/`GET` keep it.
+
+#### `THICKNESS`
+
+```
+usage: THICKNESS <layer> [<min> <max>]
+```
+
+Varies a layer's thickness. Needs [MODE COMP](config.md#mode-new).
+
+```
+PERT Command: thickness 2
+```
+
+#### `COMPOSITION`
+
+```
+usage: COMPOSITION <layer> <element> [<min> <max>]
+```
+
+Varies one element's stoichiometry in a layer. The element must already be
+in that layer. Needs [MODE COMP](config.md#mode-new).
+
+```
+PERT Command: composition 2 Mn 2 4
+```
+
+!!! warning "Always keep one element fixed"
+    Only the ratios within a layer matter, so varying every element of a
+    layer together has no effect on the spectrum and the fit fails. In an
+    *N*-element layer, vary at most *N*−1 of them.
+
+#### `ATOMS` `[new]`
+
+```
+usage: ATOMS <layer> <element> [<min> <max>]
+```
+
+Varies one element's own areal density in a layer, keeping the other
+elements' amounts fixed. Needs [MODE ATOMS](config.md#mode-new).
+
+```
+PERT Command: atoms 2 Mn
+```
+
+#### `SPECIES`
+
+```
+usage: SPECIES <layer> <element> [<min> <max>]
+```
+
+Varies one element of a layer's [`SPECIES`](sim.md#species). The element
+must already be declared there.
+
+```
+PERT Command: species 2 Au
+```
+
+#### `EQUATION`
+
+```
+usage: EQUATION <layer> <n> [<min> <max>]
+```
+
+Varies parameter *n* of a layer's [`EQUATION`](sim.md#equation).
+
+```
+PERT Command: equation 2 2            /* the second equation parameter */
+```
+
+#### `STRAGGLE`
+
+```
+usage: STRAGGLE [<min> <max>]
+```
+
+Varies the sample's [straggling factor](sim.md#straggle).
+
+```
+PERT Command: straggle 0.5 2
+```
+
+#### `FUZZ`
+
+Not implemented; it prints an error.
+
+#### `MEV`
+
+```
+usage: MEV [<min> <max>]
+```
+
+Varies the beam energy, in MeV.
+
+```
+PERT Command: mev
+```
+
+#### `FWHM`
+
+```
+usage: FWHM [<min> <max>]
+```
+
+Varies the detector resolution, in keV.
+
+```
+PERT Command: fwhm 18 25
+```
+
+#### `THETA`
+
+```
+usage: THETA [<min> <max>]
+```
+
+Varies the sample tilt, in degrees.
+
+```
+PERT Command: theta -12 -6
+```
+
+#### `CORRECTION`
+
+```
+usage: CORRECTION [<min> <max>]
+```
+
+Varies the buffer's normalisation factor ([`CORRECTION`](buffers.md#correction)).
+Cannot be combined with a `NORMALIZE` window.
+
+```
+PERT Command: correction
+```
+
+#### `SLOPE` / `KEV/CH`
+
+```
+usage: SLOPE [<min> <max>]
+```
+
+Varies the energy calibration's slope, in keV per channel.
+
+```
+PERT Command: slope
+```
+
+#### `OFFSET` / `KEV(0)`
+
+```
+usage: OFFSET [<min> <max>]
+```
+
+Varies the energy calibration's offset, in keV, e.g. to follow a
+sample-charging shift.
+
+```
+PERT Command: offset
+```
+
+### Reading the fit report
+
+```
+Your wish? pert get MnPt.pert go
+  ...
+  Fitting MnPt: Si [1000nm] - SiO2 [330A] - Ru [40A] - Mn2.73Pt [331A] - Ru [40A]
+
+  fit took 0.17 s
+
+  reduced chi-square 12.3538 on 397 dof   (was 61.8545)
+  35 evaluations, converged
+  kev(0)                            48.4324  +/- 0.04736   (was 48)
+  layer 2 thickness                     250  +/- 0.5042   (was 254)
+  layer 2 composition Mn             2.8231  +/- 0.01217   (was 2.73495)
+  fwhm                              24.9921  +/- 0.03427   (was 15)
+
+  MnPt: Si [1000nm] - SiO2 [330A] - Ru [40A] - Mn2.82Pt [326A] - Ru [40A]
+```
+
+* **`Fitting MnPt: …`** — the sample name and the layer structure before the
+  fit, substrate first. The last line shows the structure after it.
+* **`reduced chi-square … on … dof`** — chi-square per degree of freedom,
+  over the error windows; `(was …)` is the value before the fit. Near 1, the
+  model explains the data as well as counting statistics allow. Much more
+  than 1 means a systematic mismatch: a missing layer, a wrong calibration or
+  geometry, or non-Rutherford scattering in the window. Much less than 1
+  usually means the window is too narrow.
+* **`… evaluations, converged`** — how many simulations the fit ran. `did not
+  converge` means it stopped at its limit first: check the starting values
+  or narrow the window before trusting the numbers.
+* **One line per parameter** — the fitted value, its uncertainty, and the
+  starting value. Layer thicknesses are in 10¹⁵ at/cm².
+* **`data scaled by …`** — only with a `NORMALIZE` window: the scale applied,
+  and the `CORRECTION` it was stored as.

@@ -222,7 +222,7 @@ usage: CORRECTION <factor>
 Sets the normalization fudge factor that absorbs charge-integration error
 (RUMP's `CORR`). `PERT`'s `NORMALIZE` window can set this automatically from
 a fit instead of you setting it by hand — see
-[PERT commands](sim-pert.md#pert-commands).
+[`PERT NORMALIZE`](pert.md#normalize).
 
 #### `CHARGE`
 
