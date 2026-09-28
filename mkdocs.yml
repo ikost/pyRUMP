@@ -53,9 +53,8 @@ nav:
       - Plotting & display: manual/plotting.md
       - Analysis tools: manual/analysis.md
       - File formats: manual/file-formats.md
-      - SIM and PERT:
-          - SIM — sample editor: manual/sim.md
-          - PERT — fitting: manual/pert.md
+      - SIM — sample editor: manual/sim.md
+      - PERT — fitting: manual/pert.md
       - CLI reference: manual/cli.md
       - Config: manual/config.md
       - Sample descriptions & depth profiles: manual/samples.md
