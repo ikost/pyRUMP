@@ -793,6 +793,11 @@ def cmd_go(session, args: ArgReader) -> None:
             initial_reduced = reduced
         if state.verbose:
             print(f"    eval {evaluation:3d}   chi2/dof {reduced:.4f}")
+        # Each evaluation is a full simulation, so a fit blocks the prompt --
+        # and the plot window's event loop -- for seconds to minutes. This is
+        # the only per-iteration hook the fit has; pumping here keeps the
+        # figure repainting instead of being declared hung.
+        plotting.pump(session)
 
     result = None
     started = time.perf_counter()

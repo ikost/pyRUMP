@@ -147,3 +147,79 @@ def test_buffer_label_keeps_a_synthetic_splot_label_untouched(session):
 
     buffer = SimpleNamespace(name="SIM(layer 2)", identifier="")
     assert plotting.buffer_label(session, buffer, 0) == "SIM(layer 2)"
+
+
+# -- pump: keeping the plot window alive during a long command ---------------
+#
+# Nothing pumps the GUI event loop while a command runs, so a fit that takes
+# tens of seconds leaves the figure unrepainted long enough for the OS to
+# declare it hung. ``pump`` is the escape hatch long commands call from their
+# own iteration hooks; what matters is that it is cheap enough to call
+# indiscriminately and safe when there is no window to pump.
+
+
+def test_pump_does_nothing_without_a_figure(session):
+    """Called from a fit whether or not anything is plotted, so the
+    no-figure case has to be free rather than an error."""
+    assert session.figure is None
+    plotting.pump(session)  # no exception
+
+
+def test_pump_skips_a_non_interactive_backend(session, monkeypatch):
+    """Agg has no event loop; flush_events must not be reached for it."""
+    figure, _ = plotting.figure_for(session)
+
+    def boom():
+        raise AssertionError("flush_events should not run for Agg")
+
+    monkeypatch.setattr(figure.canvas, "flush_events", boom)
+    plotting._last_pump = 0.0
+    plotting.pump(session)
+
+
+def test_pump_reaches_the_event_loop_on_an_interactive_backend(session, monkeypatch):
+    figure, _ = plotting.figure_for(session)
+    monkeypatch.setattr(
+        type(figure.canvas), "required_interactive_framework", "fake", raising=False
+    )
+    calls = []
+    monkeypatch.setattr(figure.canvas, "flush_events", lambda: calls.append("flush"))
+
+    plotting._last_pump = 0.0
+    plotting.pump(session)
+
+    assert calls == ["flush"]
+
+
+def test_pump_throttles_repeated_calls(session, monkeypatch):
+    """A fit calls this once per model evaluation -- thousands of times over a
+    long run -- so all but one call per PUMP_INTERVAL must be a cheap no-op."""
+    figure, _ = plotting.figure_for(session)
+    monkeypatch.setattr(
+        type(figure.canvas), "required_interactive_framework", "fake", raising=False
+    )
+    calls = []
+    monkeypatch.setattr(figure.canvas, "flush_events", lambda: calls.append("flush"))
+
+    plotting._last_pump = 0.0
+    for _ in range(50):
+        plotting.pump(session)
+
+    assert calls == ["flush"]
+
+
+def test_pump_ignores_a_figure_the_user_closed(session, monkeypatch):
+    """Pumping also delivers input, so the window can be closed *by* a pump --
+    the next one must not touch the dead canvas."""
+    figure, _ = plotting.figure_for(session)
+    monkeypatch.setattr(
+        type(figure.canvas), "required_interactive_framework", "fake", raising=False
+    )
+    monkeypatch.setattr(
+        figure.canvas, "flush_events",
+        lambda: (_ for _ in ()).throw(AssertionError("closed figure was pumped")),
+    )
+    plt.close(figure)
+
+    plotting._last_pump = 0.0
+    plotting.pump(session)  # no exception

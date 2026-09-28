@@ -13,8 +13,10 @@ and a typed session cannot drift apart.
 from __future__ import annotations
 
 import os
+import queue
 import random
 import sys
+import threading
 from pathlib import Path
 
 from .dispatch import ArgReader, CommandError, strip_comment, tokenize
@@ -243,6 +245,88 @@ def _save_history() -> None:
         pass
 
 
+#: How long :func:`_read_line` waits on stdin before pumping the plot window
+#: again. ``plotting.pump`` self-throttles, so this only sets how finely the
+#: wait is sliced, not how often the GUI is actually touched.
+_WAIT_SLICE = 0.05
+
+#: Lines the reader thread has pulled off a non-tty stdin, plus ``None`` once
+#: it hits EOF. Created on first use by :func:`_read_line`.
+_stdin_lines: "queue.Queue[str | None] | None" = None
+
+
+def _start_stdin_reader() -> "queue.Queue[str | None]":
+    """Read stdin on a daemon thread, so the main thread stays free to pump.
+
+    The split is this way round, not the other, because a GUI toolkit may only
+    be touched from the thread that owns it -- Cocoa enforces this outright --
+    so the blocking read is what gets banished to a thread, never the pumping.
+    """
+    lines: "queue.Queue[str | None]" = queue.Queue()
+
+    def reader() -> None:
+        while True:
+            try:
+                line = sys.stdin.readline()
+            except (OSError, ValueError):  # stdin closed under us
+                line = ""
+            if not line:
+                lines.put(None)
+                return
+            lines.put(line.rstrip("\n").rstrip("\r"))
+
+    threading.Thread(target=reader, daemon=True, name="pyrump-stdin").start()
+    return lines
+
+
+def _read_line(session, prompt: str) -> str:
+    """One line from the user, keeping the plot window alive while we wait.
+
+    On a real terminal this is plain :func:`input`: readline (or pyreadline3 on
+    Windows) provides history and tab completion, and the GUI toolkit's own
+    ``PyOS_InputHook`` -- which CPython invokes only on the interactive
+    readline path -- runs the event loop between keystrokes, so the figure
+    stays responsive on its own.
+
+    When stdin is *not* a tty that hook is never reached, because :func:`input`
+    bypasses ``PyOS_Readline`` entirely. The window then goes unpumped for the
+    whole time the prompt waits and the OS declares it hung about five seconds
+    in -- the common way to hit this on Windows is running the shell under
+    mintty/Git Bash or an IDE's run panel, where stdin is a pipe. There is no
+    line editing to preserve in that case, so the read moves to a thread and
+    the wait is spent pumping instead of blocking.
+
+    Raises :exc:`EOFError` at end of input, like :func:`input` does, so the
+    caller's handling of a closed stdin is the same either way.
+    """
+    global _stdin_lines
+
+    try:
+        interactive_stdin = sys.stdin is not None and sys.stdin.isatty()
+    except (AttributeError, ValueError):  # pragma: no cover - exotic stdin
+        interactive_stdin = False
+    if interactive_stdin:
+        return input(prompt)
+
+    from . import plotting
+
+    if _stdin_lines is None:
+        _stdin_lines = _start_stdin_reader()
+    sys.stdout.write(prompt)
+    sys.stdout.flush()
+    while True:
+        try:
+            line = _stdin_lines.get(timeout=_WAIT_SLICE)
+        except queue.Empty:
+            plotting.pump(session)
+            continue
+        if line is None:
+            # Keep EOF sticky: a later prompt must see it too, not block.
+            _stdin_lines.put(None)
+            raise EOFError
+        return line
+
+
 def run_shell(
     data: str | None = None,
     macro: Path | None = None,
@@ -301,7 +385,7 @@ def run_shell(
     try:
         while True:
             try:
-                line = input(prompt_for(session, stack, plain_prompt))
+                line = _read_line(session, prompt_for(session, stack, plain_prompt))
             except EOFError:
                 print()
                 break

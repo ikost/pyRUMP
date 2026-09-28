@@ -17,6 +17,7 @@ whole-figure products -- ``COMPARE`` and ``DISPLAY`` -- do reuse
 from __future__ import annotations
 
 import re
+import time
 from dataclasses import dataclass
 
 import numpy as np
@@ -203,6 +204,68 @@ def draw(session) -> None:
     show(figure)
 
 
+def _interactive(canvas) -> bool:
+    """Whether this canvas is backed by a real GUI toolkit.
+
+    Agg -- what the tests and ``--batch`` runs use -- has no
+    ``required_interactive_framework``, no event loop, and no window to keep
+    alive, so every GUI-facing step here is skipped for it.
+    """
+    return getattr(type(canvas), "required_interactive_framework", None) is not None
+
+
+#: Shortest gap between two pumps of the GUI event loop, in seconds. 0.1 s is
+#: far below the ~5 s after which Windows declares a window "Not Responding"
+#: (and macOS shows the beachball), while costing well under 1% of a fit's
+#: runtime -- one ``flush_events`` on an idle window is a fraction of a
+#: millisecond.
+PUMP_INTERVAL = 0.1
+
+#: When :func:`pump` last reached the event loop. Module state rather than
+#: session state because the throttle is about wall-clock GUI latency, not
+#: about any one session.
+_last_pump = 0.0
+
+
+def pump(session) -> None:
+    """Give the plot window a slice of event-loop time mid-command.
+
+    Nothing pumps the GUI while a command runs, so the figure stops
+    repainting for as long as the command takes -- past about five seconds
+    the window managers on all three platforms mark it hung (a greyed title
+    bar and "Not Responding" on Windows, the beachball on macOS, the WM's own
+    force-quit prompt on Linux). A ``PERT GO`` over a fuzzed sample measures
+    eighteen seconds, almost all of it in that state.
+
+    Long-running commands call this from whatever per-iteration hook they
+    already have; it self-throttles to :data:`PUMP_INTERVAL` so a caller can
+    invoke it as often as is convenient. Does nothing when there is no
+    figure, when the user has closed it, or on a non-GUI backend.
+
+    Draining the event queue also delivers *input*, so a click on the figure's
+    close button during a fit is acted on rather than queued until the fit
+    ends. That makes the closed-figure check below load-bearing: a pump can be
+    what closes the window that the next pump would otherwise reach into.
+    """
+    global _last_pump
+    figure = session.figure
+    if figure is None:
+        return
+    now = time.monotonic()
+    if now - _last_pump < PUMP_INTERVAL:
+        return
+    _last_pump = now
+
+    plt = require_matplotlib()
+    if not plt.fignum_exists(figure.number) or not _interactive(figure.canvas):
+        return
+    try:
+        figure.canvas.flush_events()
+    except (AttributeError, NotImplementedError, RuntimeError):  # pragma: no cover
+        # A backend without an event loop, or a window torn down mid-pump.
+        pass
+
+
 def show(figure) -> None:
     """Push the figure to the screen without blocking the prompt.
 
@@ -213,7 +276,7 @@ def show(figure) -> None:
     right after, via :mod:`~pyrump.shell.terminal_focus`.
     """
     canvas = figure.canvas
-    interactive = getattr(type(canvas), "required_interactive_framework", None) is not None
+    interactive = _interactive(canvas)
     token = terminal_focus.capture() if interactive else None
     canvas.draw_idle()
     try:
