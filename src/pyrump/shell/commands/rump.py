@@ -965,61 +965,22 @@ def cmd_replot(session, args: ArgReader) -> None:
     plotting.draw(session)
 
 
-def _goodness_of_fit(session, data, theory, n_channels: int, region: tuple[int, int]) -> str:
-    """"reduced chi-square X.XX (Y dof)" -- over PERT's error windows (and
-    normalisation window) if any are set, so the number matches what GO
-    itself reports; otherwise over the plot's own visible REGION, with no
-    normalisation and no parameters subtracted from dof.
-    """
-    from ...fit.objective import chi_square
-
-    observed = np.asarray(data.spectrum.counts, dtype=np.float64)[:n_channels]
-    expected = np.asarray(theory.spectrum.counts, dtype=np.float64)[:n_channels]
-    pert = session.pert
-    if pert is not None and pert.windows.error:
-        mask = pert.windows.mask(n_channels)
-        scale = pert.windows.normalisation_factor(observed, expected)
-        n_parameters = len(pert.varying)
-    else:
-        low, high = region
-        mask = np.zeros(n_channels, dtype=bool)
-        mask[low : high + 1] = True
-        scale = 1.0
-        n_parameters = 0
-    summary = chi_square(observed * scale, expected, valid=mask, n_parameters=n_parameters)
-    return f"reduced chi-square {summary.reduced:.4f} ({summary.dof} dof)"
-
-
 def cmd_compare(session, args: ArgReader) -> None:
     """Plot the active buffer against the simulation, with residuals.
 
     Original RUMP defines COMPARE as literally ``PLOT NOW ... OV THEORY``
-    (cmds.htm), so it inherits REGION the same way PLOT/OVERLAY do.
+    (cmds.htm), so it inherits REGION the same way PLOT/OVERLAY do -- and,
+    like any PLOT, an OVERLAY or SPLOT afterwards adds to it rather than
+    replacing it (plotting's ``COMPARE_DATA``).
     """
     args.done()
-    from ...plot.spectra import plot_comparison
-
     plotting.require_matplotlib()
+    active = session.buffers.active
     data = session.buffers.require_active()
     theory = session.simulation()
-
-    n_channels = min(data.n_channels, theory.n_channels)
-    try:
-        region = session.plot.region(n_channels)
-    except ValueError as error:
-        raise CommandError(str(error)) from None
-
-    figure = plotting.compare_figure_for(session, residuals=True)
-    figure = plot_comparison(
-        data.spectrum, theory.spectrum,
-        energy_axis=session.plot.energy_axis, region=region, figure=figure,
-        data_label=plotting.buffer_label(session, data, session.buffers.active),
-        simulation_label=plotting.buffer_label(session, theory, 0),
-        goodness_of_fit=_goodness_of_fit(session, data, theory, n_channels, region),
-    )
-    session.figure = figure
-    session.traces = []
-    plotting.show(figure)
+    plotting.add_trace(session, active, data, clear=True, key=plotting.COMPARE_DATA)
+    plotting.add_trace(session, 0, theory, clear=False)
+    plotting.draw(session)
 
 
 def cmd_figsave(session, args: ArgReader) -> None:

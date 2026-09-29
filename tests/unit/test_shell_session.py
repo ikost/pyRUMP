@@ -747,6 +747,17 @@ def test_whatisit_marks_an_existing_plot(session, capsys):
 
 
 @needs_data
+def test_whatisit_marks_a_comparison_without_wiping_it(session, tmp_path):
+    sample = tmp_path / "compare_whatisit.lcm"
+    sample.write_text("Sim Reset\nLayer 1\n Thick 500 /cm2\n Composition Si 1 /\nMaxpth 200\n")
+    run(session, f"sim get {sample}", "compare", "whatisit 20")
+    assert len(session.figure.axes) == 2
+    top = session.figure.axes[0]
+    assert top.get_legend_handles_labels()[1] == ["test", "SIM"]
+    assert any(len(line.get_xdata()) == 2 for line in top.lines)
+
+
+@needs_data
 def test_info_reports_a_full_element_summary(session, capsys):
     run(session, "info Si")
     out = capsys.readouterr().out
@@ -946,6 +957,126 @@ def test_compare_goodness_of_fit_uses_pert_error_window(session, tmp_path):
     assert any("reduced chi-square" in t and "(9 dof)" in t for t in texts)
 
 
+_COMPARE_SAMPLE = (
+    "Sim Reset\nLayer 1\n Thick 30 A\n Composition Ru 1 /\n"
+    "Next\n Thick 500 /cm2\n Composition Si 1 /\nMaxpth 200\n"
+)
+
+
+@needs_data
+def test_splot_after_compare_adds_to_the_comparison(session, tmp_path):
+    """COMPARE is ``PLOT NOW ... OV THEORY`` and SPLOT overlays (RbsSplot's
+    ``RbsPlot(PLT_OV, ...)``), so SPLOT Ru after COMPARE must keep the data,
+    the simulation and the residuals panel, adding its curve on top."""
+    sample = tmp_path / "compare_splot.lcm"
+    sample.write_text(_COMPARE_SAMPLE)
+    run(session, f"sim get {sample}", "compare", "sim splot Ru")
+
+    assert len(session.figure.axes) == 2
+    top, bottom = session.figure.axes
+    assert top.get_legend_handles_labels()[1] == ["test", "SIM", "SIM(Ru)"]
+    assert any("reduced chi-square" in t.get_text() for t in bottom.texts)
+
+
+@needs_data
+def test_bare_splot_after_compare_replaces_the_simulation_in_place(session, tmp_path):
+    sample = tmp_path / "compare_bare_splot.lcm"
+    sample.write_text(_COMPARE_SAMPLE)
+    run(session, f"sim get {sample}", "compare", "sim splot")
+
+    assert len(session.figure.axes) == 2
+    assert session.figure.axes[0].get_legend_handles_labels()[1] == ["test", "SIM"]
+
+
+@needs_data
+def test_overlay_after_compare_adds_to_the_comparison(session, tmp_path):
+    sample = tmp_path / "compare_overlay.lcm"
+    sample.write_text(_COMPARE_SAMPLE)
+    session.buffers.load(make_buffer(name="other"), 2)
+    run(session, f"sim get {sample}", "compare", "overlay 2")
+
+    assert len(session.figure.axes) == 2
+    assert session.figure.axes[0].get_legend_handles_labels()[1] == ["test", "SIM", "other"]
+
+
+@needs_data
+def test_region_after_compare_redraws_the_comparison(session, tmp_path):
+    sample = tmp_path / "compare_region.lcm"
+    sample.write_text(_COMPARE_SAMPLE)
+    run(session, f"sim get {sample}", "compare", "region 20 40")
+
+    assert len(session.figure.axes) == 2
+    top, bottom = session.figure.axes
+    assert len(top.lines[0].get_xdata()) == 21
+    assert any("(21 dof)" in t.get_text() for t in bottom.texts)
+
+
+@needs_data
+def test_log_after_compare_rescales_the_top_panel(session, tmp_path):
+    sample = tmp_path / "compare_log.lcm"
+    sample.write_text(_COMPARE_SAMPLE)
+    run(session, f"sim get {sample}", "compare", "log")
+
+    assert len(session.figure.axes) == 2
+    assert session.figure.axes[0].get_yscale() == "log"
+
+
+@needs_data
+def test_compare_honours_a_log_scale_set_beforehand(session, tmp_path):
+    """The residuals are in sigma and go negative, so only the top panel
+    goes log."""
+    sample = tmp_path / "log_compare.lcm"
+    sample.write_text(_COMPARE_SAMPLE)
+    run(session, f"sim get {sample}", "log", "compare")
+
+    top, bottom = session.figure.axes
+    assert (top.get_yscale(), bottom.get_yscale()) == ("log", "linear")
+
+
+@needs_data
+@pytest.mark.parametrize("command", ["plot 1", "compare"])
+def test_log_drops_a_zero_counts_floor_instead_of_warning(session, tmp_path, recwarn, command):
+    sample = tmp_path / "log_floor.lcm"
+    sample.write_text(_COMPARE_SAMPLE)
+    run(session, f"sim get {sample}", "counts 0 5", "log", command)
+
+    bottom, top = session.figure.axes[0].get_ylim()
+    assert 0 < bottom < top == 5
+    assert not [w for w in recwarn if "non-positive ylim" in str(w.message)]
+
+
+@needs_data
+def test_normalize_applies_to_compare_and_flags_the_goodness_of_fit(session, tmp_path):
+    from pyrump.model.detector import yield_normalisation
+
+    sample = tmp_path / "normalize_compare.lcm"
+    sample.write_text(_COMPARE_SAMPLE)
+    run(session, f"sim get {sample}", "compare")
+    top, bottom = session.figure.axes
+    raw = top.lines[0].get_ydata().copy()
+    assert not any("normalized" in t.get_text() for t in bottom.texts)
+
+    run(session, "normalize")
+    top, bottom = session.figure.axes
+    factor = yield_normalisation(session.buffers[1].measurement)
+    np.testing.assert_allclose(top.lines[0].get_ydata(), raw / factor)
+    assert top.get_ylabel() == "Yield (counts/msr/uC)"
+    assert any(
+        "reduced chi-square" in t.get_text() and "normalized yield" in t.get_text()
+        for t in bottom.texts
+    )
+
+
+@needs_data
+def test_plot_after_compare_returns_to_a_single_panel(session, tmp_path):
+    sample = tmp_path / "compare_then_plot.lcm"
+    sample.write_text(_COMPARE_SAMPLE)
+    run(session, f"sim get {sample}", "compare", "plot 1", "sim splot Ru")
+
+    assert len(session.figure.axes) == 1
+    assert [t.label for t in session.traces] == ["test", "SIM(Ru)"]
+
+
 def test_newall_leaves_no_active_buffer_for_a_following_pert_go(session, tmp_path):
     """NEWALL must blank buffer 0 too, so a stale simulation left over from
     before the reset can't masquerade as PERT GO's "observed" data."""
@@ -1055,7 +1186,7 @@ def test_structlabel_on_shows_the_sample_structure(session, tmp_path):
 
     run(session, "sim splot")
     trace_labels = [t.label for t in session.traces]
-    assert trace_labels == ["Si [500/cm2] - Mn3Pt [150A] - Ru [30A]"]
+    assert trace_labels == ["test", "Si [500/cm2] - Mn3Pt [150A] - Ru [30A]"]
 
     run(session, "structlabel off", "compare")
     labels = session.figure.axes[0].get_legend_handles_labels()[1]

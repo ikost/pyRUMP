@@ -11,10 +11,16 @@ simulation as a line over it, and residuals in units of sigma against a shaded
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 import numpy as np
 
 from ..fit.objective import poisson_residuals
 from ..model.spectrum import Spectrum
+
+#: Colours for :func:`plot_comparison`'s ``overlays`` -- distinct from its own
+#: grey data and crimson simulation.
+_OVERLAY_COLORS = ("steelblue", "darkgreen", "darkorange", "purple")
 
 
 def _axes(ax=None):
@@ -59,6 +65,7 @@ def plot_comparison(
     data_label: str = "data",
     simulation_label: str = "simulation",
     goodness_of_fit: str | None = None,
+    overlays: Sequence[tuple[Spectrum, str]] = (),
 ):
     """Measured data with a simulation over it, and optionally residuals.
 
@@ -88,6 +95,10 @@ def plot_comparison(
     8.97 (400 dof)") rather than a number, since computing it needs PERT's
     error windows and varying-parameter count, which this module has no
     access to; the caller (COMPARE) builds the text.
+
+    ``overlays`` are further ``(spectrum, label)`` curves for the top panel
+    only -- whatever OVERLAY/SPLOT added on top of a COMPARE. They take no
+    part in the residuals, which stay data against ``simulation``.
     """
     import matplotlib.pyplot as plt
 
@@ -116,6 +127,15 @@ def plot_comparison(
 
     top.step(x, observed, where="mid", lw=0.9, color="0.35", label=data_label)
     top.plot(x, expected, lw=1.6, color="crimson", label=simulation_label)
+    for position, (spectrum, label) in enumerate(overlays):
+        stop = min(high, spectrum.counts.size - 1)
+        if stop <= low:
+            continue
+        xs = spectrum.energies[low : stop + 1] if energy_axis else np.arange(low, stop + 1)
+        top.plot(
+            xs, spectrum.counts[low : stop + 1], lw=1.2,
+            color=_OVERLAY_COLORS[position % len(_OVERLAY_COLORS)], label=label,
+        )
     top.set_ylabel("Counts")
     top.set_ylim(bottom=0)
     top.legend(frameon=False)

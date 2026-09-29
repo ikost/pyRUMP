@@ -5,6 +5,9 @@ scaling -- survives between commands, so ``REGION 100 400`` followed by
 ``REPLOT`` redraws what is already there. The equivalent here is a single
 long-lived matplotlib figure owned by the :class:`~pyrump.shell.session.Session`,
 plus a list of traces that ``PLOT`` resets and ``OVERLAY`` appends to.
+``COMPARE`` resets it too -- to its data and the simulation -- so that an
+OVERLAY/SPLOT afterwards adds to the comparison instead of wiping it, just as
+RUMP's own COMPARE is literally ``PLOT NOW ... OV THEORY``.
 
 ``PLOT``/``OVERLAY`` draw their traces here rather than through
 :mod:`pyrump.plot.spectra`, because :class:`~pyrump.shell.session.PlotState`
@@ -24,12 +27,18 @@ import numpy as np
 
 from .. import __version__
 from ..model.detector import yield_normalisation
+from ..model.spectrum import Spectrum
 from . import terminal_focus
 from .dispatch import CommandError
 
 #: Colour cycle for overlaid spectra. The first is RUMP's white-on-black data
 #: trace; the rest keep overlays distinguishable in both light and dark themes.
 _COLORS = ("0.20", "crimson", "steelblue", "darkgreen", "darkorange", "purple")
+
+#: The key COMPARE files its data trace under. As the first trace it switches
+#: :func:`draw` to the two-panel comparison; anything that resets the traces
+#: (PLOT, DISPLAY, AXIS, ...) drops it, and with it the comparison layout.
+COMPARE_DATA = "compare:data"
 
 
 def require_matplotlib():
@@ -106,6 +115,24 @@ def _apply_scale(ax, state) -> None:
         ax.set_yscale("linear")
 
 
+def _apply_limits(ax, state) -> None:
+    """COUNTS/YLOW/YHIGH if set, else autoscale -- floored at zero on a
+    linear axis.
+
+    A log axis can't show zero or below, so a ``COUNTS 0 <max>``/``BLOWUP``
+    floor is left to autoscaling there rather than handed to matplotlib,
+    which would ignore it with a warning.
+    """
+    ax.autoscale(axis="y")
+    bottom = state.ylow
+    if state.yscale == "log" and bottom is not None and bottom <= 0:
+        bottom = None
+    if bottom is not None or state.yhigh is not None:
+        ax.set_ylim(bottom=bottom, top=state.yhigh)
+    elif state.yscale == "linear":
+        ax.set_ylim(bottom=0)
+
+
 def _rebuilt_figure(session, n_axes: int, build, *, default_size: tuple[float, float]):
     """Reuse the session's live figure across layout changes.
 
@@ -157,10 +184,27 @@ def compare_figure_for(session, *, residuals: bool):
     return _rebuilt_figure(session, 2 if residuals else 1, build, default_size=(9, 6))
 
 
+def is_comparison(session) -> bool:
+    """Whether the traces are a COMPARE (plus anything overlaid on it)."""
+    return bool(session.traces) and session.traces[0].key == COMPARE_DATA
+
+
+def main_axes(session):
+    """The figure and the axes the spectra are drawn on -- COMPARE's top
+    panel, or PLOT's only one -- without changing the figure's layout."""
+    if is_comparison(session):
+        figure = compare_figure_for(session, residuals=True)
+        return figure, figure.axes[0]
+    return figure_for(session)
+
+
 def draw(session) -> None:
     """Render every trace according to the current :class:`PlotState`."""
     if not session.traces:
         raise CommandError("nothing to plot yet")
+    if is_comparison(session):
+        _draw_comparison(session)
+        return
 
     figure, ax = figure_for(session)
     ax.clear()
@@ -191,16 +235,89 @@ def draw(session) -> None:
     ax.set_xlabel(label_axis)
     ax.set_ylabel("Yield (counts/msr/uC)" if state.normalized else "Counts")
     _apply_scale(ax, state)
-
-    if state.ylow is not None or state.yhigh is not None:
-        ax.set_ylim(bottom=state.ylow, top=state.yhigh)
-    elif state.yscale == "linear":
-        ax.set_ylim(bottom=0)
+    _apply_limits(ax, state)
 
     if state.labels and any(t.label for t in session.traces):
         ax.legend(frameon=False, fontsize="small")
 
     figure.tight_layout()
+    show(figure)
+
+
+def goodness_of_fit(session, data, theory, n_channels: int, region: tuple[int, int]) -> str:
+    """"reduced chi-square X.XX (Y dof)" -- over PERT's error windows (and
+    normalisation window) if any are set, so the number matches what GO
+    itself reports; otherwise over the plot's own visible REGION, with no
+    normalisation and no parameters subtracted from dof.
+
+    Scored on the yield as plotted, so under NORMALIZE it is no longer a
+    count-based chi-square -- the text says so on a second line.
+    """
+    from ..fit.objective import chi_square
+
+    state = session.plot
+    observed = _values(data, state)[:n_channels]
+    expected = _values(theory, state)[:n_channels]
+    pert = session.pert
+    if pert is not None and pert.windows.error:
+        mask = pert.windows.mask(n_channels)
+        scale = pert.windows.normalisation_factor(observed, expected)
+        n_parameters = len(pert.varying)
+    else:
+        low, high = region
+        mask = np.zeros(n_channels, dtype=bool)
+        mask[low : high + 1] = True
+        scale = 1.0
+        n_parameters = 0
+    summary = chi_square(observed * scale, expected, valid=mask, n_parameters=n_parameters)
+    text = f"reduced chi-square {summary.reduced:.4f} ({summary.dof} dof)"
+    if state.normalized:
+        text += "\nnormalized yield: GOF not from raw counts"
+    return text
+
+
+def _draw_comparison(session) -> None:
+    """COMPARE's data and simulation with residuals, plus any OVERLAY/SPLOT
+    curves added since, in the top panel.
+
+    The simulation is the most recent buffer-0 trace, so a bare SPLOT after
+    COMPARE (which replaces it) updates the residuals and chi-square too; a
+    selective SPLOT, keyed apart from buffer 0, is only overlaid. REGION
+    applies to both panels, and COUNTS/YLOW/YHIGH and the yield scale to the
+    top one, as for PLOT. NORMALIZE applies to every curve, and so to the
+    residuals and chi-square too (see :func:`goodness_of_fit`).
+    """
+    from ..plot.spectra import plot_comparison
+
+    state = session.plot
+
+    def spectrum(buffer) -> Spectrum:
+        return Spectrum(counts=_values(buffer, state), calibration=buffer.spectrum.calibration)
+
+    data, *rest = session.traces
+    theory = next(t for t in reversed(rest) if t.key == 0)
+    overlays = [(spectrum(t.buffer), t.label) for t in rest if t is not theory]
+
+    n_channels = min(data.buffer.n_channels, theory.buffer.n_channels)
+    try:
+        region = state.region(n_channels)
+    except ValueError as error:
+        raise CommandError(str(error)) from None
+
+    figure = compare_figure_for(session, residuals=True)
+    figure = plot_comparison(
+        spectrum(data.buffer), spectrum(theory.buffer),
+        energy_axis=state.energy_axis, region=region, figure=figure,
+        data_label=data.label, simulation_label=theory.label,
+        goodness_of_fit=goodness_of_fit(session, data.buffer, theory.buffer, n_channels, region),
+        overlays=overlays,
+    )
+    top = figure.axes[0]
+    if state.normalized:
+        top.set_ylabel("Yield (counts/msr/uC)")
+    _apply_scale(top, state)
+    _apply_limits(top, state)
+    session.figure = figure
     show(figure)
 
 
@@ -298,13 +415,13 @@ def mark_whatisit(session, candidates, target_keV) -> bool:
     ``RbsLocate``'s own gate: with no plot device it reports that and draws
     nothing, rather than opening one.
 
-    Returns ``False`` (having drawn nothing) if there is no active PLOT/OVERLAY
-    to mark.
+    Returns ``False`` (having drawn nothing) if there is no active
+    PLOT/OVERLAY/COMPARE to mark. On a COMPARE the ticks go on its top panel.
     """
     if not session.traces:
         return False
     require_matplotlib()
-    figure, ax = figure_for(session)
+    figure, ax = main_axes(session)
     trans = ax.get_xaxis_transform()
     low, high = ax.get_xlim()
     best = min(candidates, key=lambda c: abs(c.energy_keV - target_keV))
@@ -341,7 +458,7 @@ def mark_matrix(session, buffer, energy_keV: float, channel: float, height: floa
 
     Draws nothing (and RUMP's own C prints no warning for it either,
     anlytc.c:274's silent ``if (PlotSystem...)``) when there is no active
-    PLOT/OVERLAY, or when the point falls outside the current x range. The
+    PLOT/OVERLAY/COMPARE, or when the point falls outside the current x range. The
     y range, unlike x, is expanded to fit the marker when it's taller than
     the current view -- ``draw()`` freezes it via ``set_ylim`` on every
     PLOT/OVERLAY, so without this a tall prediction would be silently
@@ -350,7 +467,7 @@ def mark_matrix(session, buffer, energy_keV: float, channel: float, height: floa
     if not session.traces:
         return False
     require_matplotlib()
-    figure, ax = figure_for(session)
+    figure, ax = main_axes(session)
     x = energy_keV if session.plot.energy_axis else channel
     low, high = ax.get_xlim()
     if x < low or x > high:
