@@ -58,6 +58,23 @@ Foil disable
 # ------------------------------------------------------------------- .lcm
 
 
+def test_version_reports_python_and_the_main_libraries(capsys):
+    import platform
+
+    import numpy
+
+    with pytest.raises(SystemExit) as exit_info:
+        main(["--version"])
+    assert exit_info.value.code == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[0].startswith("pyrump ")
+    rows = dict(line.split(None, 1) for line in lines[1:])
+    assert rows["python"].startswith(platform.python_version())
+    assert sys.executable in rows["python"]
+    assert rows["numpy"] == numpy.__version__
+    assert {"platform", "scipy", "matplotlib"} <= rows.keys()
+
+
 def test_parses_a_simple_sample():
     script = parse_lcm(SIMPLE)
     assert len(script.layers) == 1

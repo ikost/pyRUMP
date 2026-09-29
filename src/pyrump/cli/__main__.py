@@ -10,6 +10,7 @@ one-off jobs and for scripting.
 from __future__ import annotations
 
 import argparse
+import platform
 import sys
 from pathlib import Path
 
@@ -254,14 +255,58 @@ def command_shell(args) -> int:
     )
 
 
+#: What ``--version`` reports alongside pyRUMP itself: its runtime dependencies
+#: (pyproject.toml), which are what a numerical or plotting difference between
+#: two machines usually comes down to.
+_LIBRARIES = ("numpy", "scipy", "matplotlib") + (
+    ("pyreadline3",) if sys.platform == "win32" else ()
+)
+
+
+def version_report() -> str:
+    """``pyrump --version``: pyRUMP, the Python running it, and its libraries.
+
+    Library versions come from package metadata rather than importing them,
+    so this stays instant (matplotlib alone takes a second to import).
+    """
+    from importlib.metadata import PackageNotFoundError, version
+
+    rows = [
+        ("python", f"{platform.python_version()}  ({sys.executable})"),
+        ("platform", platform.platform()),
+    ]
+    for name in _LIBRARIES:
+        try:
+            rows.append((name, version(name)))
+        except PackageNotFoundError:
+            rows.append((name, "not installed"))
+    width = max(len(name) for name, _ in rows)
+    return "\n".join(
+        [f"pyrump {__version__}", *(f"  {name:<{width}}  {value}" for name, value in rows)]
+    )
+
+
+class _VersionAction(argparse.Action):
+    """Like argparse's own ``version`` action, but printed as-is: that one
+    re-wraps its text into a paragraph, which would run the rows together."""
+
+    def __init__(self, option_strings, dest=argparse.SUPPRESS, **kwargs):
+        super().__init__(
+            option_strings, dest, nargs=0, default=argparse.SUPPRESS,
+            help="show the pyRUMP, Python and library versions, and exit", **kwargs,
+        )
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        print(version_report())
+        parser.exit()
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="pyrump",
         description="Rutherford backscattering simulation and analysis.",
     )
-    parser.add_argument(
-        "-v", "--version", action="version", version=f"pyrump {__version__}"
-    )
+    parser.add_argument("-v", "--version", action=_VersionAction)
     parser.add_argument("--data", help="directory holding atom4.dat and friends")
     sub = parser.add_subparsers(dest="command")
 
