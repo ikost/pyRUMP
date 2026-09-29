@@ -9,7 +9,8 @@ commands. matplotlib installs by default with pyrump.
 usage: OVERLAY [buffer|file]
 ```
 
-Adds another trace to the current plot, without erasing it.
+Adds another trace to the current plot, without erasing it — on a
+`COMPARE`, to its top panel.
 
 ```
 Your wish? overlay 0            /* add the simulation on top          */
@@ -67,9 +68,14 @@ Sets the yield axis scale. `sqrt` redraws immediately with the new scale:
 Your wish? sqrt                 /* redraws immediately, sqrt yield    */
 ```
 
+On a `COMPARE` the scale applies to the top panel; the residuals stay linear.
+`LOG` ignores a `COUNTS` floor of 0 or below, which a log axis can't show.
+
 #### `NORMALIZE` / `RAW`
 
-Toggles between normalized and raw yield units on the plot.
+Toggles between normalized and raw yield units on the plot. It applies to
+`COMPARE` too, whose residuals and chi-square are then taken on the
+normalized yield rather than raw counts — the readout says so.
 
 #### `LABELS`
 

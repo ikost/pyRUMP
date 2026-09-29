@@ -225,6 +225,13 @@ chi-square readout (over `PERT`'s error windows if set, else the visible
 alike — see the abbreviation note above for why `COMPARE` itself needs its
 full name.
 
+Like `PLOT`, it stays live afterwards: `OVERLAY` and `SPLOT` add curves to
+its top panel (a bare `SPLOT` replaces the simulation and updates the
+residuals), and `REGION`, `COUNTS`, `LOG`/`SQRT`/`LINEAR` and
+`NORMALIZE`/`RAW` redraw it. The yield scale and range apply to the top panel
+only; the residuals stay linear. Under `NORMALIZE` the residuals and
+chi-square are taken on the normalized yield, and the readout says so.
+
 ### `PLOT`
 
 ```
