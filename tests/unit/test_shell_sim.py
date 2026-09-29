@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from pyrump.script.lcm import SampleEditor, parse_lcm, write_lcm
+from pyrump.script.lcm import SampleEditor, parse_lcm, structure_label, write_lcm
 
 ITO = """Sim Reset
 Layer 1
@@ -36,6 +36,22 @@ def test_parse_lcm_is_a_loop_over_the_editor():
     assert script.layers[0].unit == "ITO"
     assert script.layers[1].unit == "um"
     assert script.maxpth == 200.0
+
+
+def test_element_symbols_are_capitalised_however_they_were_typed():
+    """``si`` and ``Si`` must be one element: Script.elements de-duplicates by
+    exact string, and every element column (simulation, PERT) indexes it."""
+    script = parse_lcm(
+        "Layer 1\n Thick 50 nm\n Composition NB 1 n 1 /\n"
+        "Next\n Thick 448 nm\n Composition Si 1 o 2 /\n"
+        "Next\n Thick 5000 nm\n Composition si 1 /\n Species cU 0.1 /\n"
+        "Next\n Atoms fe 100 /\n"
+    )
+    assert script.elements == ["Nb", "N", "Si", "O", "Cu", "Fe"]
+    assert structure_label(script) == (
+        "Fe100 [100/CM2] - Si [5000nm] - SiO2 [448nm] - NbN [50nm]"
+    )
+    assert "Composition Si 1" in write_lcm(script)
 
 
 def test_layer_navigates_rather_than_appending():

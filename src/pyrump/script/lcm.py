@@ -213,11 +213,23 @@ def structure_label(script: Script, *, normalize: bool = False) -> str:
     )
 
 
+def canonical_symbol(token: str) -> str:
+    """An element symbol spelt the standard way: ``si``/``SI`` -> ``Si``.
+
+    The periodic table looks symbols up case-insensitively, but
+    :attr:`Script.elements` (and so every element column the simulation and
+    PERT index into) de-duplicates by exact string -- ``si`` in one layer and
+    ``Si`` in another would otherwise be two elements.
+    """
+    return token[:1].upper() + token[1:].lower()
+
+
 def _element_pairs(tokens: list[str]) -> dict[str, float]:
     """Parse ``El value El value ... /`` into a mapping.
 
     The trailing ``/`` terminates the list; RUMP's command reader uses it to
-    mean "no more arguments".
+    mean "no more arguments". Symbols are made canonical
+    (:func:`canonical_symbol`), whatever case they were typed or saved in.
     """
     out: dict[str, float] = {}
     index = 0
@@ -227,7 +239,7 @@ def _element_pairs(tokens: list[str]) -> dict[str, float]:
             break
         if index + 1 >= len(tokens) or tokens[index + 1] == "/":
             raise ValueError(f"element {token!r} has no amount")
-        out[token] = float(tokens[index + 1])
+        out[canonical_symbol(token)] = float(tokens[index + 1])
         index += 2
     return out
 

@@ -184,6 +184,8 @@ usage: COMPOSITION <element> <n> [<element> <n> ...] /
 ```
 
 Sets the layer's stoichiometry. Only the ratios matter; `/` ends the list.
+Element symbols can be typed in any case (`si`, `SI`); they are stored and
+shown as `Si`, here and in `SPECIES`, `ATOMS` and `.lcm` files.
 
 ```
 SIM Command: comp In 2 O 3 /

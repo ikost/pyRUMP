@@ -309,6 +309,20 @@ def test_composition_display_name_uses_the_element_symbol(session):
 
 
 @needs_data
+def test_composition_targets_the_right_column_despite_lowercase_input(session):
+    """``au`` in one layer and ``Au`` in another are one element, so PERT
+    varies the column layer 2 actually uses -- not a separate ``au`` column
+    that is zero there."""
+    run(
+        session, "sim", "layer 1", "comp au 1 /", "layer 2", "comp Si 1 Au 0.01 /",
+        "return", "pert", "comp 2 Au",
+    )
+    entry = session.pert.varying[0]
+    assert session.script.elements == ["Au", "Si"]
+    assert session.script.layers[1].composition[session.script.elements[entry.index]] == 0.01
+
+
+@needs_data
 def test_composition_rejects_an_element_not_declared_in_this_layer(session):
     """Si only appears in layer 2 of the fixture's sample."""
     with pytest.raises(CommandError, match="not part of layer 1"):
