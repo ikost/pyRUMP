@@ -35,8 +35,9 @@ NDF support is planned.
 pip install pyrump
 ```
 
-Requires Python 3.9+; numpy, scipy, and matplotlib are installed
-automatically, along with the physics data tables pyRUMP needs at runtime.
+Requires Python 3.10+; 3.14 is recommended, and is what pyRUMP is tested
+on. numpy, scipy, and matplotlib are installed automatically, along with the
+physics data tables pyRUMP needs at runtime.
 
 ```
 pyrump                         # the interactive shell, from any directory

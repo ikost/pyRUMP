@@ -2,8 +2,9 @@
 
 ## Install
 
-Requires Python 3.9 or later. Check your version with `python3 --version`,
-then install pyRUMP from PyPI:
+Requires Python 3.10 or later; 3.14 is recommended, and is what pyRUMP is
+tested on. Check your version with `python3 --version`, then install pyRUMP
+from PyPI:
 
 ```bash
 pip install pyrump

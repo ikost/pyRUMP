@@ -7,7 +7,7 @@ name = "pyrump"
 version = "1.5.1"
 description = "Rutherford backscattering spectrometry simulation and analysis, reimplemented in Python"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [
     { name = "Ilya Kostanovski", email = "ilya.kostanovski@mpi-halle.mpg.de" },
@@ -17,11 +17,11 @@ classifiers = [
     "Intended Audience :: Science/Research",
     "Topic :: Scientific/Engineering :: Physics",
     "License :: OSI Approved :: MIT License",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
 ]
 dependencies = [
     "numpy>=1.26",
