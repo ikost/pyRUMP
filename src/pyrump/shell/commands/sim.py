@@ -26,7 +26,7 @@ from ...script.lcm import (
     write_lcm,
 )
 from ..dispatch import ArgReader, CommandError, CommandTable
-from .rump import Return, cmd_compare, describe_topic, needs_mode
+from .rump import Return, cmd_compare, cmd_mode, describe_topic, needs_mode
 
 
 def editor_for(session) -> SampleEditor:
@@ -482,6 +482,9 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("FUZZ", 2, _editor_command("fuzz"), "fuzz an interface"),
     ("SUBLAYER", 3, _editor_command("sublayer"), "sublayers in this layer"),
     ("STHICKNESS", 3, _editor_command("sthick"), "thickness of each sublayer"),
+    # Registered here too, not only at the RUMP level, so switching doesn't
+    # fall through and leave SIM (repl.py's execute_line).
+    ("MODE", 4, cmd_mode, "switch layer entry between COMP and ATOMS (converts every layer)"),
     # Global sample parameters
     ("MAXPTH", 3, cmd_maxpth, "maximum internal layer thickness (no argument: show it)"),
     ("STRAGGLE", 4, _editor_command("straggle"), "Bohr straggling multiplier"),
@@ -511,6 +514,7 @@ TABLE.note_synonym("COMPARE", "CMP")
 _HELP_GROUPS: list[tuple[str, list[str]]] = [
     ("Getting around", ["HELP", "RETURN", "SHOW", "STATUS"]),
     ("Layers", ["LAYER", "NEXT", "OPEN", "CLOSE", "RESET"]),
+    ("Thickness mode", ["MODE"]),
     ("Layer contents -- MODE COMP", ["THICKNESS", "COMPOSITION"]),
     ("Layer contents -- MODE ATOMS", ["ATOMS"]),
     ("Profiles and interfaces",

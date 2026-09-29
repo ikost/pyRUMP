@@ -158,8 +158,9 @@ sample reset to empty space
 ### Layer contents — MODE COMP
 
 In MODE COMP (the default, and RUMP's own convention), a layer is a thickness
-plus a stoichiometry. [`MODE`](config.md#mode-new) switches to MODE ATOMS;
-switching converts every layer, and the spectrum stays the same.
+plus a stoichiometry. [`MODE`](config.md#mode-new) switches to MODE ATOMS,
+right here in SIM; switching converts every layer, and the spectrum stays
+the same.
 
 #### `THICKNESS`
 

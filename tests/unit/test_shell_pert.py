@@ -20,6 +20,7 @@ matplotlib.use("Agg")
 from pyrump.model.detector import Measurement  # noqa: E402
 from pyrump.model.geometry import Geometry, GeometryKind  # noqa: E402
 from pyrump.model.spectrum import Calibration  # noqa: E402
+from pyrump.shell.commands import pert  # noqa: E402
 from pyrump.shell.dispatch import CommandError  # noqa: E402
 from pyrump.shell.repl import execute_line  # noqa: E402
 from pyrump.shell.session import Buffer, Session  # noqa: E402
@@ -198,8 +199,8 @@ def test_reselecting_a_parameter_with_new_bounds_overwrites_the_old_ones(session
     assert len(session.pert.varying) == 1
     entry = session.pert.varying[0]
     assert entry.bounds == (200.0, 400.0)
-    assert entry.parameter.lower == 200.0
-    assert entry.parameter.upper == 400.0
+    assert pert._fit_parameter(entry, 1.0).lower == 200.0
+    assert pert._fit_parameter(entry, 1.0).upper == 400.0
 
 
 @needs_data
@@ -390,6 +391,18 @@ def test_mode_comp_drops_atoms_selections_grouped_by_layer(session, capsys):
 
 
 @needs_data
+@pytest.mark.parametrize("level", ["sim", "pert"])
+def test_mode_switches_in_place_without_leaving_sim_or_pert(session, level):
+    """MODE is registered in SIM and PERT too, so it doesn't fall through to
+    the RUMP level and pop the sub-level the way an unknown command does."""
+    stack = ["rump"]
+    execute_line(session, level, stack)
+    execute_line(session, "mode atoms", stack)
+    assert stack == ["rump", level]
+    assert session.thickness_mode == "atoms"
+
+
+@needs_data
 def test_mode_with_nothing_to_drop_says_nothing_about_pert(session, capsys):
     run(session, "pert", "fwhm", "return", "mode atoms")
     assert "PERT:" not in capsys.readouterr().out
@@ -447,11 +460,15 @@ def test_show_in_atoms_mode_keeps_areal_densities_under_compfrac(session, capsys
 
 @needs_data
 def test_thickness_accepts_an_optional_bound(session):
+    """The bound is in the layer's own unit, so it stays off the /CM2
+    parameter until GO converts it (this fixture's layer is already /cm2,
+    so the conversion factor is 1)."""
     run(session, "pert", "thickness 1 100 500")
     entry = session.pert.varying[0]
     assert entry.bounds == (100.0, 500.0)
-    assert entry.parameter.lower == 100.0
-    assert entry.parameter.upper == 500.0
+    assert entry.parameter.lower == 0.0
+    assert pert._fit_parameter(entry, 1.0).lower == 100.0
+    assert pert._fit_parameter(entry, 1.0).upper == 500.0
 
 
 @needs_data
@@ -546,7 +563,7 @@ def test_bound_overrides_the_parameter_own_default_floor(session):
     built-in floor is a convenience default, not a hard physical rule the
     user cannot override."""
     run(session, "pert", "thickness 1 -50 500")
-    assert session.pert.varying[0].parameter.lower == -50.0
+    assert pert._fit_parameter(session.pert.varying[0], 1.0).lower == -50.0
 
 
 @needs_data
@@ -569,8 +586,8 @@ def test_save_and_get_round_trip_a_bound(session, tmp_path):
     )
     entry = session.pert.varying[0]
     assert entry.bounds == (100.0, 500.0)
-    assert entry.parameter.lower == 100.0
-    assert entry.parameter.upper == 500.0
+    assert pert._fit_parameter(entry, 1.0).lower == 100.0
+    assert pert._fit_parameter(entry, 1.0).upper == 500.0
 
 
 # -- GET/SAVE ----------------------------------------------------------------
@@ -1019,7 +1036,68 @@ def test_go_prints_the_fitted_thickness_rounded_to_a_whole_unit(session, capsys)
     # ones are just the "varying ..." selection echo, with nothing after.
     value_field = re.findall(r"layer 1 thickness[ \t]+(\S+)", output)[-1]
     assert "." not in value_field
-    assert "(was 200)" in output
+    assert "(was 200 /cm2)" in output
+
+
+# -- units: THICKNESS in the layer's own unit, ATOMS in /CM2 -----------------
+
+
+def _au_in_angstroms(session) -> float:
+    """Layer 1 (Au) re-entered in Angstroms at the same areal density, and
+    the Angstroms per 1e15 at/cm^2 it converts at."""
+    run(session, "mode atoms", "mode comp")  # MODE COMP lands every layer on A
+    layer = session.script.layers[0]
+    assert layer.unit == "A"
+    return layer.thickness / GUESS
+
+
+@needs_data
+def test_go_shows_a_thickness_in_its_layer_unit_with_cm2_bracketed(session, capsys):
+    per_areal = _au_in_angstroms(session)
+    capsys.readouterr()
+    run(session, "pert", "window 355 375", "norm 140 200", "thick 1", "go")
+    line = re.findall(r"layer 1 thickness .*", capsys.readouterr().out)[-1]
+    fitted = session.script.layers[0].thickness
+    assert fitted / per_areal == pytest.approx(TRUTH, rel=0.05)
+    assert re.search(rf"\b{round(fitted)} A  \+/- \S+ A ", line)
+    assert f"(was {round(GUESS * per_areal)} A)" in line
+    assert re.search(r"\[\d+ /CM2\]$", line)
+
+
+@needs_data
+def test_a_thickness_bound_is_in_the_layer_unit(session):
+    """Read in Angstroms, a bound below the truth (but around the guess)
+    stops the fit there. Read in /CM2 instead, the same numbers would bracket
+    the true 300 /CM2 and the fit would land outside them."""
+    per_areal = _au_in_angstroms(session)
+    low, high = 0.5 * TRUTH * per_areal, 0.8 * TRUTH * per_areal
+    assert low < TRUTH < high  # the numbers themselves straddle the /CM2 truth
+    run(session, "pert", "window 355 375", "norm 140 200", f"thick 1 {low} {high}", "go")
+    assert low - 0.5 <= session.script.layers[0].thickness <= high + 0.5
+
+
+@needs_data
+def test_parms_labels_a_thickness_bound_with_its_layer_unit(session, capsys):
+    _au_in_angstroms(session)
+    run(session, "pert", "thick 1 10 40", "parms")
+    assert "layer 1 thickness  bounds 10-40 A" in capsys.readouterr().out
+
+
+@needs_data
+def test_go_shows_atoms_in_cm2_with_the_layer_thickness_bracketed(session, capsys):
+    run(session, "mode atoms")
+    capsys.readouterr()
+    run(session, "pert", "window 355 375", "norm 140 200", "atoms 1 Au", "go")
+    line = re.findall(r"layer 1 atoms Au .*", capsys.readouterr().out)[-1]
+    assert re.search(r" /CM2  \+/- \S+ /CM2   \(was 200 /CM2\)", line)
+    assert re.search(r"\[\d+ A\]$", line)
+
+
+@needs_data
+def test_single_mode_prints_the_value_with_its_unit(session, capsys):
+    _au_in_angstroms(session)
+    run(session, "pert", "window 355 375", "norm 140 200", "single", "thick 1", "go")
+    assert re.search(r"layer 1 thickness: \d+ A   chi2/dof", capsys.readouterr().out)
 
 
 @needs_data

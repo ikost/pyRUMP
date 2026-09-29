@@ -103,7 +103,8 @@ setting, so a fit can never mix the two conventions on the same layer.
 Switching recalculates every layer between the two conventions through each
 layer's own atomic density — not a relabelling — so the simulated spectrum
 is unchanged either way. [`SIM SHOW`](sim.md#show) previews the result in
-brackets. With no argument, prints the current mode.
+brackets. With no argument, prints the current mode. It works from `SIM`
+and `PERT` too, and you stay at that level.
 
 PERT variables chosen for the old mode (`THICKNESS`/`COMPOSITION`, or
 `ATOMS`) no longer fit the converted layers, so switching drops them and

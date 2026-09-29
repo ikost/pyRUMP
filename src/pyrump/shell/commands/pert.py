@@ -40,9 +40,10 @@ from ...fit.parameters import (
     thickness,
 )
 from ...fit.windows import MAX_ERROR_WINDOWS, Window, WindowSet
+from ...script.lcm import thickness_label, thickness_mode_views
 from ..dispatch import ArgReader, CommandError, CommandTable
 from .. import plotting
-from .rump import Return, cmd_compare, describe_topic, needs_mode
+from .rump import Return, cmd_compare, cmd_mode, describe_topic, needs_mode
 from .sim import describe as _describe_sample
 from .sim import editor_for
 
@@ -54,13 +55,34 @@ def _format_windows(windows: list[Window]) -> str:
     return "  ".join(f"[{i}] {w.low}-{w.high}" for i, w in enumerate(windows, start=1))
 
 
-def _format_varying(varying: list[Vary]) -> list[str]:
-    """Lines for the 'varying:' block, one per parameter, 1-based ``[n]``."""
+#: RUMP's areal-density unit, 1e15 at/cm^2, spelt the way SIM SHOW's brackets
+#: spell it. The fit engine's THICKNESS and ATOMS parameters both work in it
+#: (:mod:`pyrump.fit.parameters`).
+_AREAL = "/CM2"
+
+
+def _bound_unit(entry: Vary, script) -> str:
+    """The unit ``entry``'s bound is typed in, or "" if it has none worth naming."""
+    if entry.kind == "thickness" and script is not None and entry.layer < len(script.layers):
+        return script.layers[entry.layer].unit
+    if entry.kind == "atoms":
+        return _AREAL
+    return ""
+
+
+def _format_varying(varying: list[Vary], script=None) -> list[str]:
+    """Lines for the 'varying:' block, one per parameter, 1-based ``[n]``.
+
+    Given the ``script``, a THICKNESS bound is labelled with its layer's unit.
+    """
     if not varying:
         return ["  varying:    (nothing selected)"]
     lines = ["  varying:"]
     for i, v in enumerate(varying, start=1):
-        bound = f"  bounds {v.bounds[0]:g}-{v.bounds[1]:g}" if v.bounds else ""
+        bound = ""
+        if v.bounds:
+            unit = _bound_unit(v, script)
+            bound = f"  bounds {v.bounds[0]:g}-{v.bounds[1]:g}{f' {unit}' if unit else ''}"
         lines.append(f"    [{i}] {v.name}{bound}")
     return lines
 
@@ -113,7 +135,9 @@ class Vary:
     (which the solver actually reads, and which already default to a
     physically sensible range for some parameters, e.g. thickness >= 0) so
     that ``PARMS``/``SAVE`` only echo a bound the user actually typed, not
-    every parameter's built-in default range.
+    every parameter's built-in default range. A THICKNESS bound is the one
+    exception that is *not* copied onto ``parameter`` at selection time: it
+    is in the layer's own unit, and GO converts it (:func:`_fit_parameter`).
     """
 
     parameter: object
@@ -136,7 +160,7 @@ class PertState:
     autocmp: bool = False
     report: bool = False
 
-    def describe(self) -> str:
+    def describe(self, script=None) -> str:
         lines = [f"  mode        {'multiple' if self.multi else 'single'} variable"]
         lines.append(f"  autocmp     {'on' if self.autocmp else 'off'}")
         lines.append(f"  report      {'on' if self.report else 'off'}")
@@ -145,7 +169,7 @@ class PertState:
         lines.append(
             f"  norm win    {f'{norm.low}-{norm.high}' if norm else '(none)'}"
         )
-        lines.extend(_format_varying(self.varying))
+        lines.extend(_format_varying(self.varying, script))
         return "\n".join(lines)
 
 
@@ -256,17 +280,19 @@ def _add(session, entry: Vary) -> None:
 
 @needs_mode("comp")
 def cmd_thickness(session, args: ArgReader) -> None:
-    """``THICKNESS <layer> [<min> <max>]`` -- vary a layer's thickness."""
+    """``THICKNESS <layer> [<min> <max>]`` -- vary a layer's thickness.
+
+    The bound is in the layer's own unit (whatever SIM SHOW lists it in, e.g.
+    Angstroms), not the 1e15 at/cm^2 the fit parameter itself works in, so it
+    is left off the parameter here and converted at GO (:func:`_fit_parameter`).
+    """
     layer = _layer_argument(session, args)
     bound = _optional_bounds(args)
     args.done()
-    param = thickness(layer)
-    if bound is not None:
-        param = replace(param, lower=bound[0], upper=bound[1])
     _add(
         session,
         Vary(
-            parameter=param,
+            parameter=thickness(layer),
             kind="thickness",
             layer=layer,
             name=f"layer {layer + 1} thickness",
@@ -449,7 +475,7 @@ def cmd_fuzz(session, args: ArgReader) -> None:
 def cmd_window(session, args: ArgReader) -> None:
     state = state_for(session)
     if not args:
-        print(state.describe())
+        print(state.describe(session.script))
         return
     token = args.peek()
     if token is not None and token.lower() in ("clear", "none", "reset"):
@@ -516,7 +542,7 @@ def cmd_multi(session, args: ArgReader) -> None:
 
 def cmd_parms(session, args: ArgReader) -> None:
     args.done()
-    print(state_for(session).describe())
+    print(state_for(session).describe(session.script))
 
 
 def cmd_show(session, args: ArgReader) -> None:
@@ -558,7 +584,7 @@ def cmd_get(session, args: ArgReader) -> None:
     session.pert = PertState(autocmp=state.autocmp, report=state.report)
     execute_file(session, path, stack=["rump", "pert"])
     print(f"read {path}")
-    print(state_for(session).describe())
+    print(state_for(session).describe(session.script))
     if run_go:
         cmd_go(session, ArgReader([], command="go"))
 
@@ -590,7 +616,7 @@ def cmd_clear(session, args: ArgReader) -> None:
     if not 1 <= n <= len(varying):
         raise CommandError(f"parameter {n} is outside 1-{len(varying)}")
     del varying[n - 1]
-    print("\n".join(_format_varying(varying)))
+    print("\n".join(_format_varying(varying, session.script)))
 
 
 def cmd_volume(session, args: ArgReader) -> None:
@@ -763,10 +789,60 @@ def _append_report(buffer, lines: list[str]) -> Path:
     return path
 
 
+def _units_per_areal(session, inputs: FitInputs, layer: int) -> float | None:
+    """How many of a layer's own thickness unit make 1e15 at/cm^2.
+
+    The ratio of the layer's script thickness to the areal density
+    ``to_sample`` made of it: SimThickConvert is linear in the magnitude (see
+    :func:`_write_back`), so this one factor converts a fitted value, its
+    uncertainty and a bound alike, whatever the unit. None for a layer with
+    no thickness to take the ratio from.
+    """
+    areal = float(inputs.sample.thicknesses[layer])
+    if areal <= 0:
+        return None
+    return session.script.layers[layer].thickness / areal
+
+
+def _fit_parameter(entry: Vary, per_areal: float | None):
+    """The parameter the solver gets for ``entry``: a THICKNESS bound, typed
+    in the layer's own unit, converted to the 1e15 at/cm^2 the parameter
+    works in. Every other kind already carries its bound (see :class:`Vary`).
+    """
+    if entry.kind != "thickness" or entry.bounds is None:
+        return entry.parameter
+    if per_areal is None:
+        raise CommandError(
+            f"go: {entry.name} is zero, so its bound has no unit to convert from"
+        )
+    low, high = entry.bounds
+    return replace(entry.parameter, lower=low / per_areal, upper=high / per_areal)
+
+
+def _g6(value: float) -> str:
+    return f"{value:.6g}"
+
+
+def _display(session, entry: Vary, per_areal: float | None):
+    """How GO shows ``entry``'s values, as ``(factor, format, unit)``.
+
+    A THICKNESS is shown in its layer's own unit, the way SIM SHOW lists it
+    (``factor`` converts from the fit's 1e15 at/cm^2), and an ATOMS amount in
+    /CM2; anything else as the fit holds it, with no unit.
+    """
+    if entry.kind == "thickness":
+        if per_areal is None:
+            return 1.0, thickness_label, _AREAL
+        return per_areal, thickness_label, session.script.layers[entry.layer].unit
+    if entry.kind == "atoms":
+        return 1.0, _g6, _AREAL
+    return 1.0, _g6, ""
+
+
 def cmd_go(session, args: ArgReader) -> None:
     args.done()
     from ...fit.lm import fit
-    from ...script.lcm import structure_label, thickness_label, to_sample, write_lcm
+    from ...script.lcm import structure_label, to_sample, write_lcm
     from ...sim.engine import simulate
 
     state = state_for(session)
@@ -816,6 +892,12 @@ def cmd_go(session, args: ArgReader) -> None:
         ).counts
 
     starting = {v.name: v.parameter.get(inputs) for v in state.varying}
+    per_areal = {
+        v.layer: _units_per_areal(session, inputs, v.layer)
+        for v in state.varying
+        if v.kind == "thickness"
+    }
+    fit_parameters = {v.name: _fit_parameter(v, per_areal.get(v.layer)) for v in state.varying}
     groups = (
         [state.varying] if state.multi else [[v] for v in state.varying]
     )
@@ -844,13 +926,16 @@ def cmd_go(session, args: ArgReader) -> None:
                     run,
                     observed,
                     inputs,
-                    [v.parameter for v in group],
+                    [fit_parameters[v.name] for v in group],
                     windows=state.windows,
                     progress=_progress,
                 )
                 if not state.multi:
+                    entry = group[0]
+                    factor, fmt, unit = _display(session, entry, per_areal.get(entry.layer))
+                    value = result.parameters[entry.parameter.name] * factor
                     print(
-                        f"  {group[0].name}: {result.parameters[group[0].parameter.name]:.6g}"
+                        f"  {entry.name}: {fmt(value)}{f' {unit}' if unit else ''}"
                         f"   chi2/dof {result.reduced_chi_square:.4f}"
                     )
     except ValueError as error:
@@ -886,19 +971,32 @@ def cmd_go(session, args: ArgReader) -> None:
             f"  warning: {result.n_invalid} windowed channels had "
             "no predicted counts"
         )
+    # An ATOMS line brackets its layer's resulting thickness in Angstroms --
+    # the same view SIM SHOW brackets in MODE ATOMS.
+    angstroms = [None] * len(session.script.layers)
+    if any(v.kind == "atoms" for v in state.varying):
+        try:
+            angstroms = thickness_mode_views(
+                session.script, session.table, session.densities, to_atoms=False
+            )
+        except KeyError:
+            pass  # an element the table doesn't know: no brackets, as in SIM SHOW
     for entry in state.varying:
         name = entry.parameter.name
         value = entry.parameter.get(inputs)
         sigma = result.uncertainties.get(name)
         before = starting[entry.name]
-        if entry.kind == "thickness":
-            value_text, before_text = thickness_label(value), thickness_label(before)
-        else:
-            value_text, before_text = f"{value:.6g}", f"{before:.6g}"
-        line = f"  {entry.name:26s} {value_text:>14s}"
+        factor, fmt, unit = _display(session, entry, per_areal.get(entry.layer))
+        suffix = f" {unit}" if unit else ""
+        line = f"  {entry.name:26s} {fmt(value * factor) + suffix:>14s}"
         if sigma:
-            line += f"  +/- {sigma:.4g}"
-        report_lines.append(line + f"   (was {before_text})")
+            line += f"  +/- {sigma * factor:.4g}{suffix}"
+        line += f"   (was {fmt(before * factor)}{suffix})"
+        if entry.kind == "thickness" and unit.upper() != _AREAL:
+            line += f"   [{thickness_label(value)} {_AREAL}]"
+        elif entry.kind == "atoms" and angstroms[entry.layer] is not None:
+            line += f"   [{thickness_label(angstroms[entry.layer][0])} A]"
+        report_lines.append(line)
     new_structure = structure_label(session.script, normalize=session.plot.composition_fraction)
     report_lines.append(f"\n  {sample_id}: {new_structure}")
 
@@ -952,13 +1050,17 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("AUTOCMP", 4, cmd_autocmp, "run COMPARE automatically at the end of GO"),
     ("REPORT", 3, cmd_report,
      "append every GO's result to <sample>.report (REPORT OFF to stop)"),
+    # Registered here too, not only at the RUMP level, so switching doesn't
+    # fall through and leave PERT (repl.py's execute_line).
+    ("MODE", 4, cmd_mode,
+     "switch between COMP and ATOMS (converts every layer, drops mismatched selections)"),
     # Parameters -- all take an optional trailing "<min> <max>" search bound
     ("THICKNESS", 2, cmd_thickness,
-     "vary a layer thickness, e.g. THICKNESS <layer> [<min> <max>] (needs MODE COMP)"),
+     "vary a layer thickness [<min> <max> in the layer's unit, e.g. A] (needs MODE COMP)"),
     ("COMPOSITION", 3, cmd_composition,
      "vary an element in a layer [<min> <max>] (needs MODE COMP)"),
     ("ATOMS", 3, cmd_atoms,
-     "vary one element's areal density, others held fixed [<min> <max>] "
+     "vary one element's areal density, others held fixed [<min> <max> in /CM2] "
      "(needs MODE ATOMS)"),
     ("SPECIES", 2, cmd_species, "vary the species composition [<min> <max>]"),
     ("EQUATION", 2, cmd_equation, "vary an equation parameter [<min> <max>]"),

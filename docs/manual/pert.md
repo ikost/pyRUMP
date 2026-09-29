@@ -236,7 +236,8 @@ replaces it. Layer numbers are the ones `SHOW` lists.
 
 Every parameter takes an optional `<min> <max>` bound at the end: give both
 or neither. The fit stays inside the bound. `PARMS` shows it, and
-`SAVE`/`GET` keep it.
+`SAVE`/`GET` keep it. A `THICKNESS` bound is in the layer's own unit (the one
+`SHOW` lists, usually Å); an `ATOMS` bound is in 10¹⁵ at/cm².
 
 #### `THICKNESS`
 
@@ -244,10 +245,11 @@ or neither. The fit stays inside the bound. `PARMS` shows it, and
 usage: THICKNESS <layer> [<min> <max>]
 ```
 
-Varies a layer's thickness. Needs [MODE COMP](config.md#mode-new).
+Varies a layer's thickness. Needs [MODE COMP](config.md#mode-new). The
+bound is in the layer's own unit, e.g. Å for a layer `SHOW` lists in `A`.
 
 ```
-PERT Command: thickness 2
+PERT Command: thickness 2 300 360
 ```
 
 #### `COMPOSITION`
@@ -275,7 +277,7 @@ usage: ATOMS <layer> <element> [<min> <max>]
 ```
 
 Varies one element's own areal density in a layer, keeping the other
-elements' amounts fixed. Needs [MODE ATOMS](config.md#mode-new).
+elements' amounts fixed, in 10¹⁵ at/cm². Needs [MODE ATOMS](config.md#mode-new).
 
 ```
 PERT Command: atoms 2 Mn
@@ -408,7 +410,7 @@ Your wish? pert get MnPt.pert go
   reduced chi-square 12.3538 on 397 dof   (was 61.8545)
   35 evaluations, converged
   kev(0)                            48.4324  +/- 0.04736   (was 48)
-  layer 2 thickness                     250  +/- 0.5042   (was 254)
+  layer 2 thickness                   326 A  +/- 0.657 A   (was 331 A)   [250 /CM2]
   layer 2 composition Mn             2.8231  +/- 0.01217   (was 2.73495)
   fwhm                              24.9921  +/- 0.03427   (was 15)
 
@@ -427,6 +429,10 @@ Your wish? pert get MnPt.pert go
   converge` means it stopped at its limit first: check the starting values
   or narrow the window before trusting the numbers.
 * **One line per parameter** — the fitted value, its uncertainty, and the
-  starting value. Layer thicknesses are in 10¹⁵ at/cm².
+  starting value. As in [`SIM SHOW`](sim.md#show), the other
+  [`MODE`](config.md#mode-new)'s view follows in brackets. A `THICKNESS` is in
+  the layer's own unit, with its 10¹⁵ at/cm² (`/CM2`) in brackets. An `ATOMS`
+  amount is in `/CM2`, with the layer's resulting thickness in Å in
+  brackets.
 * **`data scaled by …`** — only with a `NORMALIZE` window: the scale applied,
   and the `CORRECTION` it was stored as.
