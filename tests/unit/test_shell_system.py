@@ -137,6 +137,17 @@ def test_cd_accepts_an_absolute_path(session, tree):
     assert Path.cwd() == (tree / "data").resolve()
 
 
+@pytest.mark.parametrize(
+    "line", ["cd My Data", 'cd "My Data"', "cd 'My Data'", r"cd My\ Data", "pushdir My Data"]
+)
+def test_cd_reaches_a_directory_with_a_space_however_it_is_written(session, tmp_path, line):
+    """Unquoted too: CD takes one directory, so extra words are the rest of it."""
+    (tmp_path / "My Data").mkdir()
+    os.chdir(tmp_path)
+    run(session, line)
+    assert Path.cwd() == (tmp_path / "My Data").resolve()
+
+
 def test_cd_with_no_argument_goes_home(session, tree):
     """system.c:447-453 -- bare CD falls back to HOME."""
     os.chdir(tree)

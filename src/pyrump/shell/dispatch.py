@@ -284,6 +284,8 @@ def tokenize(line: str) -> list[str]:
     everything to end of line as the token (lexp.c:506, "If quotes did not
     finish, then just continue on"). ``WRASCII``-written macros rely on this --
     their ``Identifier '...`` line never closes the quote.
+
+    Outside quotes, ``\\ `` is a literal space, so ``CD My\\ Data`` is one token.
     """
     tokens: list[str] = []
     index, length = 0, len(line)
@@ -301,10 +303,18 @@ def tokenize(line: str) -> list[str]:
             token = line[start:index]
             index += 1  # past the closing quote, or harmlessly past end of line
         else:
-            start = index
+            # "\ " is a space inside the word, as a Unix shell (and a folder
+            # dragged into macOS Terminal) writes it. Only before a space, so
+            # a Windows path's backslashes stay literal.
+            chars: list[str] = []
             while index < length and not line[index].isspace():
-                index += 1
-            token = line[start:index]
+                if line.startswith("\\ ", index):
+                    chars.append(" ")
+                    index += 2
+                else:
+                    chars.append(line[index])
+                    index += 1
+            token = "".join(chars)
         # "3/" -> ["3", "/"], so the terminator need not be spaced off a
         # number. Anything else ending in "/" (a path) stays one token.
         if token != "/" and token.endswith("/") and _is_number(token[:-1]):

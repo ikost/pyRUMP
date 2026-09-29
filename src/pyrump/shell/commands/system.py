@@ -72,15 +72,25 @@ def _change_to(session, target: Path) -> None:
 
 def cmd_cd(session, args: ArgReader) -> None:
     """``CD [directory]`` -- with no argument, go home (system.c:447-453)."""
-    token = args.optional()
-    args.done()
+    token = _directory_argument(args)
     _change_to(session, Path.home() if token is None else resolve(token))
+
+
+def _directory_argument(args: ArgReader) -> str | None:
+    """CD/PUSHDIR's one argument, with any further words joined back onto it.
+
+    Both take exactly one directory, so ``CD My Data`` can only mean the
+    folder "My Data" typed without quotes. Runs of spaces collapse to one;
+    a name that needs them has to be quoted.
+    """
+    words = args.remaining
+    args.index = len(args.tokens)
+    return " ".join(words) if words else None
 
 
 def cmd_pushdir(session, args: ArgReader) -> None:
     """``PUSHDIR [dir]`` -- remember where we are, then change directory."""
-    token = args.optional()
-    args.done()
+    token = _directory_argument(args)
     here = Path.cwd()
     _change_to(session, Path.home() if token is None else resolve(token))
     session.directory_stack.append(here)

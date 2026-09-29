@@ -193,7 +193,9 @@ def _setup_readline(session, stack: list[str]) -> None:
         if buffer[: readline.get_begidx()].strip():
             # Past the command word: complete paths, which is what GET, CD, XEQ
             # and SIM GET all want.
-            options = _path_completions(text)
+            options = _argument_completions(
+                buffer[: readline.get_endidx()], readline.get_begidx()
+            )
         else:
             options = tables_for(stack[-1]).completions(text)
             if stack[-1] != "rump":
@@ -212,6 +214,64 @@ def _setup_readline(session, stack: list[str]) -> None:
         readline.parse_and_bind("bind ^I rl_complete")
     else:
         readline.parse_and_bind("tab: complete")
+
+
+def _argument_start(line: str) -> tuple[int, str | None]:
+    """Where the last argument of ``line`` starts, and its quote if still open.
+
+    Walks the line the way :func:`~pyrump.shell.dispatch.tokenize` does, so
+    ``"My Da`` (an open quote) and ``My\\ Da`` (an escaped space) are each one
+    argument. A line ending in whitespace starts a new, empty one.
+    """
+    index, length = 0, len(line)
+    start = length
+    while index < length:
+        while index < length and line[index].isspace():
+            index += 1
+        if index >= length:
+            return length, None
+        start = index
+        if line[index] in ("'", '"'):
+            end = line.find(line[index], index + 1)
+            if end == -1:
+                return start, line[index]
+            index = end + 1
+        else:
+            while index < length and not line[index].isspace():
+                index += 2 if line.startswith("\\ ", index) else 1
+    return start, None
+
+
+def _argument_completions(line: str, begidx: int) -> list[str]:
+    """Path completions for the argument at the end of ``line`` (the buffer up
+    to the cursor), as replacements for ``line[begidx:]``.
+
+    Readline splits words at every space (``set_completer_delims``), so for a
+    name with spaces ``begidx`` falls mid-argument; the whole argument is
+    completed here and only the part after ``begidx`` handed back. A name
+    with spaces completes as ``"My Data/`` -- the quote left open on a
+    directory so completion can carry on into it, which ``tokenize`` accepts
+    as running to end of line -- or as ``My\\ Data/`` if that is how the user
+    started writing it.
+    """
+    start, quote = _argument_start(line)
+    typed = line[start:]
+    raw = typed[1:] if quote else typed.replace("\\ ", " ")
+    escaped = quote is None and "\\ " in typed
+
+    def spelt(path: str) -> str:
+        if escaped:
+            return path.replace(" ", "\\ ")
+        opening = quote or ('"' if " " in path else "")
+        closing = "" if not opening or path.endswith(("/", os.sep)) else opening
+        return opening + path + closing
+
+    already = line[start:begidx]
+    return [
+        full[len(already):]
+        for full in map(spelt, _path_completions(raw))
+        if full.startswith(already)
+    ]
 
 
 def _path_completions(text: str) -> list[str]:

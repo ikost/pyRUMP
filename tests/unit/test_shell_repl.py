@@ -147,3 +147,54 @@ def test_a_terminal_draws_its_prompt_through_read_prompt(session, monkeypatch):
 
     assert repl._read_line(session, "Next? ") == "PLOT"
     assert calls == ["Next? "]
+
+
+# -- tab completion of paths with spaces ------------------------------------
+
+
+def _complete(line: str) -> list[str]:
+    """What completion offers at the end of ``line``, as readline would call
+    it: ``begidx`` after the last space, since spaces are word delimiters."""
+    begidx = max(line.rfind(" "), line.rfind("\t")) + 1
+    return repl._argument_completions(line, begidx)
+
+
+@pytest.fixture
+def spaced(tmp_path, monkeypatch):
+    (tmp_path / "My Data").mkdir()
+    (tmp_path / "My Data" / "MnPt.lcm").write_text("")
+    (tmp_path / "plain").mkdir()
+    monkeypatch.chdir(tmp_path)
+    return tmp_path
+
+
+def test_a_directory_with_a_space_completes_inside_an_open_quote(spaced):
+    assert _complete("cd My") == ['"My Data/']
+
+
+def test_completion_carries_on_inside_an_open_quote(spaced):
+    # readline only replaces what follows the last space: 'Da' -> 'Data/'
+    assert _complete('cd "My Da') == ["Data/"]
+    assert _complete('get "My Data/Mn') == ['Data/MnPt.lcm"']
+
+
+def test_a_file_completes_with_its_quote_closed_and_tokenizes_whole(spaced):
+    from pyrump.shell.dispatch import tokenize
+
+    line = 'sim get "My Data/Mn'
+    completed = line[: line.rfind(" ") + 1] + _complete(line)[0]
+    assert tokenize(completed) == ["sim", "get", "My Data/MnPt.lcm"]
+
+
+def test_completion_keeps_backslash_escaping_if_that_is_how_it_was_typed(spaced):
+    assert _complete(r"cd My\ D") == ["Data/"]
+    assert _complete(r"get My\ Data/M") == ["Data/MnPt.lcm"]
+    assert _complete(r"cd M") == ['"My Data/']  # no escape typed yet: quote it
+
+
+def test_a_name_without_spaces_completes_unquoted(spaced):
+    assert _complete("cd pl") == ["plain/"]
+
+
+def test_a_new_empty_argument_lists_the_directory(spaced):
+    assert _complete("cd ") == ['"My Data/', "plain/"]

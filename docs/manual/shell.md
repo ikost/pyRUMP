@@ -72,7 +72,14 @@ CD [directory]
 ```
 
 Changes directory; with no argument, goes home.
-Tab autocompletion and wildcards are implemented.
+Tab autocompletion is implemented.
+
+A name with spaces can be quoted or backslash-escaped, as in a Unix shell:
+`cd "My Data"` or `cd My\ Data`. A folder dragged from Finder into macOS
+Terminal pastes in the escaped form. `CD` and `PUSHDIR` also accept it
+unquoted (`cd My Data`), since they take only one argument. Other commands
+need the quotes or escapes, e.g. `get "My Data/MnPt.lcm"`. Tab completion
+adds the quotes for you.
 
 
 #### `PUSHDIR` / `POPDIR`

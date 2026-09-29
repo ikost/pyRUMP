@@ -194,6 +194,17 @@ def test_tokenize_keeps_quoted_strings_whole():
     assert tokenize("ident 'a b c'") == ["ident", "a b c"]
 
 
+def test_tokenize_reads_a_backslash_space_as_a_space():
+    """Shell-style escaping -- what dragging a folder into macOS Terminal
+    pastes -- keeps a name with spaces as one token."""
+    assert tokenize(r"cd My\ Data/sub\ dir x") == ["cd", "My Data/sub dir", "x"]
+
+
+def test_tokenize_keeps_other_backslashes_literal():
+    """Only a backslash before a space is special, so Windows paths survive."""
+    assert tokenize(r"cd C:\Users\me\data") == ["cd", r"C:\Users\me\data"]
+
+
 def test_tokenize_tolerates_an_unbalanced_quote():
     """RUMP's own lexer just takes the rest of the line (lexp.c:506) --
 
