@@ -222,6 +222,14 @@ def test_tokenize_tolerates_an_unbalanced_quote():
         ("! another", ""),
         ("  ", ""),
         ("region 1 2", "region 1 2"),
+        ("/* only a comment", ""),
+        ("plot 1\t/* after a tab", "plot 1"),
+        # /* inside a word is a glob, not a comment (lexp.c:1728-1735)
+        ("ls data/*.rbs", "ls data/*.rbs"),
+        ("ls My*/*.pert /* both", "ls My*/*.pert"),
+        # ...and inside quotes it is part of the argument
+        ('ls "My Data /*.lcm"', 'ls "My Data /*.lcm"'),
+        ('ident "a /* b" /* note', 'ident "a /* b"'),
     ],
 )
 def test_strip_comment(line, expected):

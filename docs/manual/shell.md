@@ -54,6 +54,9 @@ LS [pattern]
 
 Lists files, optionally matching a glob (`ls *.rbs`). `SL` is a bare
 synonym, not shown in `?`'s listing but still usable. Tab autocompletion and wildcards are implemented.
+The wildcard can be in the file name inside a folder (`ls data/*.rbs`,
+`ls "My Data/*.lcm"`), but not in a folder name. A `/*` only starts a
+comment after a space, so it doesn't clash with such a path.
 
 #### `LL`
 

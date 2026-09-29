@@ -326,8 +326,26 @@ def tokenize(line: str) -> list[str]:
 
 
 def strip_comment(line: str) -> str:
-    """Remove RUMP comments: ``/* ... `` to end of line, or a leading ``#``/``!``."""
-    line = line.split("/*", 1)[0].strip()
+    """Remove RUMP comments: ``/* ... `` to end of line, or a leading ``#``/``!``.
+
+    ``/*`` opens a comment only where a word would start -- at the start of
+    the line or after whitespace, and outside quotes -- which is where RUMP's
+    own lexer looks for it (lexp.c:1728-1735). So ``ls data/*.rbs`` is a
+    glob, not ``ls data`` plus a comment. Quotes open only at a word's start,
+    and an unclosed one runs to end of line, as in :func:`tokenize`.
+    """
+    quote = None
+    for index, char in enumerate(line):
+        at_word_start = index == 0 or line[index - 1].isspace()
+        if quote:
+            if char == quote:
+                quote = None
+        elif char in ("'", '"') and at_word_start:
+            quote = char
+        elif at_word_start and line.startswith("/*", index):
+            line = line[:index]
+            break
+    line = line.strip()
     if line.startswith("#") or line.startswith("!"):
         return ""
     return line

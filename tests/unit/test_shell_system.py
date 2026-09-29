@@ -148,6 +148,22 @@ def test_cd_reaches_a_directory_with_a_space_however_it_is_written(session, tmp_
     assert Path.cwd() == (tmp_path / "My Data").resolve()
 
 
+@pytest.mark.parametrize(
+    "line", ['ls "My Data/*.lcm"', "ls My\\ Data/*.lcm", 'ls "My Data/*.lcm" /* note']
+)
+def test_ls_globs_inside_a_subdirectory(session, tmp_path, capsys, line):
+    """``/*`` in a path is a glob, not the start of a RUMP comment -- before,
+    ``ls data/*.rbs`` was cut to ``ls data`` and listed everything there."""
+    (tmp_path / "My Data").mkdir()
+    for name in ("a.lcm", "b.lcm", "c.pert"):
+        (tmp_path / "My Data" / name).write_text("")
+    os.chdir(tmp_path)
+    run(session, line)
+    listed = capsys.readouterr().out.split()
+    assert "a.lcm" in listed and "b.lcm" in listed
+    assert "c.pert" not in listed
+
+
 def test_cd_with_no_argument_goes_home(session, tree):
     """system.c:447-453 -- bare CD falls back to HOME."""
     os.chdir(tree)
