@@ -232,6 +232,45 @@ residuals), and `REGION`, `COUNTS`, `LOG`/`SQRT`/`LINEAR` and
 only; the residuals stay linear. Under `NORMALIZE` the residuals and
 chi-square are taken on the normalized yield, and the readout says so.
 
+### `EXPORTCMP` / `EC` `[new]`
+
+```
+usage: EXPORTCMP <file>                          (short: EC)
+```
+
+Writes what `COMPARE` shows as plain columns that Origin, Excel, gnuplot or
+`pandas.read_csv(..., comment="#")` open directly, for sharing a fit with
+people who don't use RUMP. One row per channel:
+
+| column | contents |
+|---|---|
+| `channel` | channel number, as `REGION` and `CURSOR` count them |
+| `energy_keV` | lower edge of the channel |
+| `counts` | the active buffer |
+| `simulation` | buffer 0 |
+| `diff` | counts − simulation |
+| `residual` | the Poisson residual in σ that `COMPARE`'s bottom panel plots; `nan` where the simulation is zero |
+
+Above the columns, `#` comment lines record the data file, beam, geometry,
+calibration, detector and dose, the factor that converts counts to
+`NORMALIZE`'s counts/msr/µC, the physics settings (`FAITHFUL`, `SCREENING`),
+the sample structure twice (as entered, and in 10¹⁵ at/cm²), and the reduced
+chi-square with the channels it covers (`PERT`'s error windows if set, else
+`REGION`).
+
+Values are always raw counts and the chi-square is always count-based,
+whatever `NORMALIZE` says, so the numbers match `COMPARE`'s readout with
+`NORMALIZE` off. The simulation is recomputed first if the sample changed
+since the last `COMPARE`, and no plot has to be on screen. A `.csv` file is
+comma-separated and anything else tab-separated; a bare filename gets `.txt`.
+It works at the SIM and PERT levels too, without leaving them. The file is
+for other programs: `GET` doesn't read it back.
+
+```
+Your wish? cmp                  /* check the fit                     */
+Your wish? ec MA8410-fit.csv    /* data, simulation, residuals, GOF  */
+```
+
 ### `PLOT`
 
 ```

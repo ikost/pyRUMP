@@ -213,6 +213,32 @@ def structure_label(script: Script, *, normalize: bool = False) -> str:
     )
 
 
+def areal_structure_label(
+    script: Script,
+    periodic_table: PeriodicTable,
+    densities: DensityTable,
+    *,
+    normalize: bool = False,
+) -> str:
+    """:func:`structure_label` with every thickness in 1e15 at/cm^2.
+
+    "Si [500.0/cm2] - Mn3Pt [1234.6/cm2] - Ru [27.3/cm2]": the totals come
+    from :func:`thickness_mode_views` -- the conversion SIM SHOW prints --
+    while the formula stays the layer's own. One decimal rather than
+    :func:`thickness_label`'s whole units, since a few-angstrom layer is only
+    a few 1e15 at/cm^2. A layer with no thickness or composition yet shows
+    ``[?]``.
+    """
+    if not script.layers:
+        return ""
+    views = thickness_mode_views(script, periodic_table, densities, to_atoms=True)
+    parts = []
+    for layer, view in zip(reversed(script.layers), reversed(views)):
+        amount = "?" if view is None else f"{view[0]:.1f}/cm2"
+        parts.append(f"{_formula(layer.composition, normalize=normalize)} [{amount}]")
+    return " - ".join(parts)
+
+
 def canonical_symbol(token: str) -> str:
     """An element symbol spelt the standard way: ``si``/``SI`` -> ``Si``.
 

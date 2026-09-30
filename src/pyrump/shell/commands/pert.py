@@ -43,7 +43,7 @@ from ...fit.windows import MAX_ERROR_WINDOWS, Window, WindowSet
 from ...script.lcm import thickness_label, thickness_mode_views
 from ..dispatch import ArgReader, CommandError, CommandTable
 from .. import plotting
-from .rump import Return, cmd_compare, cmd_mode, describe_topic, needs_mode
+from .rump import Return, cmd_compare, cmd_exportcmp, cmd_mode, describe_topic, needs_mode
 from .sim import describe as _describe_sample
 from .sim import editor_for
 
@@ -1078,6 +1078,9 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("KEV(0)", -6, _simple("kev(0)"), "synonym for OFFSET"),
     ("COMPARE", 0, cmd_compare, "plot the active buffer against the simulation"),
     ("CMP", -3, cmd_compare, "synonym for COMPARE"),
+    ("EXPORTCMP", 7, cmd_exportcmp,
+     "write the active buffer, simulation, difference and GOF as columns"),
+    ("EC", -2, cmd_exportcmp, "synonym for EXPORTCMP"),
 ]
 
 for _name, _minlen, _handler, _help in _ENTRIES:
@@ -1087,3 +1090,4 @@ TABLE.note_synonym("RETURN", "QUIT", "Q")
 TABLE.note_synonym("SLOPE", "KEV/CH")
 TABLE.note_synonym("OFFSET", "KEV(0)")
 TABLE.note_synonym("COMPARE", "CMP")
+TABLE.note_synonym("EXPORTCMP", "EC")

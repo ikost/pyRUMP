@@ -12,6 +12,10 @@ Any non-numeric leading lines become the identifier string (rdwr.c:1150-1170).
 
 Also handles RUMP's own ``wrascii`` output, which prefixes a keyword header
 block terminated by the literal line ``Swallow``.
+
+:func:`write_columns` is pyRUMP's own, write-only addition: a ``#``-commented
+header over named columns, for spreadsheets and plotting tools rather than
+for RUMP to read back.
 """
 
 from __future__ import annotations
@@ -124,4 +128,34 @@ def write_ascii(
         )
     else:
         lines.extend(f"{value:.6f}" for value in counts)
+    Path(path).write_text("\n".join(lines) + "\n")
+
+
+def write_columns(
+    path: str | Path,
+    columns: dict[str, np.ndarray],
+    *,
+    comments: list[str] | None = None,
+    delimiter: str = "\t",
+    formats: dict[str, str] | None = None,
+) -> None:
+    """Write named columns under ``#``-prefixed comment lines.
+
+    One row per element of the columns, which must all be the same length;
+    the column names form the first uncommented line. ``formats`` maps a
+    column name to a format spec (default ``.6f``). Origin, Excel, gnuplot,
+    ``numpy.loadtxt`` and ``pandas.read_csv(comment="#")`` all skip the
+    comments.
+    """
+    formats = formats or {}
+    arrays = [np.asarray(values) for values in columns.values()]
+    lengths = {array.size for array in arrays}
+    if len(lengths) > 1:
+        raise ValueError(f"columns differ in length: {sorted(lengths)}")
+    specs = [formats.get(name, ".6f") for name in columns]
+
+    lines = [f"# {line}".rstrip() for line in comments or []]
+    lines.append(delimiter.join(columns))
+    for row in zip(*arrays):
+        lines.append(delimiter.join(format(value, spec) for value, spec in zip(row, specs)))
     Path(path).write_text("\n".join(lines) + "\n")

@@ -244,20 +244,28 @@ def draw(session) -> None:
     show(figure)
 
 
-def goodness_of_fit(session, data, theory, n_channels: int, region: tuple[int, int]) -> str:
+def goodness_of_fit(
+    session, data, theory, n_channels: int, region: tuple[int, int], *, raw: bool = False
+) -> str:
     """"reduced chi-square X.XX (Y dof)" -- over PERT's error windows (and
     normalisation window) if any are set, so the number matches what GO
     itself reports; otherwise over the plot's own visible REGION, with no
     normalisation and no parameters subtracted from dof.
 
     Scored on the yield as plotted, so under NORMALIZE it is no longer a
-    count-based chi-square -- the text says so on a second line.
+    count-based chi-square -- the text says so on a second line. ``raw``
+    scores the raw counts whatever NORMALIZE says (EXPORTCMP's columns).
     """
     from ..fit.objective import chi_square
 
     state = session.plot
-    observed = _values(data, state)[:n_channels]
-    expected = _values(theory, state)[:n_channels]
+    normalized = state.normalized and not raw
+    if normalized:
+        observed = _values(data, state)[:n_channels]
+        expected = _values(theory, state)[:n_channels]
+    else:
+        observed = np.asarray(data.spectrum.counts, dtype=float)[:n_channels]
+        expected = np.asarray(theory.spectrum.counts, dtype=float)[:n_channels]
     pert = session.pert
     if pert is not None and pert.windows.error:
         mask = pert.windows.mask(n_channels)
@@ -271,7 +279,7 @@ def goodness_of_fit(session, data, theory, n_channels: int, region: tuple[int, i
         n_parameters = 0
     summary = chi_square(observed * scale, expected, valid=mask, n_parameters=n_parameters)
     text = f"reduced chi-square {summary.reduced:.4f} ({summary.dof} dof)"
-    if state.normalized:
+    if normalized:
         text += "\nnormalized yield: GOF not from raw counts"
     return text
 

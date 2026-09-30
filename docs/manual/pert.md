@@ -151,6 +151,9 @@ Plots the active buffer against the simulation, with residuals, the same as
 PERT Command: cmp
 ```
 
+[`EXPORTCMP` / `EC`](shell.md#exportcmp-ec-new) writes the same comparison
+to a column file from here too, without leaving PERT.
+
 ### Saving and clearing
 
 #### `GET`

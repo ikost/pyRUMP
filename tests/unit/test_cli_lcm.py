@@ -27,9 +27,11 @@ from pyrump.plot.spectra import (  # noqa: E402
 )
 from pyrump.profiles.equations import EquationType  # noqa: E402
 from pyrump.script.lcm import (  # noqa: E402
+    areal_structure_label,
     parse_lcm,
     read_lcm,
     structure_label,
+    thickness_mode_views,
     to_sample,
     write_lcm,
 )
@@ -123,6 +125,32 @@ def test_structure_label_is_substrate_first():
         "Next\n Thick 500 /cm2\n Composition Si 1 /\n"
     )
     assert structure_label(script) == "Si [500/cm2] - Mn3Pt [150A] - Ru [30A]"
+
+
+@needs_data
+def test_areal_structure_label_gives_every_layer_in_1e15_atoms_per_cm2():
+    table = PeriodicTable.load(DATA / "atom4.dat", DATA / "pscoef.dat")
+    densities = DensityTable.load(DATA / "density.tab")
+    script = parse_lcm(
+        "Sim Reset\nLayer 1\n Thick 30 A\n Composition Ru 1 /\n"
+        "Next\n Thick 150 A\n Composition Mn 3 Pt 1 /\n"
+        "Next\n Thick 500 /cm2\n Composition Si 1 /\n"
+    )
+    ru, mnpt, _ = thickness_mode_views(script, table, densities, to_atoms=True)
+    assert areal_structure_label(script, table, densities) == (
+        f"Si [500.0/cm2] - Mn3Pt [{mnpt[0]:.1f}/cm2] - Ru [{ru[0]:.1f}/cm2]"
+    )
+
+
+@needs_data
+def test_areal_structure_label_marks_an_unfinished_layer():
+    table = PeriodicTable.load(DATA / "atom4.dat", DATA / "pscoef.dat")
+    densities = DensityTable.load(DATA / "density.tab")
+    script = parse_lcm(
+        "Sim Reset\nLayer 1\n Thick 0 A\n Composition Ru 1 /\n"
+        "Next\n Thick 500 /cm2\n Composition Si 1 /\n"
+    )
+    assert areal_structure_label(script, table, densities) == "Si [500.0/cm2] - Ru [?]"
 
 
 def test_structure_label_renders_a_compact_chemical_formula():

@@ -1077,6 +1077,168 @@ def test_plot_after_compare_returns_to_a_single_panel(session, tmp_path):
     assert [t.label for t in session.traces] == ["test", "SIM(Ru)"]
 
 
+_EC_SAMPLE = "Sim Reset\nLayer 1\n Thick 500 /cm2\n Composition Si 1 /\nMaxpth 200\n"
+
+
+def _ec_sample(session, tmp_path, text: str = _EC_SAMPLE) -> Path:
+    """Write the sample, and widen buffer 1 to 50 keV/ch so its 64 channels
+    reach the Si edge (~1.1 MeV) -- the default 5 keV/ch stops at 320 keV,
+    where the simulation is all zeros."""
+    session.buffers.get(1).spectrum.calibration = Calibration(kevch=50.0, npt=64)
+    sample = tmp_path / "ec.lcm"
+    sample.write_text(text)
+    return sample
+
+
+def _read_export(path):
+    """(comment lines without their "# ", column names, data rows) of an
+    EXPORTCMP file, split on its own delimiter."""
+    lines = path.read_text().splitlines()
+    comments = [line[2:] for line in lines if line.startswith("#")]
+    body = [line for line in lines if not line.startswith("#")]
+    delimiter = "," if path.suffix == ".csv" else "\t"
+    names = body[0].split(delimiter)
+    rows = np.array([[float(v) for v in line.split(delimiter)] for line in body[1:]])
+    return comments, names, rows
+
+
+@needs_data
+def test_exportcmp_writes_data_simulation_and_difference_as_columns(session, tmp_path):
+    sample = _ec_sample(session, tmp_path)
+    out = tmp_path / "fit.txt"
+    run(session, f"sim get {sample}", f"ec {out}")
+
+    _, names, rows = _read_export(out)
+    assert names == ["channel", "energy_keV", "counts", "simulation", "diff", "residual"]
+    data = session.buffers[1]
+    theory = session.simulation().spectrum.counts
+    np.testing.assert_array_equal(rows[:, 0], np.arange(data.n_channels))
+    np.testing.assert_allclose(rows[:, 1], data.spectrum.energies, atol=1e-4)
+    np.testing.assert_allclose(rows[:, 2], data.spectrum.counts, atol=1e-6)
+    np.testing.assert_allclose(rows[:, 3], theory, atol=1e-6)
+    np.testing.assert_allclose(rows[:, 4], data.spectrum.counts - theory, atol=1e-5)
+
+
+@needs_data
+def test_exportcmp_residual_is_the_poisson_residual_and_nan_without_a_model(session, tmp_path):
+    from pyrump.fit.objective import poisson_residuals
+
+    sample = _ec_sample(session, tmp_path)
+    out = tmp_path / "fit.txt"
+    run(session, f"sim get {sample}", f"ec {out}")
+
+    _, _, rows = _read_export(out)
+    residual = rows[:, 5]
+    # Against the full-precision spectra, not the file's 6-decimal columns:
+    # in the edge tail, where the simulation is tiny, that rounding alone
+    # shifts the residual.
+    counts = session.buffers[1].spectrum.counts
+    theory = session.simulation().spectrum.counts
+    modelled = theory > 0
+    assert modelled.any() and (~modelled).any()
+    expected, _ = poisson_residuals(counts[modelled], theory[modelled])
+    np.testing.assert_allclose(residual[modelled], expected, atol=1e-5)
+    assert np.isnan(residual[~modelled]).all()
+
+
+@needs_data
+def test_exportcmp_gof_matches_compare_over_region(session, tmp_path):
+    sample = _ec_sample(session, tmp_path)
+    out = tmp_path / "fit.txt"
+    run(session, f"sim get {sample}", "region 20 40", "compare", f"ec {out}")
+
+    shown = next(
+        t.get_text() for t in session.figure.axes[1].texts if "reduced chi-square" in t.get_text()
+    )
+    comments, _, _ = _read_export(out)
+    gof = next(line for line in comments if line.startswith("GOF"))
+    assert gof == f"GOF            {shown} over REGION channels 20-40"
+
+
+@needs_data
+def test_exportcmp_gof_names_the_pert_error_window(session, tmp_path):
+    sample = _ec_sample(session, tmp_path)
+    out = tmp_path / "fit.txt"
+    run(session, f"sim get {sample}", "pert", "window 10 19", "thick 1", "return", f"ec {out}")
+
+    comments, _, _ = _read_export(out)
+    gof = next(line for line in comments if line.startswith("GOF"))
+    assert "(9 dof)" in gof
+    assert gof.endswith("over PERT error windows 10-19 (1 varying parameter)")
+
+
+@needs_data
+def test_exportcmp_writes_raw_counts_under_normalize(session, tmp_path):
+    sample = _ec_sample(session, tmp_path)
+    raw, normalized = tmp_path / "raw.txt", tmp_path / "norm.txt"
+    run(session, f"sim get {sample}", f"ec {raw}", "normalize", f"ec {normalized}")
+
+    raw_comments, _, raw_rows = _read_export(raw)
+    norm_comments, _, norm_rows = _read_export(normalized)
+    np.testing.assert_array_equal(raw_rows, norm_rows)
+    gof = next(line for line in norm_comments if line.startswith("GOF"))
+    assert gof == next(line for line in raw_comments if line.startswith("GOF"))
+    assert "normalized" not in gof
+
+
+@needs_data
+def test_exportcmp_csv_is_comma_separated_and_a_bare_name_gets_txt(session, tmp_path):
+    sample = _ec_sample(session, tmp_path)
+    run(session, f"sim get {sample}", f"ec {tmp_path / 'fit.csv'}", f"ec {tmp_path / 'fit'}")
+
+    _, names, _ = _read_export(tmp_path / "fit.csv")
+    assert names[0] == "channel" and len(names) == 6
+    assert (tmp_path / "fit.txt").exists()
+    assert "\t" in (tmp_path / "fit.txt").read_text().splitlines()[-1]
+
+
+@needs_data
+def test_exportcmp_header_describes_physics_and_sample(session, tmp_path):
+    sample = _ec_sample(session, tmp_path, _SPLOT_SAMPLE)
+    out = tmp_path / "fit.txt"
+    run(session, f"sim get {sample}", "screening andersen", f"ec {out}")
+
+    comments, _, _ = _read_export(out)
+    rows = {line.split()[0]: line for line in comments}
+    assert rows["Physics"].split() == ["Physics", "FAITHFUL", "on", "SCREENING", "ANDERSEN"]
+    assert rows["Sample"].endswith("Si [500/cm2] - Mn3Pt [150A] - Ru [30A]")
+    assert rows["Areal"].endswith("(1e15 at/cm2)") and "Si [500.0/cm2]" in rows["Areal"]
+    assert rows["Normalisation"].startswith("Normalisation  divide counts by")
+
+
+@needs_data
+def test_exportcmp_refreshes_a_stale_simulation(session, tmp_path):
+    sample = _ec_sample(session, tmp_path)
+    out = tmp_path / "fit.txt"
+    run(session, f"sim get {sample}", "compare")
+    stale = session.buffers.get(0).spectrum.counts.copy()
+    run(session, "sim thick 900 /cm2", f"ec {out}")
+
+    _, _, rows = _read_export(out)
+    fresh = session.simulation().spectrum.counts
+    assert not np.allclose(stale, fresh)
+    np.testing.assert_allclose(rows[:, 3], fresh, atol=1e-6)
+
+
+@needs_data
+def test_exportcmp_from_pert_stays_in_pert(session, tmp_path):
+    sample = _ec_sample(session, tmp_path)
+    stack = ["rump"]
+    for line in (f"sim get {sample}", "pert", f"ec {tmp_path / 'fit.txt'}"):
+        execute_line(session, line, stack)
+    assert stack == ["rump", "pert"]
+    assert (tmp_path / "fit.txt").exists()
+
+
+@needs_data
+def test_exportcmp_refuses_the_simulation_buffer_as_data(session, tmp_path):
+    sample = _ec_sample(session, tmp_path)
+    run(session, f"sim get {sample}", "compare")
+    session.buffers.active = 0
+    with pytest.raises(CommandError, match="data buffer"):
+        run(session, f"ec {tmp_path / 'fit.txt'}")
+
+
 def test_newall_leaves_no_active_buffer_for_a_following_pert_go(session, tmp_path):
     """NEWALL must blank buffer 0 too, so a stale simulation left over from
     before the reset can't masquerade as PERT GO's "observed" data."""

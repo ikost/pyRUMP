@@ -983,6 +983,122 @@ def cmd_compare(session, args: ArgReader) -> None:
     plotting.draw(session)
 
 
+def _fit_window_description(session, region: tuple[int, int]) -> str:
+    """Which channels :func:`plotting.goodness_of_fit` scored -- the same
+    PERT-windows-else-REGION choice it makes."""
+    pert = session.pert
+    if pert is not None and pert.windows.error:
+        windows = ", ".join(f"{w.low}-{w.high}" for w in pert.windows.error)
+        n = len(pert.varying)
+        text = f"PERT error windows {windows} ({n} varying parameter{'' if n == 1 else 's'})"
+        if pert.windows.normalisation is not None:
+            w = pert.windows.normalisation
+            text += f"; normalisation window {w.low}-{w.high}"
+        return text
+    low, high = region
+    return f"REGION channels {low}-{high}"
+
+
+def _exportcmp_comments(session, index: int, data, gof: str, region) -> list[str]:
+    """EXPORTCMP's header: every parameter needed to read the columns, plus
+    the sample and the goodness of fit."""
+    import datetime
+
+    from ... import __version__
+    from ...model.detector import yield_normalisation
+    from ...script.lcm import areal_structure_label, structure_label
+
+    c, g, m, b = data.calibration, data.geometry, data.measurement, data.beam
+    source = str(data.path) if data.path is not None else data.name
+    stem = plotting.buffer_stem(data) or f"buffer {index}"
+    factor = yield_normalisation(m)
+    normalize = session.plot.composition_fraction
+    areal = areal_structure_label(
+        session.script, session.table, session.densities, normalize=normalize
+    )
+    screening = session.settings.screening.name
+    lines = [
+        f"pyRUMP {__version__} COMPARE export, {datetime.date.today().isoformat()}",
+        f"Data           {stem}  ({source}, buffer {index})",
+        f"Date           {data.date}" if data.date else None,
+        f"Beam           {_wrascii_beam_code(session, b)}  {b.e0_MeV:.6f} MeV",
+        f"Geometry       {_WRASCII_GEOMETRY_NAMES.get(g.kind, '??')}"
+        f"  theta {g.theta:.6f}  phi {g.phi:.6f}  psi {g.psi:.6f} deg",
+        f"Conversion     {c.kevch:.6f} keV/ch  offset {c.kev0:.6f} keV  choff {c.first:g}",
+        f"Detector       FWHM {m.fwhm_keV:.6f} keV  omega {m.omega_msr:.6f} msr"
+        f"  tau {m.tau_us:.6f} us",
+        f"Dose           charge {m.charge_uC:.6f} uC  current {m.current_nA:.6f} nA"
+        f"  corr {m.correction:.6f}",
+        f"Normalisation  divide counts by {factor:.6g} for counts/msr/uC"
+        if factor else "Normalisation  n/a",
+        f"Physics        FAITHFUL {'on' if session.settings.faithful else 'off'}"
+        f"  SCREENING {screening}",
+        f"Sample         {structure_label(session.script, normalize=normalize)}",
+        f"Areal density  {areal}  (1e15 at/cm2)",
+        f"GOF            {gof} over {_fit_window_description(session, region)}",
+        "energy_keV is the lower edge of each channel; residual is the Poisson",
+        "residual in sigma (nan where the simulation is zero)",
+    ]
+    return [line for line in lines if line is not None]
+
+
+def cmd_exportcmp(session, args: ArgReader) -> None:
+    """``EXPORTCMP <file>`` (synonym ``EC``) -- write what COMPARE shows as
+    plain columns for other programs: channel, energy, the active buffer's
+    counts, the simulation, their difference and the Poisson residual, under
+    a ``#``-commented header of parameters, physics, sample and goodness of
+    fit.
+
+    A pyRUMP-only addition, write-only -- nothing reads it back. Always raw
+    counts, and a count-based chi-square, whatever NORMALIZE says; the header
+    gives the factor to convert. ``.csv`` is comma-separated, anything else
+    tab-separated, and a bare filename gets ``.txt``. Buffer 0 is refreshed
+    first if the sample changed, and no plot needs to be on screen.
+    """
+    from ...fit.objective import poisson_residuals
+    from ...io.ascii import write_columns
+
+    target = Path(args.token("an output file"))
+    args.done()
+    if not target.suffix:
+        target = target.with_suffix(".txt")
+    index = session.buffers.active
+    if index == 0:
+        raise CommandError(
+            "EXPORTCMP compares a data buffer with the simulation: POINTAT a data buffer first"
+        )
+    data = session.buffers.require_active()
+    theory = session.simulation()
+
+    n_channels = min(data.n_channels, theory.n_channels)
+    try:
+        region = session.plot.region(n_channels)
+    except ValueError as error:
+        raise CommandError(str(error)) from None
+    gof = plotting.goodness_of_fit(session, data, theory, n_channels, region, raw=True)
+
+    counts = np.asarray(data.spectrum.counts, dtype=np.float64)[:n_channels]
+    simulation = np.asarray(theory.spectrum.counts, dtype=np.float64)[:n_channels]
+    residual, _ = poisson_residuals(counts, simulation)
+    residual[simulation <= 0] = np.nan
+
+    write_columns(
+        target,
+        {
+            "channel": np.arange(n_channels),
+            "energy_keV": data.spectrum.energies[:n_channels],
+            "counts": counts,
+            "simulation": simulation,
+            "diff": counts - simulation,
+            "residual": residual,
+        },
+        comments=_exportcmp_comments(session, index, data, gof, region),
+        delimiter="," if target.suffix.lower() == ".csv" else "\t",
+        formats={"channel": "d", "energy_keV": ".4f"},
+    )
+    print(f"wrote {target}: {n_channels} channels, {gof}")
+
+
 def cmd_figsave(session, args: ArgReader) -> None:
     """``FIGSAVE <file>`` (synonym ``HCOPY``) -- save the current plot to an
     image file.
@@ -1883,6 +1999,9 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("REPLOT", 3, cmd_replot, "redraw the current plot"),
     ("COMPARE", 0, cmd_compare, "plot the active buffer against the simulation"),
     ("CMP", -3, cmd_compare, "synonym for COMPARE"),
+    ("EXPORTCMP", 7, cmd_exportcmp,
+     "write the active buffer, simulation, difference and GOF as columns"),
+    ("EC", -2, cmd_exportcmp, "synonym for EXPORTCMP"),
     ("FIGSAVE", 4, cmd_figsave, "save the current plot to an image file, e.g. FIGSAVE out.png"),
     ("HCOPY", -5, cmd_figsave, "synonym for FIGSAVE"),
     ("AXIS", 2, cmd_axis, "draw axes only"),
@@ -1983,6 +2102,7 @@ for _name, _minlen, _handler, _help in _ENTRIES:
     TABLE.add(_name, _minlen, _handler, _help)
 TABLE.note_synonym("HELP", "?")
 TABLE.note_synonym("COMPARE", "CMP")
+TABLE.note_synonym("EXPORTCMP", "EC")
 TABLE.note_synonym("FIGSAVE", "HCOPY")
 TABLE.note_synonym("GET", "READ")
 TABLE.note_synonym("GETNRA", "GN")
@@ -1997,7 +2117,7 @@ TABLE.note_synonym("WRITENRA", "WN")
 _HELP_GROUPS: list[tuple[str, list[str]]] = [
     ("Getting started", ["HELP", "QUIT"]),
     ("Core workflow",
-     ["GET", "SIM", "PERT", "COMPARE", "PLOT", "RECALCULATE", "RETURN"]),
+     ["GET", "SIM", "PERT", "COMPARE", "EXPORTCMP", "PLOT", "RECALCULATE", "RETURN"]),
     ("Plotting & display",
      ["OVERLAY", "REPLOT", "FIGSAVE", "REGION", "COUNTS", "LINEAR", "SQRT",
       "LOG", "NORMALIZE", "RAW", "LABELS", "STRUCTLABEL", "COMPFRAC",

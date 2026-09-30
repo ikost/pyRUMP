@@ -26,7 +26,7 @@ from ...script.lcm import (
     write_lcm,
 )
 from ..dispatch import ArgReader, CommandError, CommandTable
-from .rump import Return, cmd_compare, cmd_mode, describe_topic, needs_mode
+from .rump import Return, cmd_compare, cmd_exportcmp, cmd_mode, describe_topic, needs_mode
 
 
 def editor_for(session) -> SampleEditor:
@@ -498,6 +498,9 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("SPLOT", 3, cmd_splot, "overlay the simulation, or one element/layer, on the plot"),
     ("COMPARE", 0, cmd_compare, "plot the active buffer against the simulation"),
     ("CMP", -3, cmd_compare, "synonym for COMPARE"),
+    ("EXPORTCMP", 7, cmd_exportcmp,
+     "write the active buffer, simulation, difference and GOF as columns"),
+    ("EC", -2, cmd_exportcmp, "synonym for EXPORTCMP"),
 ]
 
 for _name, _minlen, _handler, _help in _ENTRIES:
@@ -507,6 +510,7 @@ TABLE.note_synonym("RETURN", "QUIT", "Q", "ABORT")
 TABLE.note_synonym("OPEN", "INSERT")
 TABLE.note_synonym("CLOSE", "DELETE", "CLEAR")
 TABLE.note_synonym("COMPARE", "CMP")
+TABLE.note_synonym("EXPORTCMP", "EC")
 
 #: How ``HELP`` lays out the table -- display only; matching still runs over
 #: ``_ENTRIES`` in order. The mode headings stand in for a "(needs MODE ...)"
@@ -520,5 +524,5 @@ _HELP_GROUPS: list[tuple[str, list[str]]] = [
     ("Profiles and interfaces",
      ["SPECIES", "EQUATION", "EQLIST", "FUZZ", "SUBLAYER", "STHICKNESS"]),
     ("Sample-wide", ["MAXPTH", "STRAGGLE", "ABSORBER", "MULTIPLE"]),
-    ("Files and plotting", ["GET", "SAVE", "DENSITY", "SPLOT", "COMPARE"]),
+    ("Files and plotting", ["GET", "SAVE", "DENSITY", "SPLOT", "COMPARE", "EXPORTCMP"]),
 ]
