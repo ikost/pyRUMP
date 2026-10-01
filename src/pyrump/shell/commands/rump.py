@@ -1004,26 +1004,31 @@ def _fit_window_description(session, region: tuple[int, int]) -> str:
     return f"REGION channels {low}-{high}"
 
 
-def _exportcmp_comments(session, index: int, data, gof: str, region) -> list[str]:
-    """EXPORTCMP's header: every parameter needed to read the columns, plus
-    the sample and the goodness of fit."""
+def _export_target(args: ArgReader) -> Path:
+    """The output file EXPORT and EXPORTCMP write: a bare name gets ``.txt``."""
+    target = Path(args.token("an output file"))
+    args.done()
+    return target if target.suffix else target.with_suffix(".txt")
+
+
+def _export_delimiter(target: Path) -> str:
+    return "," if target.suffix.lower() == ".csv" else "\t"
+
+
+def _export_buffer_lines(session, index: int, data, what: str) -> list[str]:
+    """The header lines EXPORT and EXPORTCMP share: every parameter needed to
+    read a buffer's columns."""
     import datetime
 
     from ... import __version__
     from ...model.detector import yield_normalisation
-    from ...script.lcm import areal_structure_label, structure_label
 
     c, g, m, b = data.calibration, data.geometry, data.measurement, data.beam
     source = str(data.path) if data.path is not None else data.name
     stem = plotting.buffer_stem(data) or f"buffer {index}"
     factor = yield_normalisation(m)
-    normalize = session.plot.composition_fraction
-    areal = areal_structure_label(
-        session.script, session.table, session.densities, normalize=normalize
-    )
-    screening = session.settings.screening.name
     lines = [
-        f"pyRUMP {__version__} COMPARE export, {datetime.date.today().isoformat()}",
+        f"pyRUMP {__version__} {what} export, {datetime.date.today().isoformat()}",
         f"Data           {stem}  ({source}, buffer {index})",
         f"Date           {data.date}" if data.date else None,
         f"Beam           {_wrascii_beam_code(session, b)}  {b.e0_MeV:.6f} MeV",
@@ -1036,15 +1041,37 @@ def _exportcmp_comments(session, index: int, data, gof: str, region) -> list[str
         f"  corr {m.correction:.6f}",
         f"Normalisation  divide counts by {factor:.6g} for counts/msr/uC"
         if factor else "Normalisation  n/a",
+    ]
+    return [line for line in lines if line is not None]
+
+
+def _export_sample_lines(session) -> list[str]:
+    """The physics settings and the sample, as entered and in 1e15 at/cm^2 --
+    what the simulation in an export was computed from."""
+    from ...script.lcm import areal_structure_label, structure_label
+
+    normalize = session.plot.composition_fraction
+    areal = areal_structure_label(
+        session.script, session.table, session.densities, normalize=normalize
+    )
+    return [
         f"Physics        FAITHFUL {'on' if session.settings.faithful else 'off'}"
-        f"  SCREENING {screening}",
+        f"  SCREENING {session.settings.screening.name}",
         f"Sample         {structure_label(session.script, normalize=normalize)}",
         f"Areal density  {areal}  (1e15 at/cm2)",
+    ]
+
+
+def _exportcmp_comments(session, index: int, data, gof: str, region) -> list[str]:
+    """EXPORTCMP's header: every parameter needed to read the columns, plus
+    the sample and the goodness of fit."""
+    return [
+        *_export_buffer_lines(session, index, data, "COMPARE"),
+        *_export_sample_lines(session),
         f"GOF            {gof} over {_fit_window_description(session, region)}",
         "energy_keV is the lower edge of each channel; residual is the Poisson",
         "residual in sigma (nan where the simulation is zero)",
     ]
-    return [line for line in lines if line is not None]
 
 
 def cmd_exportcmp(session, args: ArgReader) -> None:
@@ -1063,10 +1090,7 @@ def cmd_exportcmp(session, args: ArgReader) -> None:
     from ...fit.objective import poisson_residuals
     from ...io.ascii import write_columns
 
-    target = Path(args.token("an output file"))
-    args.done()
-    if not target.suffix:
-        target = target.with_suffix(".txt")
+    target = _export_target(args)
     index = session.buffers.active
     if index == 0:
         raise CommandError(
@@ -1098,10 +1122,49 @@ def cmd_exportcmp(session, args: ArgReader) -> None:
             "residual": residual,
         },
         comments=_exportcmp_comments(session, index, data, gof, region),
-        delimiter="," if target.suffix.lower() == ".csv" else "\t",
+        delimiter=_export_delimiter(target),
         formats={"channel": "d", "energy_keV": ".4f"},
     )
     print(f"wrote {target}: {n_channels} channels, {gof}")
+
+
+def cmd_export(session, args: ArgReader) -> None:
+    """``EXPORT <file>`` -- write the active buffer as plain columns for
+    other programs: channel, energy, counts and the Poisson error
+    sqrt(counts), under the same ``#``-commented parameter header as
+    EXPORTCMP.
+
+    A pyRUMP-only addition, write-only -- WRASCII is the text form `GET`
+    reads back. Always raw counts; the header gives the NORMALIZE factor.
+    Buffer 0 exports the simulation, recomputed first if the sample changed,
+    and its header adds the physics settings and the sample. ``.csv`` is
+    comma-separated, anything else tab-separated, and a bare filename gets
+    ``.txt``.
+    """
+    from ...io.ascii import write_columns
+
+    target = _export_target(args)
+    index = session.buffers.active
+    data = session.simulation() if index == 0 else session.buffers.require_active()
+
+    counts = np.asarray(data.spectrum.counts, dtype=np.float64)
+    comments = _export_buffer_lines(session, index, data, "buffer")
+    if index == 0:
+        comments += _export_sample_lines(session)
+    comments.append("energy_keV is the lower edge of each channel; error is sqrt(counts)")
+    write_columns(
+        target,
+        {
+            "channel": np.arange(counts.size),
+            "energy_keV": data.spectrum.energies[: counts.size],
+            "counts": counts,
+            "error": np.sqrt(np.clip(counts, 0.0, None)),
+        },
+        comments=comments,
+        delimiter=_export_delimiter(target),
+        formats={"channel": "d", "energy_keV": ".4f"},
+    )
+    print(f"wrote {target}: {counts.size} channels from buffer {index}")
 
 
 def cmd_figsave(session, args: ArgReader) -> None:
@@ -2007,6 +2070,7 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("EXPORTCMP", 7, cmd_exportcmp,
      "write the active buffer, simulation, difference and GOF as columns"),
     ("EC", -2, cmd_exportcmp, "synonym for EXPORTCMP"),
+    ("EXPORT", 4, cmd_export, "write the active buffer as columns: channel, energy, counts, error"),
     ("FIGSAVE", 4, cmd_figsave, "save the current plot to an image file, e.g. FIGSAVE out.png"),
     ("HCOPY", -5, cmd_figsave, "synonym for FIGSAVE"),
     ("AXIS", 2, cmd_axis, "draw axes only"),
@@ -2122,7 +2186,7 @@ TABLE.note_synonym("WRITENRA", "WN")
 _HELP_GROUPS: list[tuple[str, list[str]]] = [
     ("Getting started", ["HELP", "QUIT"]),
     ("Core workflow",
-     ["GET", "SIM", "PERT", "COMPARE", "EXPORTCMP", "PLOT", "RECALCULATE", "RETURN"]),
+     ["GET", "SIM", "PERT", "COMPARE", "EXPORTCMP", "EXPORT", "PLOT", "RECALCULATE", "RETURN"]),
     ("Plotting & display",
      ["OVERLAY", "REPLOT", "FIGSAVE", "REGION", "COUNTS", "LINEAR", "SQRT",
       "LOG", "NORMALIZE", "RAW", "LABELS", "STRUCTLABEL", "COMPFRAC",

@@ -1239,6 +1239,81 @@ def test_exportcmp_refuses_the_simulation_buffer_as_data(session, tmp_path):
         run(session, f"ec {tmp_path / 'fit.txt'}")
 
 
+@needs_data
+def test_export_writes_the_active_buffer_with_poisson_errors(session, tmp_path):
+    out = tmp_path / "spectrum.txt"
+    run(session, f"export {out}")
+
+    comments, names, rows = _read_export(out)
+    assert names == ["channel", "energy_keV", "counts", "error"]
+    data = session.buffers[1]
+    np.testing.assert_array_equal(rows[:, 0], np.arange(data.n_channels))
+    np.testing.assert_allclose(rows[:, 1], data.spectrum.energies, atol=1e-4)
+    np.testing.assert_allclose(rows[:, 2], data.spectrum.counts, atol=1e-6)
+    np.testing.assert_allclose(rows[:, 3], np.sqrt(data.spectrum.counts), atol=1e-6)
+    keys = [line.split()[0] for line in comments]
+    assert "buffer export" in comments[0]
+    assert {"Data", "Beam", "Geometry", "Conversion", "Detector", "Dose"} <= set(keys)
+    assert not {"Physics", "Sample", "GOF"} & set(keys)
+
+
+@needs_data
+def test_export_writes_raw_counts_under_normalize(session, tmp_path):
+    raw, normalized = tmp_path / "raw.txt", tmp_path / "norm.txt"
+    run(session, f"expo {raw}", "normalize", f"expo {normalized}")
+    np.testing.assert_array_equal(_read_export(raw)[2], _read_export(normalized)[2])
+
+
+@needs_data
+def test_export_csv_is_comma_separated_and_a_bare_name_gets_txt(session, tmp_path):
+    run(session, f"export {tmp_path / 'spectrum.csv'}", f"export {tmp_path / 'spectrum'}")
+
+    _, names, _ = _read_export(tmp_path / "spectrum.csv")
+    assert names == ["channel", "energy_keV", "counts", "error"]
+    assert (tmp_path / "spectrum.txt").exists()
+
+
+@needs_data
+def test_export_of_buffer_0_writes_a_fresh_simulation_and_its_sample(session, tmp_path):
+    sample = _ec_sample(session, tmp_path)
+    out = tmp_path / "sim.txt"
+    run(session, f"sim get {sample}", "compare")
+    stale = session.buffers.get(0).spectrum.counts.copy()
+    session.buffers.active = 0
+    run(session, "sim thick 900 /cm2", f"export {out}")
+
+    comments, _, rows = _read_export(out)
+    fresh = session.simulation().spectrum.counts
+    assert not np.allclose(stale, fresh)
+    np.testing.assert_allclose(rows[:, 2], fresh, atol=1e-6)
+    rows_by_key = {line.split()[0]: line for line in comments}
+    assert rows_by_key["Data"].endswith("buffer 0)")
+    assert rows_by_key["Sample"].endswith("Si [900/cm2]")
+    assert "Physics" in rows_by_key and "Areal" in rows_by_key
+
+
+@needs_data
+def test_export_from_sim_and_pert_stays_at_that_level(session, tmp_path):
+    sample = _ec_sample(session, tmp_path)
+    stack = ["rump"]
+    for line in ("sim", f"get {sample}", f"export {tmp_path / 'a.txt'}"):
+        execute_line(session, line, stack)
+    assert stack == ["rump", "sim"]
+    for line in ("return", "pert", f"export {tmp_path / 'b.txt'}"):
+        execute_line(session, line, stack)
+    assert stack == ["rump", "pert"]
+    assert (tmp_path / "a.txt").exists() and (tmp_path / "b.txt").exists()
+
+
+def test_export_abbreviations_leave_expand_and_exportcmp_alone():
+    from pyrump.shell.commands.rump import TABLE, cmd_expand, cmd_export, cmd_exportcmp
+
+    assert TABLE.match("exp").handler is cmd_expand
+    assert TABLE.match("expo").handler is cmd_export
+    assert TABLE.match("export").handler is cmd_export
+    assert TABLE.match("exportc").handler is cmd_exportcmp
+
+
 def test_newall_leaves_no_active_buffer_for_a_following_pert_go(session, tmp_path):
     """NEWALL must blank buffer 0 too, so a stale simulation left over from
     before the reset can't masquerade as PERT GO's "observed" data."""

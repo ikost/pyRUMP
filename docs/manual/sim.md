@@ -413,4 +413,5 @@ SIM Command: cmp
 ```
 
 [`EXPORTCMP` / `EC`](shell.md#exportcmp-ec-new) writes the same comparison
-to a column file from here too, without leaving SIM.
+to a column file from here too, without leaving SIM, and
+[`EXPORT`](shell.md#export-new) writes the active buffer on its own.

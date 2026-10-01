@@ -47,6 +47,7 @@ from .rump import (
     FIGSAVE_DPI,
     Return,
     cmd_compare,
+    cmd_export,
     cmd_exportcmp,
     cmd_mode,
     describe_topic,
@@ -1089,6 +1090,7 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("EXPORTCMP", 7, cmd_exportcmp,
      "write the active buffer, simulation, difference and GOF as columns"),
     ("EC", -2, cmd_exportcmp, "synonym for EXPORTCMP"),
+    ("EXPORT", 4, cmd_export, "write the active buffer as columns: channel, energy, counts, error"),
 ]
 
 for _name, _minlen, _handler, _help in _ENTRIES:

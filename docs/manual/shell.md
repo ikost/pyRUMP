@@ -271,6 +271,40 @@ Your wish? cmp                  /* check the fit                     */
 Your wish? ec MA8410-fit.csv    /* data, simulation, residuals, GOF  */
 ```
 
+### `EXPORT` `[new]`
+
+```
+usage: EXPORT <file>                             (short: EXPO)
+```
+
+Writes the active buffer on its own as plain columns, for plotting a
+spectrum in another program. It uses the same layout and header as
+[`EXPORTCMP`](#exportcmp-ec-new), with one row per channel:
+
+| column | contents |
+|---|---|
+| `channel` | channel number, as `REGION` and `CURSOR` count them |
+| `energy_keV` | lower edge of the channel |
+| `counts` | the active buffer |
+| `error` | the Poisson error, √counts |
+
+The `#` header records the data file, beam, geometry, calibration, detector
+and dose, and the factor that converts counts to `NORMALIZE`'s
+counts/msr/µC. Values are always raw counts, whatever `NORMALIZE` says.
+
+With buffer 0 active (`POINTAT 0`), `EXPORT` writes the simulation. It is
+recomputed first if the sample changed, and the header adds the physics
+settings and the sample structure, as entered and in 10¹⁵ at/cm².
+
+A `.csv` file is comma-separated and anything else tab-separated; a bare
+filename gets `.txt`. It works at the SIM and PERT levels too. `GET`
+doesn't read the file back: use `WRASCII` for a text spectrum RUMP can
+reopen.
+
+```
+Your wish? export MA8410.csv    /* channel, energy, counts, error    */
+```
+
 ### `PLOT`
 
 ```

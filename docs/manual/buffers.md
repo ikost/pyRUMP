@@ -82,6 +82,10 @@ automatically; `.rbs`/`.RBS` is a footgun rather than a hard error --
 `WRASCII` still writes the file but warns, since `GET` would otherwise
 mistake it for an RC43 macro and refuse it (see [File formats](file-formats.md)).
 
+`[new]` To open a spectrum in Origin, Excel or gnuplot instead, use
+[`EXPORT`](shell.md#export-new). It writes named channel, energy, counts and
+error columns, but `GET` can't read the file back.
+
 #### `GETNRA` / `WRITENRA` `[new]`
 
 ```
