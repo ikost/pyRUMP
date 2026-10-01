@@ -28,8 +28,10 @@ usage: FIGSAVE <file>
 ```
 
 Saves the current plot to an image file (`.png` by default; format follows
-the extension). `HCOPY` is a synonym, the original's own name for the
-command (a literal hard-copy to a plotter, in RUMP's day).
+the extension). Raster formats such as `.png` are written at 300 dpi;
+`.pdf` and `.svg` are vector and scale freely. `HCOPY` is a synonym, the
+original's own name for the command (a literal hard-copy to a plotter, in
+RUMP's day).
 
 #### `REGION`
 

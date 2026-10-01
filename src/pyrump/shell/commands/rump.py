@@ -24,6 +24,11 @@ from .. import plotting
 #: RUMP's own maximum channel count (rumpdata.h: CMAX), used to bound SWALLOW.
 _CMAX = 16384
 
+#: Resolution for FIGSAVE/HCOPY (and PERT's snapshot PNG); matplotlib's
+#: 100 dpi default is too coarse for slides and papers. Vector formats
+#: (.pdf, .svg) ignore it.
+FIGSAVE_DPI = 300
+
 
 class Quit(Exception):
     """Raised by QUIT/BYE to unwind out of the REPL."""
@@ -1108,7 +1113,7 @@ def cmd_figsave(session, args: ArgReader) -> None:
     substitution for that whole display layer (see the module docstring),
     so there is no legacy command to match. The image format is whatever
     matplotlib infers from the extension (``.png`` default, also ``.pdf``,
-    ``.svg``, ...).
+    ``.svg``, ...); raster formats are written at ``FIGSAVE_DPI``.
     """
     path = Path(args.token("an output image file"))
     args.done()
@@ -1116,7 +1121,7 @@ def cmd_figsave(session, args: ArgReader) -> None:
         raise CommandError("nothing plotted yet -- PLOT or COMPARE first")
     if not path.suffix:
         path = path.with_suffix(".png")
-    session.figure.savefig(path)
+    session.figure.savefig(path, dpi=FIGSAVE_DPI)
     print(f"wrote {path}")
 
 

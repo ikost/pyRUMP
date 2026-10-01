@@ -1270,6 +1270,20 @@ def test_figsave_writes_an_image_file(session, tmp_path):
 
 
 @needs_data
+def test_figsave_writes_png_at_300_dpi(session, tmp_path):
+    from matplotlib.image import imread
+    sample = tmp_path / "figsave_dpi.lcm"
+    sample.write_text(
+        "Sim Reset\nLayer 1\n Thick 500 /cm2\n Composition Si 1 /\nMaxpth 200\n"
+    )
+    out = tmp_path / "dpi.png"
+    run(session, f"sim get {sample}", "compare", f"figsave {out}")
+    width_in, height_in = session.figure.get_size_inches()
+    height_px, width_px = imread(out).shape[:2]
+    assert (width_px, height_px) == (round(width_in * 300), round(height_in * 300))
+
+
+@needs_data
 def test_figsave_defaults_to_png_with_no_extension(session, tmp_path):
     sample = tmp_path / "figsave_noext.lcm"
     sample.write_text(

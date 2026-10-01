@@ -43,7 +43,15 @@ from ...fit.windows import MAX_ERROR_WINDOWS, Window, WindowSet
 from ...script.lcm import thickness_label, thickness_mode_views
 from ..dispatch import ArgReader, CommandError, CommandTable
 from .. import plotting
-from .rump import Return, cmd_compare, cmd_exportcmp, cmd_mode, describe_topic, needs_mode
+from .rump import (
+    FIGSAVE_DPI,
+    Return,
+    cmd_compare,
+    cmd_exportcmp,
+    cmd_mode,
+    describe_topic,
+    needs_mode,
+)
 from .sim import describe as _describe_sample
 from .sim import editor_for
 
@@ -1023,7 +1031,7 @@ def cmd_go(session, args: ArgReader) -> None:
         print(f"  wrote {lcm_path}")
 
         png_path = Path(f"{stem}.png")
-        session.figure.savefig(png_path)
+        session.figure.savefig(png_path, dpi=FIGSAVE_DPI)
         print(f"  wrote {png_path}")
 
 
