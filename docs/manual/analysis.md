@@ -27,6 +27,10 @@ usage: ELEMENT el [el ...]
 ```
 
 Prints the expected K, energy and channel of each element's surface edge.
+If a plot is showing, each edge is also ticked along the bottom of the plot
+and labelled with its symbol (`^{A}X` for an isotope such as `28Si`), the
+same kind of marker WHATISIT draws, so peaks can be labelled on the figure.
+Edges outside the current region are skipped.
 
 #### `MATRIX`
 

@@ -1585,9 +1585,10 @@ def cmd_mode(session, args: ArgReader) -> None:
 def cmd_element(session, args: ArgReader) -> None:
     """``ELEMENT el [el ...]`` -- expected energy/channel of each surface edge.
 
-    ``RbsQueryElement``/``RbsKappa`` per element (anlytc.c:208-254); RUMP's
-    optional cursor-driven height marker is dropped -- headless, this command
-    is purely a report.
+    ``RbsQueryElement``/``RbsKappa`` per element (anlytc.c:208-254), each edge
+    then ticked onto the plot if one is showing (see
+    :func:`~pyrump.shell.plotting.mark_element`). RUMP's optional
+    cursor-driven marker height is dropped; the ticks sit on the axis.
     """
     from ...analysis.elements import matrix_result
 
@@ -1598,6 +1599,7 @@ def cmd_element(session, args: ArgReader) -> None:
         raise CommandError("element: expected one or more element names")
 
     buffer = session.buffers.require_active()
+    marks: list[tuple[float, float, str]] = []
     for token in tokens:
         try:
             result = matrix_result(buffer, session.table, session.registry, token)
@@ -1609,9 +1611,15 @@ def cmd_element(session, args: ArgReader) -> None:
             continue
         print(
             f"  {result.symbol:2s}  Z={result.z:2d}  Mass={result.mass:7.3f}"
-            f"  K(ion)={result.k:6.4f}  Energy={result.energy_keV:8.1f} eV"
+            f"  K(ion)={result.k:6.4f}  Energy={result.energy_keV:8.1f} keV"
             f"  Channel={result.channel:8.3f}"
         )
+        # anlytc.c:243-247: an isotope is labelled ^{A}X, a natural element by symbol.
+        label = (f"$^{{{result.mass_number}}}${result.symbol}"
+                 if result.mass_number else result.symbol)
+        marks.append((result.energy_keV, result.channel, label))
+    if marks:
+        plotting.mark_element(session, marks)
 
 
 def cmd_matrix(session, args: ArgReader) -> None:
@@ -1633,7 +1641,7 @@ def cmd_matrix(session, args: ArgReader) -> None:
     if result.height is None:
         raise CommandError(f"matrix: scattering event cannot occur for {result.symbol}")
     print(
-        f"  {result.symbol} expected at {result.energy_keV:8.1f} eV"
+        f"  {result.symbol} expected at {result.energy_keV:8.1f} keV"
         f" ({result.channel:6.1f}) and height {result.height:8.3f}"
     )
     plotting.mark_matrix(
@@ -1662,7 +1670,7 @@ def cmd_whatisit(session, args: ArgReader) -> None:
     for candidate in candidates:
         print(
             f"    {candidate.symbol:2s} (Z={candidate.z:2d})"
-            f"  {candidate.energy_keV:8.1f} eV  channel {candidate.channel:7.2f}"
+            f"  {candidate.energy_keV:8.1f} keV  channel {candidate.channel:7.2f}"
         )
     if not plotting.mark_whatisit(session, candidates, target_keV):
         print("  Plot device not enabled. (LOCATE)")
@@ -1691,7 +1699,7 @@ def cmd_info(session, args: ArgReader) -> None:
         f"  Density: {element.atomic_density:11.4e} at/cc ({density_g_cc:5.2f} g/cc)"
     )
     print(
-        f"Parameters: Energy {buffer.beam.e0_MeV * 1000.0:8.1f} eV"
+        f"Parameters: Energy {buffer.beam.e0_MeV * 1000.0:8.1f} keV"
         f"  Theta{buffer.geometry.theta:6.2f}     Phi{buffer.geometry.phi:7.2f}"
     )
     c = buffer.calibration
@@ -1700,7 +1708,7 @@ def cmd_info(session, args: ArgReader) -> None:
         print("Scattering event cannot occur")
         return
     print(
-        f"Surface Scattering:          {result.k:6.4f} at {result.energy_keV:8.1f} eV"
+        f"Surface Scattering:          {result.k:6.4f} at {result.energy_keV:8.1f} keV"
         f" (Channel: {result.channel:5.1f})"
     )
     if result.height is not None:

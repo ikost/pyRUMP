@@ -453,6 +453,46 @@ def mark_whatisit(session, candidates, target_keV) -> bool:
     return True
 
 
+def mark_element(session, marks) -> bool:
+    """Tick ELEMENT's surface edges along the plot's bottom edge.
+
+    ``RbsMark(MK_TKL, ...)`` (anlytc.c:250): one solid tick per element at its
+    predicted edge, labelled with the symbol, drawn the same way as
+    :func:`mark_whatisit`'s best match. ``marks`` is a sequence of
+    ``(energy_keV, channel, label)``. Ticks alternate between two heights in
+    order along the axis, whatever order the elements were typed in, so
+    labels of close edges don't print on top of each other. The
+    C's optional marker height (a typed value or a cursor pick) is not
+    carried over: the ticks always sit on the axis.
+
+    Draws nothing, silently, when there is no active PLOT/OVERLAY/COMPARE
+    (anlytc.c:250's ``if (PlotSystem...)``), and skips any edge outside the
+    current x range. Returns whether a plot was there to mark. On a COMPARE
+    the ticks go on its top panel.
+    """
+    if not session.traces:
+        return False
+    require_matplotlib()
+    figure, ax = main_axes(session)
+    trans = ax.get_xaxis_transform()
+    low, high = ax.get_xlim()
+    xs = sorted(
+        (energy_keV if session.plot.energy_axis else channel, label)
+        for energy_keV, channel, label in marks
+    )
+    visible = [(x, label) for x, label in xs if low <= x <= high]
+    for row, (x, label) in enumerate(visible):
+        y = 0.05 + 0.05 * (row % 2)
+        ax.plot([x, x], [0.0, y], transform=trans, clip_on=False, color="0.15", lw=1.4)
+        ax.annotate(
+            label, (x, y), xycoords=trans,
+            xytext=(0, 3), textcoords="offset points",
+            ha="center", va="bottom", fontsize="small", fontweight="bold",
+        )
+    show(figure)
+    return True
+
+
 def mark_matrix(session, buffer, energy_keV: float, channel: float, height: float, symbol: str) -> bool:
     """Crosshair MATRIX's predicted point directly onto the plot.
 

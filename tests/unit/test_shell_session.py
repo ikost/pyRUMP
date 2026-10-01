@@ -655,6 +655,41 @@ def test_element_reports_the_surface_edge(session, capsys):
 
 
 @needs_data
+def test_element_labels_its_energy_in_keV(session, capsys):
+    run(session, "element Au")
+    out = capsys.readouterr().out
+    assert " keV  Channel=" in out
+
+
+@needs_data
+def test_element_does_not_mark_with_no_plot_up(session):
+    run(session, "element Si Au")
+    assert session.figure is None
+
+
+@needs_data
+def test_element_ticks_each_edge_on_an_existing_plot(session):
+    # Wide enough to cover both Si (~1130 keV) and Au (~1845 keV) at 2 MeV.
+    wide = make_buffer(channels=64)
+    wide.spectrum.calibration = Calibration(kevch=50.0, npt=64)
+    session.buffers.load(wide, 2)
+    run(session, "plot 2", "element Si Au")
+    ax = session.figure.axes[0]
+    assert {text.get_text() for text in ax.texts} >= {"Si", "Au"}
+    ticks = [line for line in ax.lines if len(line.get_xdata()) == 2]
+    assert len(ticks) == 2
+
+
+@needs_data
+def test_element_labels_an_isotope_with_its_mass_number(session):
+    wide = make_buffer(channels=64)
+    wide.spectrum.calibration = Calibration(kevch=50.0, npt=64)
+    session.buffers.load(wide, 2)
+    run(session, "plot 2", "element 28Si")
+    assert any(text.get_text() == "$^{28}$Si" for text in session.figure.axes[0].texts)
+
+
+@needs_data
 def test_element_rejects_an_unknown_symbol(session):
     with pytest.raises(CommandError, match="unknown element"):
         run(session, "element Xx")
