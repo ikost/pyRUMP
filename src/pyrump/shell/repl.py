@@ -42,12 +42,13 @@ RC_FILE = Path.home() / ".pyrumprc"
 
 def tables_for(mode: str):
     """The command table for a mode name."""
-    from .commands import pert, rump, sim, system
+    from .commands import pert, pixe, rump, sim, system
 
     return {
         "rump": rump.TABLE,
         "sim": sim.TABLE,
         "pert": pert.TABLE,
+        "pixe": pixe.TABLE,
         "system": system.TABLE,
     }[mode]
 
@@ -58,6 +59,8 @@ def prompt_for(session, stack: list[str], plain: bool) -> str:
         return "SIM Command: "
     if mode == "pert":
         return "PERT Command: "
+    if mode == "pixe":
+        return "PIXE Command: "
     return "pyrump> " if plain else random.choice(PROMPTS)
 
 

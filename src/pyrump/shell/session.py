@@ -32,6 +32,8 @@ from ..model.detector import Measurement
 from ..model.geometry import Geometry
 from ..model.spectrum import Calibration, Spectrum
 from ..physics.xsec.rutherford import ScreeningModel
+from ..pixe.data import PixeData
+from ..pixe.detector import DEFAULT_CALIBRATION, PixeDetector
 from ..script.lcm import Script
 from ..sim.engine import Beam
 
@@ -63,6 +65,9 @@ class Buffer:
     #: ``.xnra``), so WRITENRA can keep the SIMNRA settings pyRUMP does not
     #: model. ``None`` for every other source.
     source_xml: bytes | None = None
+    #: The PIXE spectrum measured in the same run, if any (``PIXE GET``, or
+    #: ``PAIR ON``). It shares this buffer's beam, geometry and charge.
+    pixe: PixeData | None = None
 
     @property
     def calibration(self) -> Calibration:
@@ -137,6 +142,7 @@ class Buffer:
                 counts=self.spectrum.counts.copy(), calibration=self.calibration
             ),
             comments=list(self.comments),
+            pixe=self.pixe.copy() if self.pixe is not None else None,
         )
 
     # -- metadata setters -------------------------------------------------
@@ -184,6 +190,8 @@ class Buffer:
             f"   current {m.current_nA:g} nA",
             f"  Total      {self.spectrum.total():.1f} counts",
         ]
+        if self.pixe is not None:
+            lines.append(self.pixe.describe())
         return "\n".join(lines)
 
 
@@ -298,6 +306,8 @@ class BufferSet:
                 lines.append(f"{index:3d}   {mark}   (empty simulation)")
                 continue
             label = buffer.display_path() if buffer.path else (buffer.identifier or "-")
+            if buffer.pixe is not None:
+                label += "  + PIXE"
             lines.append(
                 f"{index:3d}   {mark}  {buffer.n_channels:8d}"
                 f"  {buffer.spectrum.total():12.1f}  {label}"
@@ -404,6 +414,31 @@ class Settings:
 
 
 @dataclass(slots=True)
+class PixeState:
+    """The PIXE sub-processor's settings (:mod:`pyrump.shell.commands.pixe`).
+
+    The measured PIXE spectra themselves live on the buffers
+    (:attr:`Buffer.pixe`); this is what applies to all of them.
+    """
+
+    #: Turned on by entering the PIXE prompt, off by its DISABLE.
+    enabled: bool = False
+    #: Whether reading ``x.RBS`` also loads ``x.PIX`` from the same folder.
+    pair: bool = False
+    detector: PixeDetector = field(default_factory=PixeDetector)
+    #: For a spectrum whose header has no usable calibration.
+    calibration: Calibration = DEFAULT_CALIBRATION
+    #: The PIXE window's energy range in keV (``None``: the whole spectrum),
+    #: and its yield axis -- of :class:`PlotState`, only the yield fields
+    #: (``ylow``, ``yhigh``, ``yscale``) are used.
+    emin: float | None = None
+    emax: float | None = None
+    plot: PlotState = field(default_factory=lambda: PlotState(yscale="log"))
+    #: The PIXE window, separate from the RBS one (:attr:`Session.figure`).
+    figure: object | None = None
+
+
+@dataclass(slots=True)
 class Session:
     """Everything the interactive shell owns.
 
@@ -430,6 +465,8 @@ class Session:
 
     #: PERT state, populated by :mod:`pyrump.shell.commands.pert`.
     pert: object | None = None
+
+    pixe: PixeState = field(default_factory=PixeState)
 
     #: "comp" (classic thickness+stoichiometric ratio) or "atoms" (each
     #: element's own areal density) -- MODE (:mod:`pyrump.shell.commands.rump`),

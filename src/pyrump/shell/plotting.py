@@ -242,6 +242,14 @@ def draw(session) -> None:
 
     figure.tight_layout()
     show(figure)
+    _refresh_pixe(session)
+
+
+def _refresh_pixe(session) -> None:
+    """Keep the PIXE window on the same buffer as the RBS one."""
+    from . import pixe_plotting
+
+    pixe_plotting.refresh(session)
 
 
 def goodness_of_fit(
@@ -327,6 +335,7 @@ def _draw_comparison(session) -> None:
     _apply_limits(top, state)
     session.figure = figure
     show(figure)
+    _refresh_pixe(session)
 
 
 def _interactive(canvas) -> bool:
@@ -373,8 +382,8 @@ def pump(session) -> None:
     what closes the window that the next pump would otherwise reach into.
     """
     global _last_pump
-    figure = session.figure
-    if figure is None:
+    figures = [f for f in (session.figure, session.pixe.figure) if f is not None]
+    if not figures:
         return
     now = time.monotonic()
     if now - _last_pump < PUMP_INTERVAL:
@@ -382,13 +391,14 @@ def pump(session) -> None:
     _last_pump = now
 
     plt = require_matplotlib()
-    if not plt.fignum_exists(figure.number) or not _interactive(figure.canvas):
-        return
-    try:
-        figure.canvas.flush_events()
-    except (AttributeError, NotImplementedError, RuntimeError):  # pragma: no cover
-        # A backend without an event loop, or a window torn down mid-pump.
-        pass
+    for figure in figures:
+        if not plt.fignum_exists(figure.number) or not _interactive(figure.canvas):
+            continue
+        try:
+            figure.canvas.flush_events()
+        except (AttributeError, NotImplementedError, RuntimeError):  # pragma: no cover
+            # A backend without an event loop, or a window torn down mid-pump.
+            pass
 
 
 def show(figure) -> None:

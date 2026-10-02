@@ -314,7 +314,15 @@ def cmd_xeq(session, args: ArgReader) -> None:
 
     path = resolve(args.token("a command file"))
     args.done()
+    before = session.buffers.active_buffer
     execute_file(session, path)
+    # An acquisition macro (RC43's EMPTY/SWALLOW .RBS) that read a new
+    # spectrum: with PAIR ON, its .PIX comes along.
+    after = session.buffers.active_buffer
+    if after is not None and after is not before:
+        from .pixe import pair
+
+        pair(session, after, path)
 
 
 def cmd_echo(session, args: ArgReader) -> None:

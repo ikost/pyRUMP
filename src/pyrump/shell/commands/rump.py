@@ -112,6 +112,9 @@ def read_into_buffer(session, path: Path) -> int:
     slot = session.buffers.scroll_in(buffer)
     session.buffers.active = slot
     session.touch()
+    from .pixe import pair
+
+    pair(session, buffer, path)
     return slot
 
 
@@ -288,6 +291,14 @@ def cmd_pert(session, args: ArgReader) -> None:
         execute_in_pert(session, args)
         return
     raise EnterMode("pert")
+
+
+def cmd_pixe(session, args: ArgReader) -> None:
+    """``PIXE [command]`` -- enter the PIXE sub-processor, turning PIXE on,
+    or run one PIXE command without leaving the RUMP level."""
+    from .pixe import enter
+
+    enter(session, args)
 
 
 def cmd_return(session, args: ArgReader) -> None:
@@ -2078,6 +2089,7 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     # Sub-processors
     ("SIM", 3, cmd_sim, "enter the sample-description editor"),
     ("PERT", 3, cmd_pert, "enter the fitting sub-processor"),
+    ("PIXE", 3, cmd_pixe, "enter the PIXE sub-processor (turns PIXE on)"),
     ("RETURN", 3, cmd_return, "return from a sub-level"),
     # Plotting
     ("PLOT", 2, cmd_plot, "erase and plot a buffer or file"),
@@ -2204,7 +2216,7 @@ TABLE.note_synonym("WRITENRA", "WN")
 _HELP_GROUPS: list[tuple[str, list[str]]] = [
     ("Getting started", ["HELP", "QUIT"]),
     ("Core workflow",
-     ["GET", "SIM", "PERT", "COMPARE", "EXPORTCMP", "EXPORT", "PLOT", "RECALCULATE", "RETURN"]),
+     ["GET", "SIM", "PERT", "PIXE", "COMPARE", "EXPORTCMP", "EXPORT", "PLOT", "RECALCULATE", "RETURN"]),
     ("Plotting & display",
      ["OVERLAY", "REPLOT", "FIGSAVE", "REGION", "COUNTS", "LINEAR", "SQRT",
       "LOG", "NORMALIZE", "RAW", "LABELS", "STRUCTLABEL", "COMPFRAC",
