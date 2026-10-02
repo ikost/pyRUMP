@@ -55,6 +55,7 @@ nav:
       - File formats: manual/file-formats.md
       - SIM — sample editor: manual/sim.md
       - PERT — fitting: manual/pert.md
+      - PIXE — X-ray emission (planned): manual/pixe.md
       - CLI reference: manual/cli.md
       - Config: manual/config.md
       - Sample descriptions & depth profiles: manual/samples.md
