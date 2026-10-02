@@ -868,7 +868,7 @@ def _sample_layers(root: ET.Element, layers: list[XnraLayer], description: str) 
 #: The document a fresh file starts from, following the structure SIMNRA 7.04
 #: itself writes. ``simnraversionnr`` names the SIMNRA release whose layout this
 #: mirrors. Settings pyRUMP has no opinion on use the values SIMNRA saved in
-#: examples/MnPt.xnra.
+#: tests/data/xnra/MnPt.xnra.
 _SKELETON = f"""<?xml version="1.0" encoding="utf-8"?>
 <idf xmlns="{IDF_NS}" xmlns:simnra="{SIMNRA_NS}" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
 <users><user/></users>

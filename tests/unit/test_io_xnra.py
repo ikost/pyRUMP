@@ -1,8 +1,10 @@
 """SIMNRA ``.xnra`` reading and writing, and the GETNRA/WRITENRA commands.
 
-Expected values come from the files themselves: ``examples/MnPt.xnra`` was
-saved by SIMNRA 7.04 from the same measurement as ``examples/MnPt.RBS``, so
-the RUMP header of the one is the known answer for the other.
+Expected values come from the files themselves: ``tests/data/xnra/MnPt.xnra``
+was saved by SIMNRA 7.04 from the same measurement as
+``tests/data/xnra/MnPt.RBS``, so the RUMP header of the one is the known answer
+for the other. The pair is kept here rather than in ``examples/``, whose MnPt
+files are free to move on to newer measurements.
 """
 
 from __future__ import annotations
@@ -40,7 +42,8 @@ from pyrump.shell.session import Buffer, Session  # noqa: E402
 from conftest import data_dir
 
 EXAMPLES = Path(__file__).resolve().parents[2] / "examples"
-MNPT = EXAMPLES / "MnPt.xnra"
+XNRA_DATA = Path(__file__).resolve().parents[1] / "data" / "xnra"
+MNPT = XNRA_DATA / "MnPt.xnra"
 NS = {"i": IDF_NS, "s": SIMNRA_NS}
 
 DATA = data_dir()
@@ -104,7 +107,7 @@ def test_mnpt_sample_layers():
 def test_dose_folds_the_solid_angle_into_the_charge():
     """SIMNRA's fluence is particles x solid angle: MnPt.RBS's 16 uC at
     2.7 msr must come back as the same product at OMEGA 1."""
-    header = _rbs_header(EXAMPLES / "MnPt.RBS")
+    header = _rbs_header(XNRA_DATA / "MnPt.RBS")
     rump_product = float(header["charge"]) * float(header["omega"])
     m = read_xnra(MNPT).spectrum.measurement
     assert m.omega_msr == 1.0
@@ -364,7 +367,7 @@ def test_writenra_from_the_rbs_macro_matches_simnra(session, tmp_path):
     """XEQ MnPt.RBS (RUMP's own header), then WN: the fluence must be the one
     SIMNRA itself computed from the same header."""
     target = tmp_path / "from-rbs.xnra"
-    run(session, f"XEQ {EXAMPLES / 'MnPt.RBS'}", f"WN {target}")
+    run(session, f"XEQ {XNRA_DATA / 'MnPt.RBS'}", f"WN {target}")
     written = float(_raw(target, ".//i:beam/i:beamfluence").text)
     expected = float(_raw(MNPT, ".//i:beam/i:beamfluence").text)
     assert written == pytest.approx(expected)
