@@ -1228,10 +1228,20 @@ def cmd_region(session, args: ArgReader) -> None:
 
 def cmd_expand(session, args: ArgReader) -> None:
     """``EXPAND lo hi`` -- narrow the region to a subset of the current one
-    and replot."""
+    and replot.
+
+    Limits given high-to-low are swapped, as RP_EXPAND's ``OrderPair`` does
+    (aplot.c:334). Everything is checked before the region is stored, so a
+    rejected EXPAND leaves the plot as it was.
+    """
     low = args.integer("the first channel")
     high = args.integer("the last channel")
     args.done()
+    if not session.traces:
+        raise CommandError("EXPAND: nothing plotted yet -- PLOT first, or use REGION")
+    low, high = min(low, high), max(low, high)
+    if high == low:
+        raise CommandError(f"empty region: {low} to {high}")
     current_low = session.plot.low or 0
     current_high = session.plot.high
     if low < current_low or (current_high is not None and high > current_high):

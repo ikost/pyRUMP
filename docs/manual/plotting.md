@@ -39,7 +39,10 @@ RUMP's day).
 usage: REGION lo hi
 ```
 
-Sets the channel range shown.
+Sets the channel range shown. Any range is accepted, so `REGION` zooms in
+and back out. With no plot open, the range is stored and used by the next
+`PLOT`. With no arguments it prints the plot settings, the same as
+`PARAMETERS`.
 
 ```
 Your wish? region 100 400
@@ -51,8 +54,17 @@ Your wish? region 100 400
 usage: EXPAND lo hi
 ```
 
-Narrows the current region and redraws — a `REGION` that's relative to what's
-already shown rather than absolute channel numbers.
+Zooms in on part of the current plot and redraws it. The channel numbers
+are absolute, the same as `REGION`'s, but they must lie inside the range
+already shown: `EXPAND` can only narrow the view. Use `REGION` to widen it
+again. Limits given high-to-low are swapped. `EXPAND` needs a plot to be
+open. If it is rejected, the plot keeps its current range.
+
+`REGION` does everything `EXPAND` does and can also zoom out, so it is the
+one to use in most cases. `EXPAND` is kept for compatibility with RUMP
+macros. In the original it was an interactive tool: with no numbers typed,
+you picked the two limits with the cursor on the plot. pyRUMP has no cursor
+picking, so the channels must always be typed.
 
 #### `COUNTS`
 

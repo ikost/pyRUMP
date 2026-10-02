@@ -152,6 +152,36 @@ def test_region_rejects_an_inverted_range(session):
 
 
 @needs_data
+def test_expand_narrows_the_plotted_region(session):
+    run(session, "plot 1", "expand 10 40")
+    assert (session.plot.low, session.plot.high) == (10, 40)
+
+
+@needs_data
+def test_expand_swaps_limits_given_high_to_low(session):
+    run(session, "plot 1", "expand 40 10")
+    assert (session.plot.low, session.plot.high) == (10, 40)
+
+
+@needs_data
+def test_rejected_expand_leaves_the_region_alone(session):
+    run(session, "plot 1", "region 10 40")
+    with pytest.raises(CommandError, match="subset"):
+        run(session, "expand 5 50")
+    with pytest.raises(CommandError, match="empty region"):
+        run(session, "expand 20 20")
+    assert (session.plot.low, session.plot.high) == (10, 40)
+    run(session, "replot")
+
+
+@needs_data
+def test_expand_with_nothing_plotted_stores_nothing(session):
+    with pytest.raises(CommandError, match="nothing plotted"):
+        run(session, "expand 10 40")
+    assert (session.plot.low, session.plot.high) == (None, None)
+
+
+@needs_data
 def test_yield_scale_commands(session):
     run(session, "sqrt")
     assert session.plot.yscale == "sqrt"
