@@ -26,6 +26,7 @@ from pyrump.io.xnra import (  # noqa: E402
     SIMNRA_NS,
     XnraFormatError,
     XnraLayer,
+    describe_physics,
     exit_angle,
     fluence,
     format_number,
@@ -249,13 +250,72 @@ def test_empty_sample_reads_as_none(tmp_path):
     assert _raw(target, ".//i:nlayers").text == "1"
 
 
-def test_screening_is_written_in_simnra_terms(tmp_path):
+@pytest.mark.parametrize(
+    "screening, written",
+    [
+        (ScreeningModel.NONE, "none"),
+        (ScreeningModel.LECUYER, "Ecuyer"),  # as SIMNRA 7.04 itself writes it
+        (ScreeningModel.ANDERSEN, "Andersen"),
+    ],
+)
+def test_screening_is_written_in_simnra_terms(tmp_path, screening, written):
+    """IDF keeps Rutherford and screening apart: Rutherford is always the
+    default, whatever the screening."""
     buffer = _buffer_from(MNPT)
     target = tmp_path / "screening.xnra"
-    write_xnra(target, buffer, screening=ScreeningModel.NONE, base=buffer.source_xml)
+    notices = write_xnra(target, buffer, screening=screening, base=buffer.source_xml)
     assert _raw(target, ".//i:crosssectiondefault/i:Rutherford").text == "true"
-    notices = write_xnra(target, buffer, screening=ScreeningModel.LECUYER, base=buffer.source_xml)
-    assert any("L'Ecuyer" in n for n in notices)
+    assert _raw(target, ".//i:crosssectiondefault/i:screening").text == written
+    assert notices == []
+    # Read back with the same setting, nothing about cross sections differs.
+    lines = describe_physics(read_xnra(target).physics, screening)
+    assert not any(line.startswith("screening") or "Rutherford" in line for line in lines)
+
+
+def test_a_fresh_file_makes_rutherford_the_default(tmp_path):
+    """With no reaction list, SIMNRA builds its own from the default: it must
+    say Rutherford, or SIMNRA picks non-Rutherford data where it has some."""
+    target = tmp_path / "fresh.xnra"
+    write_xnra(target, Buffer.from_rbs(read_rbs(EXAMPLES / "2A.rbs")))
+    assert _raw(target, ".//i:crosssectiondefault/i:Rutherford").text == "true"
+    assert _raw(target, ".//i:crosssections/i:crosssection") is None
+
+
+def _set_override(rutherford: str):
+    def edit(root):
+        entry = root.find(".//i:crosssections/i:crosssection", NS)
+        entry.find("i:crosssectionoverride/i:Rutherford", NS).text = rutherford
+    return edit
+
+
+def test_simnra_reaction_list_is_rutherford():
+    """SIMNRA's own files say Rutherford is not the default but list every
+    reaction as Rutherford: no cross-section difference to report."""
+    physics = read_xnra(MNPT).physics
+    assert physics["rutherford"] == "false"
+    assert int(physics["reactions"]) == 19
+    lines = describe_physics(physics, ScreeningModel.ANDERSEN)
+    assert not any("Rutherford" in line or line.startswith("screening") for line in lines)
+    assert any("'Andersen'" in line for line in describe_physics(physics, ScreeningModel.LECUYER))
+
+
+def test_non_rutherford_reactions_are_reported(tmp_path):
+    edited = _edited(tmp_path, _set_override("false"))
+    lines = describe_physics(read_xnra(edited).physics, ScreeningModel.ANDERSEN)
+    assert any("non-Rutherford cross sections for 96Ru" in line for line in lines)
+    # WRITENRA keeps SIMNRA's choice, and says so.
+    buffer = _buffer_from(edited)
+    notices = write_xnra(tmp_path / "out.xnra", buffer, base=buffer.source_xml)
+    assert any("96Ru" in n and "not Rutherford" in n for n in notices)
+
+
+def test_no_reaction_list_and_no_rutherford_default_is_reported(tmp_path):
+    def edit(root):
+        for crosssections in root.iter(f"{{{IDF_NS}}}crosssections"):
+            for entry in list(crosssections):
+                crosssections.remove(entry)
+    lines = describe_physics(read_xnra(_edited(tmp_path, edit)).physics, ScreeningModel.ANDERSEN)
+    assert any("chosen by SIMNRA" in line for line in lines)
 
 
 # -- the shell --------------------------------------------------------------

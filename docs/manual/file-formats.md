@@ -160,3 +160,13 @@ when a file uses it:
 
 SIMNRA's own physics choices (stopping tables, straggling model, screening)
 are listed after loading; pyRUMP uses its own.
+
+**Cross sections.** pyRUMP simulates Rutherford cross sections only.
+`WRITENRA` marks Rutherford as the default and writes the screening that
+`SCREENING` selects, under the names SIMNRA uses: `Andersen`, `Ecuyer`
+(L'Ecuyer) or `none`. SIMNRA then sets every reaction to Rutherford when it
+builds its reaction list. If the file came from SIMNRA, its reaction list is
+kept as it is. When the list has non-Rutherford cross sections, for example
+SigmaCalc data for oxygen, `WRITENRA` names those reactions in a warning, and
+SIMNRA's simulation of that file will differ from pyRUMP's. `GETNRA` names
+them too, among SIMNRA's own physics choices.

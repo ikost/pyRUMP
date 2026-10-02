@@ -105,6 +105,15 @@ _GEOMETRY_WRITTEN = {
     GeometryKind.GENERAL: "general",
 }
 
+#: Screening names as SIMNRA 7.04 writes them (IDF: "Andersen, Ecuyer, ...,
+#: or none"), and back.
+_SCREENING_WRITTEN = {
+    ScreeningModel.NONE: "none",
+    ScreeningModel.LECUYER: "Ecuyer",
+    ScreeningModel.ANDERSEN: "Andersen",
+}
+_SCREENING_READ = {name.lower(): model for model, name in _SCREENING_WRITTEN.items()}
+
 #: ``28Si``, ``Si``, ``2D`` -- an optional mass number, then a symbol.
 _NUCLIDE = re.compile(r"^\s*(\d*)\s*([A-Z][a-z]?)\s*$")
 
@@ -538,16 +547,51 @@ def _physics(spectrum: ET.Element) -> dict[str, str]:
     defaults = _find(spectrum, "i:process/i:physicsdefaults")
     if defaults is None:
         return {}
+    total = _total_simulation(spectrum)
+    reactions = [] if total is None else _reactions(total)
     physics = {
         "stopping": _text(defaults, "i:stoppingpowerdefault/i:computercode/i:name"),
         "straggling": _text(defaults, "i:energyspreaddefault/i:energylossstraggling"),
         "screening": _text(defaults, "i:crosssectiondefault/i:screening"),
         "rutherford": _text(defaults, "i:crosssectiondefault/i:Rutherford"),
+        "reactions": str(len(reactions)) if reactions else "",
+        "non-rutherford": ", ".join(name for name, rutherford in reactions if not rutherford),
         "multiple scattering": _text(defaults, "i:energyspreaddefault/i:multiplescattering"),
         "dual scattering": _text(defaults, "s:dualscatteringdefault/s:dualscattering"),
         "pileup": _text(defaults, "s:pileupcalculationdefault/s:pileup"),
     }
     return {key: value for key, value in physics.items() if value}
+
+
+def _total_simulation(spectrum: ET.Element) -> ET.Element | None:
+    for simulation in spectrum.findall("i:process/i:simulations/i:simulation", _NS):
+        if _text(simulation, "i:simulationtype", "total").lower() == "total":
+            return simulation
+    return None
+
+
+def _reactions(simulation: ET.Element) -> list[tuple[str, bool]]:
+    """``(target particle, is Rutherford)`` for each cross section SIMNRA
+    lists for this simulation.
+
+    Only an override with ``Rutherford`` true counts as Rutherford; a file
+    name or tabulated data is SIMNRA's own non-Rutherford choice.
+    """
+    reactions = []
+    for entry in simulation.findall("i:physics/i:crosssections/i:crosssection", _NS):
+        name = _text(entry, "i:reaction/i:initialtargetparticle", "?")
+        reactions.append((name, _boolean(_text(entry, "i:crosssectionoverride/i:Rutherford"))))
+    return reactions
+
+
+def _non_rutherford_notice(simulation: ET.Element) -> list[str]:
+    names = [name for name, rutherford in _reactions(simulation) if not rutherford]
+    if not names:
+        return []
+    return [
+        f"cross sections for {', '.join(names)} are SIMNRA's own, not Rutherford: "
+        "kept as SIMNRA set them, so SIMNRA's simulation will differ from pyRUMP's"
+    ]
 
 
 def describe_physics(physics: dict[str, str], screening: ScreeningModel) -> list[str]:
@@ -557,12 +601,17 @@ def describe_physics(physics: dict[str, str], screening: ScreeningModel) -> list
         lines.append(f"stopping {physics['stopping']!r} (pyRUMP: its own tables)")
     if physics.get("straggling"):
         lines.append(f"straggling {physics['straggling']!r} (pyRUMP: RUMP's own model)")
-    if _boolean(physics.get("rutherford", "false")):
-        simnra_screening, same = "none (pure Rutherford)", screening is ScreeningModel.NONE
-    else:
-        simnra_screening = physics.get("screening", "")
-        same = simnra_screening.lower() == screening.name.lower()
-    if simnra_screening and not same:
+    # Rutherford and screening are independent in IDF. SIMNRA's own files say
+    # Rutherford is not the default but list every reaction as Rutherford, so
+    # the default only matters when there is no list.
+    if physics.get("non-rutherford"):
+        lines.append(f"non-Rutherford cross sections for {physics['non-rutherford']} "
+                     "(pyRUMP: Rutherford)")
+    elif not physics.get("reactions") and not _boolean(physics.get("rutherford", "false")):
+        lines.append("cross sections chosen by SIMNRA, not necessarily Rutherford "
+                     "(pyRUMP: Rutherford)")
+    simnra_screening = physics.get("screening", "")
+    if simnra_screening and _SCREENING_READ.get(simnra_screening.lower()) is not screening:
         lines.append(f"screening {simnra_screening!r} (pyRUMP: {screening.name})")
     for key in ("multiple scattering", "dual scattering", "pileup"):
         if _boolean(physics.get(key, "false")):
@@ -719,8 +768,8 @@ def write_xnra(
     else:
         _simpledata(total, 0, np.zeros(1))
 
-    if screening is not None:
-        notices.extend(_screening(spectrum, screening))
+    _cross_section_defaults(spectrum, screening)
+    notices.extend(_non_rutherford_notice(total))
 
     if layers is not None:
         _sample_layers(root, layers, description)
@@ -803,20 +852,18 @@ def _simpledata(node: ET.Element, first: int, counts: np.ndarray) -> None:
     _set(data, "i:y", " ".join(format_number(v) for v in counts))
 
 
-def _screening(spectrum: ET.Element, screening: ScreeningModel) -> list[str]:
+def _cross_section_defaults(spectrum: ET.Element, screening: ScreeningModel | None) -> None:
+    """Rutherford cross sections by default, with pyRUMP's screening.
+
+    IDF keeps the two apart: ``Rutherford`` says whether Rutherford is the
+    default cross section at all, and ``screening`` which correction goes
+    with it. ``Rutherford`` must be true, or SIMNRA builds its reaction list
+    from non-Rutherford data wherever it has some.
+    """
     defaults = _ensure(spectrum, "i:process/i:physicsdefaults/i:crosssectiondefault")
-    if screening is ScreeningModel.NONE:
-        _set(defaults, "i:Rutherford", "true")
-        return []
-    if screening is ScreeningModel.ANDERSEN:
-        _set(defaults, "i:Rutherford", "false")
-        _set(defaults, "i:screening", "Andersen")
-        return []
-    current = _text(defaults, "i:screening") or "(unset)"
-    return [
-        f"screening: SIMNRA's name for L'Ecuyer is not known, so the file keeps "
-        f"{current!r}"
-    ]
+    _set(defaults, "i:Rutherford", "true")
+    if screening is not None:
+        _set(defaults, "i:screening", _SCREENING_WRITTEN[screening])
 
 
 def _sample_layers(root: ET.Element, layers: list[XnraLayer], description: str) -> None:
@@ -950,7 +997,7 @@ _SKELETON = f"""<?xml version="1.0" encoding="utf-8"?>
 <process>
 <physicsdefaults>
 <crosssectiondefault>
-<Rutherford>false</Rutherford>
+<Rutherford>true</Rutherford>
 <screening>Andersen</screening>
 <simnra:isotopes>true</simnra:isotopes>
 </crosssectiondefault>
