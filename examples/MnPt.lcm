@@ -1,16 +1,13 @@
 Sim Reset
 Layer 1
- Thick 40 A
+ Thick 40.0151 A
  Composition Ru 1 /
 Next
- Thick 331.162 A
- Composition Mn 2.73495 Pt 1 /
+ Thick 291.275 A
+ Composition Mn 2.82931 Pt 1 /
 Next
- Thick 40 A
+ Thick 38.4223 A
  Composition Ru 1 /
-Next
- Thick 330 A
- Composition Si 1 O 2 /
 Next
  Thick 1000 nm
  Composition Si 1 /

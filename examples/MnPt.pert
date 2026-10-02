@@ -1,5 +1,10 @@
-window 800 1200
+window 400 1200
+fwhm
+correction
 kev(0)
+thickness 1
 thickness 2
+thickness 3
 composition 2 Mn
-fwhm 18 25
+kev/ch
+thickness 4
