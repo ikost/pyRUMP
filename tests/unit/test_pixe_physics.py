@@ -188,6 +188,39 @@ def test_substrate_and_absorber_layers_make_no_lines(tables):
     assert all(set(line.by_layer) == {1} for line in lines)
 
 
+@needs_data
+def test_a_thick_substrate_saturates_where_the_beam_stops(tables):
+    """1.9 MeV 4He gets about 4 µm into Si before its cross sections are
+    negligible: a SIM substrate of 4 or 8 µm gives the same Si K (and no
+    error for the part the beam never reaches with useful energy)."""
+    table, registry = tables
+
+    def si_k(substrate_thickness):
+        sample = _film(table, [("Mn", 50.0)])
+        sample.thicknesses[-1] = substrate_thickness
+        lines = simulate_lines(sample, HELIUM, 9.0, PixeDetector(), Exposure(charge_uC=10.0),
+                               registry, table, include_substrate=True)
+        return sum(l.counts for l in lines if l.symbol == "Si" and l.line.shell == "K")
+
+    thin, four, eight = si_k(2000.0), si_k(20000.0), si_k(40000.0)
+    assert thin < 0.5 * four
+    assert eight == pytest.approx(four, rel=0.02)
+
+
+@needs_data
+def test_substrate_lines_only_when_included(tables):
+    table, registry = tables
+    sample = _film(table, [("Ti", 50.0)], substrate="Cu")
+
+    def symbols(include):
+        return {l.symbol for l in simulate_lines(sample, PROTON, 0.0, PixeDetector(),
+                                                 Exposure(charge_uC=1.0), registry, table,
+                                                 include_substrate=include)}
+
+    assert symbols(False) == {"Ti"}
+    assert symbols(True) == {"Ti", "Cu"}
+
+
 # -- the detector response ----------------------------------------------------
 
 

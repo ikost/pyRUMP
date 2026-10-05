@@ -23,10 +23,16 @@ mass attenuation coefficient at the line energy (mixture rule),
 second factor of :math:`A` is the exact self-absorption of a uniform slab.
 For a truly thin film :math:`A \to 1` and :math:`\bar E_k \to E_0`.
 
+The **substrate** -- the last SIM layer -- is included or not
+(``include_substrate``). Included, it counts with the thickness SIM gives
+it, like any other layer, as far as the beam gets: where the beam has slowed
+below the cross-section tables (0.1 MeV for protons, 0.2 MeV for 4He) the
+rest is dropped, its cross sections being orders of magnitude down by then.
+For 1.9 MeV 4He in Si that is about 4 µm; a thicker SIM substrate changes
+nothing. Left out, its peaks are expected from a measured background.
+
 What is left out, on purpose:
 
-* **the substrate** -- the last SIM layer. Its peaks come from the measured
-  bare-substrate spectrum, not from this sum;
 * **RBS absorber layers** -- foils in front of the RBS detector, which the
   beam never crosses;
 * **roughness** (``FUZZ``): the slabs are flat.
@@ -172,6 +178,7 @@ def simulate_lines(
     registry,
     periodic_table,
     *,
+    include_substrate: bool = False,
     atomic: AtomicData | None = None,
     faithful: bool = True,
 ) -> list[LineYield]:
@@ -208,18 +215,24 @@ def simulate_lines(
         faithful=faithful,
     )
 
-    # Film slabs: past the absorber, before the substrate, reached by the beam.
+    # The slabs that count: past the absorber, reached by the beam, and --
+    # unless it is included -- before the substrate.
     substrate = int(grid.layer_index.max())
     film = np.arange(first, min(inbound.reached, grid.n_slab))
-    film = film[grid.layer_index[film] != substrate]
-    if film.size == 0:
-        return []
+    in_substrate = grid.layer_index[film] == substrate
+    if not include_substrate:
+        film, in_substrate = film[~in_substrate], in_substrate[~in_substrate]
     mean_energy_MeV = 0.5e-3 * (inbound.energy[film] + inbound.energy[film + 1])
-    if mean_energy_MeV.min() < ionisation.e_min:
+    below = mean_energy_MeV < ionisation.e_min
+    if np.any(below & ~in_substrate):
         raise ValueError(
             f"the beam slows below {ionisation.e_min:g} MeV inside the film, "
             "under the cross-section tables"
         )
+    # In the substrate, that is where the X-rays effectively stop.
+    film, mean_energy_MeV = film[~below], mean_energy_MeV[~below]
+    if film.size == 0:
+        return []
 
     # Mass thickness and mass fractions of each film slab.
     masses = np.array([periodic_table.by_z(z).mass for z in grid.element_z])

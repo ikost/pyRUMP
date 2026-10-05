@@ -43,7 +43,8 @@ def simulate(session) -> PixeSpectrum | None:
     sample = to_sample(session.script, session.table, session.densities)
     lines = simulate_lines(
         sample, buffer.beam, buffer.geometry.theta, state.detector, exposure,
-        session.registry, session.table, faithful=session.settings.faithful,
+        session.registry, session.table, include_substrate=state.substrate,
+        faithful=session.settings.faithful,
     )
     calibration = data.calibration if data is not None else state.calibration
     return synthesize(lines, calibration, state.detector, escape=state.escape)
