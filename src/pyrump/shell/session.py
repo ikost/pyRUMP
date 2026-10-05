@@ -479,6 +479,16 @@ class Session:
     #: Set when the sample or the active buffer's parameters change; buffer 0
     #: is recomputed on next use. RUMP has no explicit "simulate" command.
     dirty: bool = True
+    #: Set alongside :attr:`dirty`, but cleared only once the simulation
+    #: curves on the plot have been brought up to date
+    #: (:func:`~pyrump.shell.plotting.follow_simulation`).
+    sim_changed: bool = False
+    #: LIVE: redraw those curves after every command that changes the sample
+    #: or a simulation setting. A pyRUMP addition, on by default.
+    live: bool = True
+    #: The last error from that redraw, so a broken sample is reported once,
+    #: not after every command.
+    sim_error: str | None = None
 
     #: PERT state, populated by :mod:`pyrump.shell.commands.pert`.
     pert: object | None = None
@@ -549,6 +559,7 @@ class Session:
     def touch(self) -> None:
         """Mark the simulation stale -- the RBS one and the PIXE one."""
         self.dirty = True
+        self.sim_changed = True
         self.pixe.cache = None
 
     # -- the implicit simulation ------------------------------------------

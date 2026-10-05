@@ -78,7 +78,8 @@ buffers, the PIXE spectrum where the RBS window shows the RBS one:
 
 A buffer with no PIXE spectrum is named in the PIXE window ("buffer 2: no
 PIXE spectrum") rather than left out silently. Reading data (`GET`, `XEQ`
-with `PAIR ON`, `PIXE GET`) and changing a PIXE setting only update a PIXE
+with `PAIR ON`, `PIXE GET`), changing a PIXE setting and — with
+[`LIVE`](plotting.md#live-new) on — changing the sample only update a PIXE
 window that is already open; they never open one.
 
 Inside the PIXE prompt, `PLOT [buffer]` (`PLOT 0`: the simulation) and

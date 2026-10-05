@@ -977,7 +977,10 @@ def cmd_overlay(session, args: ArgReader) -> None:
 
 
 def cmd_replot(session, args: ArgReader) -> None:
+    """``REPLOT`` -- redraw the current plot, bringing any simulation on it
+    up to date with the sample first (even with LIVE off)."""
     args.done()
+    plotting.update_simulations(session)
     plotting.draw(session)
 
 
@@ -1404,6 +1407,7 @@ def cmd_screening(session, args: ArgReader) -> None:
 def cmd_parms(session, args: ArgReader) -> None:
     args.done()
     print(session.plot.describe())
+    print(f"  Live       {'on' if session.live else 'off'}")
     # LexSystem's U_PARM case prints the working directory too (system.c:312).
     print(f"  Directory  {Path.cwd()}")
     if session.log_file is not None:

@@ -252,6 +252,96 @@ def _refresh_pixe(session) -> None:
     pixe_plotting.follow(session)
 
 
+# -- keeping the simulation curves current ---------------------------------------
+
+
+def is_open(session) -> bool:
+    """Whether the RBS window is on screen (not closed by hand)."""
+    figure = session.figure
+    return figure is not None and require_matplotlib().fignum_exists(figure.number)
+
+
+def simulation_for(session, key):
+    """The simulation a trace filed under ``key`` shows: the full one for
+    ``0`` (buffer 0, cached until the sample changes), or a selective SPLOT's
+    ``"splot:element:<symbol>"`` / ``"splot:layer:<n>"``, computed afresh.
+    ``None`` when that element or layer is no longer in the sample."""
+    if not isinstance(key, str):
+        return session.simulation()
+    kind, _, which = key.removeprefix("splot:").partition(":")
+    if kind == "element":
+        z = session.table.by_symbol(which).z
+        if z not in {session.table.by_symbol(s).z for s in session.script.elements}:
+            return None
+        return session.selective_simulation(element_z=z, label=f"SIM({which})")
+    layer = int(which)
+    if not 1 <= layer <= len(session.script.layers):
+        return None
+    return session.selective_simulation(layer=layer - 1, label=f"SIM(layer {layer})")
+
+
+def update_simulations(session) -> bool:
+    """Recompute every simulation curve on the plot (the full simulation and
+    any selective SPLOTs) against the current sample and settings. Returns
+    whether anything changed.
+
+    A SPLOT whose element or layer has gone is dropped, with a note. A
+    simulation that fails is reported once and leaves the curves as they
+    were -- the plot is never broken by it.
+    """
+    traces = []
+    changed = False
+    try:
+        for trace in session.traces:
+            if trace.index != 0 or trace.key == COMPARE_DATA:
+                traces.append(trace)
+                continue
+            buffer = simulation_for(session, trace.key)
+            if buffer is None:
+                print(f"  SPLOT {trace.key.rsplit(':', 1)[1]} removed: no longer in the sample")
+                changed = True
+                continue
+            if buffer is not trace.buffer:
+                trace = Trace(buffer=buffer, label=buffer_label(session, buffer, 0),
+                              index=0, key=trace.key)
+                changed = True
+            traces.append(trace)
+    except (KeyError, ValueError) as error:
+        message = str(error).strip("'")
+        if message != session.sim_error:
+            print(f"  simulation: {message}")
+            session.sim_error = message
+        return False
+    session.sim_error = None
+    session.traces = traces
+    return changed
+
+
+def follow_simulation(session) -> None:
+    """After a command (a whole XEQ counting as one): if it changed the
+    sample or a simulation setting, bring the simulation curves on the RBS
+    plot up to date and redraw it -- which brings the PIXE window along --
+    while LIVE is on. Neither window is ever opened by this.
+
+    With LIVE off the change is remembered, so turning LIVE back on catches
+    the plot up at once.
+    """
+    if not (session.live and session.sim_changed):
+        return
+    session.sim_changed = False
+    try:
+        if session.traces and is_open(session) and update_simulations(session):
+            draw(session)
+        elif session.pixe.cache is None:
+            # Nothing redrawn since the change: the PIXE window catches up on
+            # its own (a no-op unless it is open).
+            from . import pixe_plotting
+
+            pixe_plotting.refresh(session)
+    except CommandError as error:
+        print(f"  redraw: {error}")
+
+
 def goodness_of_fit(
     session, data, theory, n_channels: int, region: tuple[int, int], *, raw: bool = False
 ) -> str:

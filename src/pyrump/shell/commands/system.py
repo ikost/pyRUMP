@@ -333,6 +333,21 @@ def cmd_echo(session, args: ArgReader) -> None:
     print(f"echo {'on' if session.echo else 'off'}")
 
 
+def cmd_live(session, args: ArgReader) -> None:
+    """``LIVE [off]`` -- redraw the simulation on the plot (and in the PIXE
+    window) after every command that changes the sample or a simulation
+    setting. On by default; a pyRUMP addition. Here rather than at RUMP's
+    level so it can be typed at the SIM or PERT prompt without leaving it.
+
+    Turning it back on brings the plot up to date at once. Like AUTOCMP, a
+    standing preference: set it from ``~/.pyrumprc``; SAVE does not write it.
+    """
+    token = args.optional()
+    args.done()
+    session.live = True if token is None else token.lower() not in ("off", "no", "0")
+    print(f"live {'on' if session.live else 'off'}")
+
+
 def cmd_quiet(session, args: ArgReader) -> None:
     """``QUIET`` is the C's off-synonym for ECHO (system.c:203)."""
     args.done()
@@ -406,6 +421,8 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("SCRIPT", 6, cmd_script, "record commands to a file for replay"),
     ("LOGFILE", -4, cmd_script, "record commands to a file"),
     ("RECORD", -3, cmd_script, "record commands to a file"),
+    # Plot
+    ("LIVE", 4, cmd_live, "redraw the simulation as the sample changes (LIVE OFF to stop)"),
 ]
 
 for _name_, _minlen, _handler, _help in _ENTRIES:

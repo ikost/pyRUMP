@@ -91,7 +91,22 @@ def execute_line(session: Session, line: str, stack: list[str]) -> None:
     automatic return from SIM and PERT -- and finally to the general system
     commands, which run in place without changing the stack (see the note
     below).
+
+    A line typed at the prompt -- not one inside a macro, so a whole XEQ
+    counts as one -- ends by redrawing the simulation if it changed (LIVE,
+    :func:`~pyrump.shell.plotting.follow_simulation`), even if it failed
+    part-way.
     """
+    try:
+        _execute_line(session, line, stack)
+    finally:
+        if session.xeq_depth == 0:
+            from . import plotting
+
+            plotting.follow_simulation(session)
+
+
+def _execute_line(session: Session, line: str, stack: list[str]) -> None:
     text = strip_comment(line)
     if not text:
         return
@@ -471,6 +486,11 @@ def run_shell(
             return 0
         if batch:
             return 0
+        # The macro ran at XEQ depth, so its lines never redrew: catch the
+        # plot up before the first prompt, as an XEQ typed there would.
+        from . import plotting
+
+        plotting.follow_simulation(session)
 
     _setup_readline(session, stack)
     try:

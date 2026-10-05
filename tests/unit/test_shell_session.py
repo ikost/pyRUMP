@@ -1775,3 +1775,148 @@ def test_compare_shows_its_cmp_synonym_at_every_level():
     for table in (RUMP_TABLE, SIM_TABLE, PERT_TABLE):
         assert table.match("COMPARE").display == "COMPARE / CMP"
         assert table.match("COMP") is None or table.match("COMP").name != "COMPARE"
+
+
+# -- LIVE: the simulation on the plot follows the sample -------------------------
+
+
+def _live_sample(session, tmp_path, text: str = _SPLOT_SAMPLE) -> None:
+    # Wide enough to catch the edges (see the SPLOT tests above).
+    session.buffers.get(1).spectrum.calibration = Calibration(kevch=50.0, npt=64)
+    sample = tmp_path / "live.lcm"
+    sample.write_text(text)
+    run(session, f"sim get {sample}")
+
+
+def _drawn(session, label: str) -> np.ndarray:
+    """The y data of the curve labelled ``label`` on the (top) plot panel."""
+    handles, labels = session.figure.axes[0].get_legend_handles_labels()
+    return np.asarray(handles[labels.index(label)].get_ydata()).copy()
+
+
+@needs_data
+def test_live_redraws_the_simulation_after_a_sim_edit(session, tmp_path):
+    _live_sample(session, tmp_path)
+    run(session, "plot 0")
+    before = _drawn(session, "SIM")
+
+    run(session, "sim", "layer 1", "thick 60 A")
+
+    assert session.traces[0].buffer is session.buffers.get(0)
+    assert not np.array_equal(_drawn(session, "SIM"), before)
+
+
+@needs_data
+def test_live_keeps_the_comparison_and_updates_its_residuals(session, tmp_path):
+    _live_sample(session, tmp_path, _COMPARE_SAMPLE)
+    run(session, "compare")
+
+    def chi_square_text():
+        return [t.get_text() for t in session.figure.axes[1].texts if "chi-square" in t.get_text()]
+
+    before = chi_square_text()
+
+    run(session, "sim", "layer 1", "thick 60 A")
+
+    assert len(session.figure.axes) == 2
+    assert session.traces[1].buffer is session.buffers.get(0)
+    assert chi_square_text() != before
+
+
+@needs_data
+def test_live_recomputes_once_for_a_whole_xeq(session, tmp_path, monkeypatch):
+    import pyrump.sim.engine as engine
+
+    _live_sample(session, tmp_path)
+    run(session, "plot 0")
+    calls = []
+    real = engine.simulate
+    monkeypatch.setattr(engine, "simulate", lambda *a, **k: calls.append(1) or real(*a, **k))
+    macro = tmp_path / "edits.cmd"
+    macro.write_text("sim\nlayer 1\nthick 40 A\nthick 50 A\nthick 60 A\nreturn\n")
+
+    run(session, f"xeq {macro}")
+
+    assert len(calls) == 1
+    assert session.traces[0].buffer is session.buffers.get(0)
+
+
+@needs_data
+def test_live_recomputes_splot_curves_and_drops_a_vanished_element(session, tmp_path, capsys):
+    _live_sample(session, tmp_path)
+    run(session, "plot 1", "sim splot Mn", "sim splot 1")
+    layer_before = _drawn(session, "SIM(layer 1)")
+
+    run(session, "sim", "layer 1", "thick 60 A")
+    assert not np.array_equal(_drawn(session, "SIM(layer 1)"), layer_before)
+
+    capsys.readouterr()
+    run(session, "sim", "layer 2", "composition Pt 1 /")
+    labels = session.figure.axes[0].get_legend_handles_labels()[1]
+    assert labels == ["test", "SIM(layer 1)"]
+    assert "SPLOT Mn removed" in capsys.readouterr().out
+
+
+@needs_data
+def test_live_never_reopens_a_closed_window(session, tmp_path):
+    import matplotlib.pyplot as plt
+
+    _live_sample(session, tmp_path)
+    run(session, "plot 0")
+    plt.close(session.figure)
+    open_before = plt.get_fignums()
+
+    run(session, "sim", "layer 1", "thick 60 A")
+
+    assert plt.get_fignums() == open_before
+
+
+@needs_data
+def test_live_off_leaves_the_plot_until_live_is_back_on(session, tmp_path, capsys):
+    _live_sample(session, tmp_path)
+    run(session, "plot 0", "live off")
+    assert "live off" in capsys.readouterr().out
+    shown = session.traces[0].buffer
+
+    run(session, "sim", "layer 1", "thick 60 A")
+    assert session.traces[0].buffer is shown
+
+    run(session, "live")
+    assert session.traces[0].buffer is session.buffers.get(0)
+    assert session.traces[0].buffer is not shown
+
+
+@needs_data
+def test_live_works_at_the_sim_prompt_without_leaving_it(session, tmp_path):
+    stack = ["rump"]
+    for line in ("sim", "live off"):
+        execute_line(session, line, stack)
+    assert stack == ["rump", "sim"]
+    assert session.live is False
+
+
+@needs_data
+def test_replot_brings_the_simulation_up_to_date_even_with_live_off(session, tmp_path):
+    _live_sample(session, tmp_path)
+    run(session, "live off", "plot 0")
+    before = _drawn(session, "SIM")
+    run(session, "sim", "layer 1", "thick 60 A")
+    assert np.array_equal(_drawn(session, "SIM"), before)
+
+    run(session, "replot")
+
+    assert session.traces[0].buffer is session.buffers.get(0)
+    assert not np.array_equal(_drawn(session, "SIM"), before)
+
+
+@needs_data
+def test_live_reports_a_broken_sample_once_and_keeps_the_plot(session, tmp_path, capsys):
+    _live_sample(session, tmp_path)
+    run(session, "plot 0")
+    before = _drawn(session, "SIM")
+    capsys.readouterr()
+
+    run(session, "sim", "reset", "reset")
+
+    assert capsys.readouterr().out.count("simulation: no sample described") == 1
+    assert np.array_equal(_drawn(session, "SIM"), before)

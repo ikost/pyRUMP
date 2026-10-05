@@ -295,6 +295,26 @@ def test_settings_redraw_an_open_window_with_a_fresh_simulation(session):
     assert np.max(_sim_curve(session).get_ydata()) == pytest.approx(4 * before, rel=1e-3)
 
 
+
+def test_a_sim_edit_redraws_the_pixe_window_on_its_own(session):
+    """LIVE: the PIXE prompt's own PLOT 0, with no RBS window open."""
+    run(session, f"sim get {EXAMPLES / 'MnPt.lcm'}", f"pixe get {EXAMPLES / 'MnPt.PIX'}",
+        "pixe", "plot 0")
+    before = _sim_curve(session).get_ydata().copy()
+    run(session, "sim", "layer 2", "thick 600 A")
+    assert session.figure is None
+    assert not np.array_equal(_sim_curve(session).get_ydata(), before)
+
+
+def test_a_sim_edit_redraws_both_windows(session):
+    """LIVE: the RBS window redraws, and the PIXE window follows it."""
+    run(session, f"sim get {EXAMPLES / 'MnPt.lcm'}", f"pixe get {EXAMPLES / 'MnPt.PIX'}",
+        "pixe", "return", "plot 0")
+    before = _sim_curve(session).get_ydata().copy()
+    run(session, "sim", "layer 2", "thick 600 A")
+    assert session.traces[0].buffer is session.buffers.get(0)
+    assert not np.array_equal(_sim_curve(session).get_ydata(), before)
+
 def test_region_is_in_channels_with_energy_below_and_channels_on_top(session):
     stack = run(session, f"pixe get {EXAMPLES / 'MnPt.PIX'}", "pixe", "plot", "region 1200 50")
     assert (session.pixe.low, session.pixe.high) == (50, 1200)

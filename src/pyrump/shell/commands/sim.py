@@ -386,22 +386,15 @@ def cmd_splot(session, args: ArgReader) -> None:
                 element = session.table.by_symbol(token)
             except KeyError:
                 raise CommandError(f"splot: {token!r} is not a known element") from None
-            in_target = {session.table.by_symbol(s).z for s in session.script.elements}
-            if element.z not in in_target:
-                raise CommandError(
-                    f"splot: element {element.symbol} does not exist in target"
-                )
-            buffer = session.selective_simulation(
-                element_z=element.z, label=f"SIM({element.symbol})"
-            )
             key = f"splot:element:{element.symbol}"
+            missing = f"splot: element {element.symbol} does not exist in target"
         else:
-            if not 1 <= layer <= len(session.script.layers):
-                raise CommandError(f"splot: layer {layer} doesn't exist")
-            buffer = session.selective_simulation(
-                layer=layer - 1, label=f"SIM(layer {layer})"
-            )
             key = f"splot:layer:{layer}"
+            missing = f"splot: layer {layer} doesn't exist"
+        # The same lookup LIVE redraws the curve with (plotting.simulation_for).
+        buffer = plotting.simulation_for(session, key)
+        if buffer is None:
+            raise CommandError(missing)
     plotting.add_trace(session, 0, buffer, clear=False, replace=True, key=key)
     plotting.draw(session)
 

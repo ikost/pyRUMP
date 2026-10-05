@@ -2,7 +2,9 @@
 
 `SIM` edits the sample description: the stack of layers that buffer 0 (the
 simulation) is computed from, and that [`PERT`](pert.md) fits. It is not a
-"simulate" command — buffer 0 recomputes itself whenever the sample changes.
+"simulate" command — buffer 0 recomputes itself whenever the sample changes,
+and a simulation already on the plot is redrawn after each edit (see
+[`LIVE`](plotting.md#live-new)).
 
 `SIM` opens its own `SIM Command:` prompt. A command SIM does not recognise
 is passed to the RUMP level, which also takes you back there. From the RUMP

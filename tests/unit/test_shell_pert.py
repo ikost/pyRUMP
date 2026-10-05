@@ -1256,3 +1256,34 @@ def test_thickness_write_back_preserves_the_unit(session):
     run(session, "pert", "window 355 375", "norm 140 200", "thick 1", "go")
     # The script keeps magnitude + unit; only the magnitude should move.
     assert session.script.layers[0].unit == "/cm2"
+
+
+# -- LIVE --------------------------------------------------------------------
+
+
+@needs_data
+def test_go_shows_the_fitted_simulation_on_the_plot(session):
+    """With AUTOCMP off, LIVE still brings the simulation already on the
+    plot up to date with the fitted sample once GO is done."""
+    run(session, "plot 1", "overlay 0")
+    guess = session.traces[1].buffer
+
+    run(session, "pert", "window 355 375", "norm 140 200", "thick 1", "go")
+
+    assert session.traces[1].buffer is session.buffers.get(0)
+    assert not np.array_equal(session.traces[1].buffer.spectrum.counts, guess.spectrum.counts)
+
+
+@needs_data
+def test_go_with_autocmp_draws_the_comparison_only_once(session, monkeypatch):
+    """AUTOCMP's COMPARE already shows the fitted simulation, so LIVE has
+    nothing left to redraw."""
+    from pyrump.shell import plotting
+
+    draws = []
+    real = plotting.draw
+    monkeypatch.setattr(plotting, "draw", lambda s: draws.append(1) or real(s))
+
+    run(session, "pert", "window 355 375", "norm 140 200", "thick 1", "autocmp", "go")
+
+    assert len(draws) == 1

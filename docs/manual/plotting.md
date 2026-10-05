@@ -18,8 +18,48 @@ Your wish? overlay 0            /* add the simulation on top          */
 
 #### `REPLOT`
 
-Redraws the current plot, unchanged — useful after resizing the window or
-after a setting that doesn't redraw on its own.
+Redraws the current plot — useful after resizing the window or after a
+setting that doesn't redraw on its own. Any simulation on it is brought up
+to date with the sample first, even with `LIVE OFF`.
+
+#### `LIVE` `[new]`
+
+```
+usage: LIVE [off]
+```
+
+Keeps the simulation on the plot current. After every command that changes
+the sample (any `SIM` edit, `SIM GET`, a `PERT` fit) or something the
+simulation depends on (`MEV`, `THETA`, `FAITHFUL`, `SCREENING`, ...), the
+simulation curves already on the plot are recomputed and the window
+redrawn. This covers `PLOT 0`, `OVERLAY 0`, the simulation in a `COMPARE`
+(with its residuals and chi-square) and each `SIM SPLOT` element or layer.
+A `SPLOT` whose element or layer is no longer in the sample is dropped,
+with a note. On by default.
+
+* It **never opens a window**: with nothing plotted, or the window closed,
+  it does nothing.
+* An `XEQ` macro counts as one command, so a macro of twenty `SIM` edits
+  recomputes once, at the end.
+* `PERT`'s `GO` is not slowed down: the plot is redrawn once, with the
+  fitted sample, after the fit.
+* A sample that can't be simulated (all its layers deleted, say) is
+  reported once, and the plot is left as it was.
+* With [PIXE](pixe.md) enabled, the PIXE window follows too.
+
+Each redraw costs a fresh simulation (one more for each `SPLOT` curve, and
+the PIXE one), so for a slow sample turn it off with `LIVE OFF` and redraw
+with `REPLOT` when you want to see it. `LIVE` works at any prompt without
+leaving it. It is a standing preference, like `AUTOCMP`: put `LIVE OFF` in
+`~/.pyrumprc` to keep it off; `SAVE` does not write it.
+
+```
+SIM Command: live off
+live off
+SIM Command: thick 60 A         /* the plot stays as it is            */
+SIM Command: live               /* ...and catches up now              */
+live on
+```
 
 #### `FIGSAVE` / `HCOPY`
 
