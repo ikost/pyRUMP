@@ -10,8 +10,7 @@
     defaults; reading Oxford `.PIX` files; the PIXE window mirroring the
     RBS one (PLOT, OVERLAY, SPLOT, COMPARE with residuals), with markers
     for the sample's lines and the **simulated film spectrum** (K and L
-    lines of the film and the substrate, with `H`, `ESCAPE`, `SUBSTRATE`
-    and `LINES`); the
+    lines of the film and the substrate, with `H`, `ESCAPE` and `LINES`); the
     X-ray atomic data and the ECPSSR K/L cross sections. **Not yet:** M-shell
     cross sections (so no Pt/Au/W M lines in the simulation), the
     bare-substrate background, and fitting.
@@ -26,8 +25,9 @@ Scope of the first version:
 
 * **Beams:** protons and ⁴He at a few MeV.
 * **Samples:** thin films (one or more layers) on a substrate, as described
-  in [SIM](sim.md). The film peaks are simulated; the substrate and the
-  continuum come from a measured **bare-substrate spectrum**.
+  in [SIM](sim.md). The peaks of the films and the substrate are
+  simulated; the continuum is still to come — fitted, or taken from a
+  measured reference spectrum.
 * **Lines:** K, L and M lines of the film elements.
 * **Absolute scale:** an instrumental constant **H** for each shell (K, L,
   M), as in GUPIX.
@@ -261,7 +261,7 @@ Commands marked † are not implemented yet.
 | Detector | `WINDOW <element\|MYLAR\|KAPTON> <µm>`, `CRYSTAL <element> <µm>`, `FWHM <eV>`, `FANO <F>`, `DEADLAYER <µm>` †, `ESCAPE ON\|OFF`, `TAIL ON\|OFF` † |
 | Absorbers | `FILTER <element\|MYLAR\|KAPTON> <µm> [<hole %>]`, `FILTER CLEAR` |
 | Calibration | `CALIB <gain keV/ch> <offset keV>`, `H <K> <L> <M>` or `H K\|L\|M <value>` |
-| Simulation | `SUBSTRATE ON\|OFF` (include the last SIM layer), `LINES [ALL]` (table of lines, energies, cross sections, efficiency and counts), `EXCLUDE <element>` †, `INCLUDE <element>` † |
+| Simulation | `LINES [ALL]` (table of lines, energies, cross sections, efficiency and counts), `EXCLUDE <element>` †, `INCLUDE <element>` † |
 | Background | `BGSCALE <s>` †, `SMOOTH <channels>` † |
 | Plot | `PLOT [buffer]`, `COMPARE` / `CMP`, `REGION <channel> <channel>` / `REGION ALL`, `COUNTS <low> <high>` / `COUNTS ALL`, `LOG`/`LINEAR`/`SQRT`, `MARKERS ON\|ALL\|OFF`, `FIGSAVE <file>`, `COMPONENTS ON\|OFF` † |
 | Output | `EXPORT <file>` † |
@@ -336,15 +336,16 @@ It absorbs the solid angle, charge calibration and database errors, and is
 best determined from standards — including films whose amounts RBS has
 already measured.
 
-**The substrate** — the last SIM layer — is part of this sum with
-`SUBSTRATE ON` (the default), with the thickness SIM gives it, as far as the
-beam gets: where the beam has slowed below the cross-section tables (0.1 MeV
+**The substrate** — the last SIM layer — is part of this sum like any
+other layer, with the thickness SIM gives it, as far as the beam gets: where the beam has slowed below the cross-section tables (0.1 MeV
 for protons, 0.2 MeV for ⁴He) the rest is dropped, its cross sections being
 orders of magnitude down by then. For 1.9 MeV ⁴He in Si that is about 4 µm,
 so a SIM substrate of 3–5 µm, as is usual for RBS, gives the full
 thick-target yield; a thinner one gives less (MnPt.lcm's 1000 nm Si: about
-half). `SUBSTRATE OFF` leaves the substrate out, for when its peaks come from
-a measured background.
+half). To see the film's part alone, use `SIM SPLOT <layer>` or
+`SIM SPLOT <element>`. When a measured bare-substrate background is in use
+(still to come), it supplies the substrate's peaks and the simulation will
+leave the substrate out by itself.
 
 #### Detector
 

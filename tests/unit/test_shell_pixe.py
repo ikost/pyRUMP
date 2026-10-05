@@ -408,9 +408,7 @@ def test_lines_lists_film_and_substrate_lines(session, capsys):
     run(session, "pixe lines")
     out = capsys.readouterr().out
     assert "Mn" in out and "KL3" in out and "Pt" in out
-    assert "Si " in out  # SUBSTRATE ON, the default: the Si substrate's lines too
-    run(session, "pixe substrate off", "pixe lines")
-    assert "Si " not in capsys.readouterr().out.split("substrate off")[-1]
+    assert "Si " in out  # the Si substrate's lines too
 
 
 def test_simulation_errors_are_reported_not_raised(session, capsys):
@@ -457,14 +455,6 @@ def test_tiltsign_and_show_report_the_angles(empty_session, capsys):
     assert "beam 9 deg, X-rays 54 deg" in capsys.readouterr().out
     with pytest.raises(CommandError, match="1, -1 or 0"):
         run(empty_session, "pixe tiltsign 2")
-
-
-def test_substrate_setting(empty_session):
-    run(empty_session, "pixe substrate off")
-    assert not empty_session.pixe.substrate
-    with pytest.raises(CommandError, match="ON or OFF"):
-        run(empty_session, "pixe substrate thick")
-    assert "substrate off" in setup_lines(empty_session)
 
 
 def test_defaults_describe_the_rc43_setup():

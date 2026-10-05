@@ -1,6 +1,7 @@
 """Run the PIXE simulation for the shell: SIM sample in, PIXE spectrum out.
 
-The sample is the one SIM edits and the RBS simulation uses; the beam, tilt
+The sample is the one SIM edits and the RBS simulation uses -- all of it,
+the substrate included with the thickness SIM gives it; the beam, tilt
 and charge are the ACTIVE buffer's (one run, one charge integrator), the
 live fraction its PIXE spectrum's; the detector, H values and escape
 setting are the PIXE prompt's.
@@ -43,7 +44,7 @@ def simulate(session) -> PixeSpectrum | None:
     sample = to_sample(session.script, session.table, session.densities)
     lines = simulate_lines(
         sample, buffer.beam, buffer.geometry.theta, state.detector, exposure,
-        session.registry, session.table, include_substrate=state.substrate,
+        session.registry, session.table, include_substrate=True,
         faithful=session.settings.faithful,
     )
     calibration = data.calibration if data is not None else state.calibration

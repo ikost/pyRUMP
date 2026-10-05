@@ -118,7 +118,6 @@ def setup_lines(session) -> list[str]:
         f"calib {c.kevch:.8g} {c.kev0:.8g}",
         f"h {state.h[0]:g} {state.h[1]:g} {state.h[2]:g}",
         f"escape {'on' if state.escape else 'off'}",
-        f"substrate {'on' if state.substrate else 'off'}",
         f"pair {'on' if state.pair else 'off'}",
         f"markers {state.markers}",
     ]
@@ -450,20 +449,6 @@ def cmd_escape(session, args: ArgReader) -> None:
     print(f"  escape {'on' if session.pixe.escape else 'off'}")
 
 
-def cmd_substrate(session, args: ArgReader) -> None:
-    """``SUBSTRATE ON|OFF`` -- whether the simulation includes the substrate
-    (the last SIM layer, with the thickness SIM gives it, as far as the beam
-    gets). OFF leaves it to a measured background."""
-    token = args.optional()
-    args.done()
-    if token is not None:
-        if token.lower() not in ("on", "off"):
-            raise CommandError("SUBSTRATE: expected ON or OFF")
-        session.pixe.substrate = token.lower() == "on"
-        pixe_plotting.refresh(session)
-    print(f"  substrate {'on' if session.pixe.substrate else 'off'}")
-
-
 def cmd_lines(session, args: ArgReader) -> None:
     """``LINES [ALL]`` -- the simulated lines: energy, cross section at the
     beam energy, detector efficiency and counts, strongest first. Lines
@@ -480,7 +465,7 @@ def cmd_lines(session, args: ArgReader) -> None:
     if result is None:
         raise CommandError("LINES: no SIM sample to simulate")
     if not result.lines:
-        print("  no lines: the sample is a substrate only, and SUBSTRATE is OFF")
+        print("  no lines: the beam reaches no element of the sample")
         return
     strongest = result.lines[0].counts
     print("  element  line    E (keV)   sigma (b)   efficiency      counts")
@@ -644,7 +629,6 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("CALIB", 3, cmd_calib, "energy calibration: keV/channel and offset in keV"),
     ("H", 1, cmd_h, "instrumental constant for K, L, M lines (H K L M, or H K|L|M v)"),
     ("ESCAPE", 2, cmd_escape, "Si escape peaks in the simulation: ON or OFF"),
-    ("SUBSTRATE", 3, cmd_substrate, "include the substrate (last SIM layer): ON or OFF"),
     ("LINES", 2, cmd_lines, "table of the simulated lines (ALL: weak ones too)"),
     # The PIXE window
     ("PLOT", 2, cmd_plot, "draw a buffer's PIXE spectrum (0: the simulation)"),
@@ -673,7 +657,7 @@ _HELP_GROUPS: list[tuple[str, list[str]]] = [
     ("Detector",
      ["ANGLE", "TILTSIGN", "SOLID", "WINDOW", "CRYSTAL", "FWHM", "FANO", "FILTER", "CALIB",
       "ESCAPE"]),
-    ("Simulation", ["H", "SUBSTRATE", "LINES"]),
+    ("Simulation", ["H", "LINES"]),
     ("PIXE window",
      ["PLOT", "COMPARE", "REGION", "COUNTS", "LINEAR", "SQRT", "LOG", "MARKERS", "FIGSAVE"]),
 ]

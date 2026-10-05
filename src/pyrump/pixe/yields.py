@@ -24,8 +24,9 @@ second factor of :math:`A` is the exact self-absorption of a uniform slab.
 For a truly thin film :math:`A \to 1` and :math:`\bar E_k \to E_0`.
 
 The **substrate** -- the last SIM layer -- is included or not
-(``include_substrate``). Included, it counts with the thickness SIM gives
-it, like any other layer, as far as the beam gets: where the beam has slowed
+(``include_substrate``; the shell always includes it, and a measured
+background will be the reason to leave it out). Included, it counts with
+the thickness SIM gives it, like any other layer, as far as the beam gets: where the beam has slowed
 below the cross-section tables (0.1 MeV for protons, 0.2 MeV for 4He) the
 rest is dropped, its cross sections being orders of magnitude down by then.
 For 1.9 MeV 4He in Si that is about 4 µm; a thicker SIM substrate changes
