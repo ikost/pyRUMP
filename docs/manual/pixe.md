@@ -10,7 +10,8 @@
     defaults; reading Oxford `.PIX` files; the PIXE window mirroring the
     RBS one (PLOT, OVERLAY, SPLOT, COMPARE with residuals), with markers
     for the sample's lines and the **simulated film spectrum** (K and L
-    lines of the film and the substrate, with `H`, `ESCAPE` and `LINES`); the
+    lines of the film and the substrate, with `H`, `ESCAPE` and `LINES`);
+    GUPIX's top-hat digital filter (`DF`) for background-free comparison; the
     X-ray atomic data and the ECPSSR K/L cross sections. **Not yet:** M-shell
     cross sections (so no Pt/Au/W M lines in the simulation), the
     bare-substrate background, and fitting.
@@ -107,6 +108,34 @@ Inside the PIXE prompt, `REGION`, `COUNTS`, `LOG`/`LINEAR`/`SQRT` and
 window, as before. `REGION` is in **channels**, as the spectrum file
 numbers them, like the RBS window's: `REGION 220 1190`.
 
+**The digital filter.** `DF ON` (`DIGITALFILTER`) passes everything the
+PIXE window shows — data, simulation and comparison — through GUPIX's
+top-hat filter: each channel becomes the mean of a central lobe minus the
+mean of two wings around it. The kernel has zero area and is symmetric, so
+a constant or sloping continuum filters to zero and any slowly varying one
+nearly so, while peaks survive with negative side lobes. The continuum then
+needs no model at all. The y axis turns linear (filtered spectra go
+negative), and the comparison's residuals become (filtered simulation −
+filtered data)/σ, σ propagated through the filter from the data's counts
+(at least 1 per channel), with the reduced chi-square over the channels
+shown. Filtered residuals are sensitive to peak position and width, which
+makes them a good check of the energy calibration and resolution.
+
+The filter's two constants are its lobe widths, in units of the detector
+FWHM at each channel, so the filter widens with energy along with the
+peaks (GUPIX's variable filter):
+
+* `DF WIDTH <UW> <LW>` — the central lobe and each wing; default `1 0.5`,
+  Schamber's and Statham's compromise between suppressing the background
+  and keeping the peak information. Wider lobes suppress more background
+  but merge close peaks.
+* `DF SPLIT <keV> <UW> <LW>` — wider lobes above an energy, GUPIX's
+  two-region filter: e.g. `DF SPLIT 6 3 0.5` for the few weak, isolated
+  peaks at high energy. `DF SPLIT OFF` removes it.
+
+Channels within a filter's reach of either end of the spectrum have no
+filtered value.
+
 **FIGSAVE.** At the RUMP level, `FIGSAVE fit` saves the RBS window as
 `fit.png` — and with `PAIR ON` and the PIXE window open, the PIXE window
 next to it as `fit_pixe.png`. Inside the PIXE prompt, `FIGSAVE` saves the
@@ -188,9 +217,10 @@ pixe
  solid 25 7.125 in         ! 25 mm^2 active area, 7.125 in from the sample
  window Be 12.5            ! window material and thickness, µm
  crystal Si 500            ! crystal thickness, µm
- fwhm 130                  ! resolution at Mn Kα, eV
+ fwhm 122                  ! resolution at Mn Kα, eV
+ fano 0.104
  filter clear
- filter mylar 125          ! absorber against bremsstrahlung, µm
+ filter mylar 62           ! absorber against bremsstrahlung, µm (effective)
  pair on
 disable
 ```
@@ -229,9 +259,9 @@ silicon drift detector.
 | `SOLID` | 0.763 msr | 25 mm² at 7.125 in |
 | `WINDOW` | Be 12.5 µm | Amptek SDD |
 | `CRYSTAL` | Si 500 µm | Amptek FAST SDD (typical) |
-| `FWHM` | 130 eV at Mn Kα | detector specification |
-| `FANO` | 0.13 | fitted to `MnPt.PIX` (Si Kα 79 eV, Mn Kα 131 eV) |
-| `FILTER` | Mylar 125 µm | as specified; see below |
+| `FWHM` | 122 eV at Mn Kα | fitted: Mn Kα doublet in `MnPt.PIX` (specification: 130 eV) |
+| `FANO` | 0.104 | fitted: Si Kα 78.5 eV and Mn Kα 122 eV |
+| `FILTER` | Mylar 62 µm | effective thickness, fitted; see below (specified: 125 µm) |
 | `CALIB` | 0.01009699 keV/ch, −0.03864563 keV | `MnPt.PIX`'s RC43 header |
 | `PAIR` | off | |
 | `MARKERS` | on | |
@@ -241,13 +271,30 @@ calibration. A spectrum's own header calibration, when it has one, is used
 for that spectrum; `CALIB` given after `GET` changes the active buffer's
 PIXE calibration too.
 
-**What the MnPt spectrum says about the filter.** With these defaults and
-no fitted parameter, the simulation reproduces Mn K at 0.90 and Pt Lα at
-0.78 of the measured counts — but Ru L (2.56 keV) at only 0.15, and the
-substrate's Si K (1.74 keV) some 300 times too weak. Both low-energy lines
-agree with the data for about 55–60 µm of Mylar instead (Ru L 0.9–1.1,
-Mn K 1.05, Pt Lα 0.81) — close to a standard 2 mil (50.8 µm) foil. Try
-`FILTER CLEAR` then `FILTER MYLAR 58` against your own spectra.
+**How the filter, resolution and calibration defaults were measured.** Two
+spectra from this setup, four years apart, pin them down:
+
+* *A 258 nm SiO₂-on-Si reference* (2022, 1.9 MeV ⁴He, 40 µC) has nothing
+  but Si and O, so its thick-target Si K (1.74 keV) depends only on the
+  filter. Through the specified 125 µm of Mylar, only 1.7×10⁻⁵ of it would
+  arrive and the simulation would be 200 times too weak; the measured yield
+  needs **63.0 µm**. `examples/MnPt` (2026) gives **60.8 µm** the same way.
+  The default is their mean, 62 µm — an *effective* thickness, which also
+  takes up any error in the Si K cross section (H_K = 1 assumed). A 5 %
+  change in it changes Si K by about 30 %, the higher-energy lines hardly.
+* Si Kα is 78.5 eV wide in both spectra and Mn Kα, fitted as its Kα₁/Kα₂
+  doublet, 122 ± 3 eV: a Fano factor of 0.104 with about 50 eV of
+  electronic noise.
+* The RC43 header calibration puts Si Kα within 0.4 eV of its true energy
+  but Mn Kα 19 eV high — 0.46 % too much gain. Gain and offset need fitting;
+  the header is a good start.
+* The reference's continuum, filtered with `DF WIDTH 1 0.5`, comes down to
+  the counting noise (reduced chi-square 0.99 at 0.4–1.3 keV); narrower or
+  wider lobes do worse.
+
+Its spectrum has nothing at 2.05 keV (0.6 % of Si K, from Si K's own tail),
+so the 2.05 keV peak in MnPt (16.6 % of its Si K) comes from the sample —
+the Pt Mα/Mβ pair.
 
 ### Commands (draft)
 
@@ -263,7 +310,7 @@ Commands marked † are not implemented yet.
 | Calibration | `CALIB <gain keV/ch> <offset keV>`, `H <K> <L> <M>` or `H K\|L\|M <value>` |
 | Simulation | `LINES [ALL]` (table of lines, energies, cross sections, efficiency and counts), `EXCLUDE <element>` †, `INCLUDE <element>` † |
 | Background | `BGSCALE <s>` †, `SMOOTH <channels>` † |
-| Plot | `PLOT [buffer]`, `COMPARE` / `CMP`, `REGION <channel> <channel>` / `REGION ALL`, `COUNTS <low> <high>` / `COUNTS ALL`, `LOG`/`LINEAR`/`SQRT`, `MARKERS ON\|ALL\|OFF`, `FIGSAVE <file>`, `COMPONENTS ON\|OFF` † |
+| Plot | `PLOT [buffer]`, `COMPARE` / `CMP`, `DF ON\|OFF`, `DF WIDTH <UW> <LW>`, `DF SPLIT <keV> <UW> <LW>` / `DF SPLIT OFF`, `REGION <channel> <channel>` / `REGION ALL`, `COUNTS <low> <high>` / `COUNTS ALL`, `LOG`/`LINEAR`/`SQRT`, `MARKERS ON\|ALL\|OFF`, `FIGSAVE <file>`, `COMPONENTS ON\|OFF` † |
 | Output | `EXPORT <file>` † |
 
 Other compounds (by formula and density) can be added to the list as

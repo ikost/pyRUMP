@@ -6,16 +6,21 @@ PIXE prompt says otherwise. They describe a real setup -- the NEC RC43
 endstation the ``examples/MnPt`` pair was measured on:
 
 * an Amptek silicon drift detector: 12.5 µm Be window, 25 mm^2 active
-  area, 130 eV FWHM at 5.9 keV, a 500 µm crystal (Amptek's FAST SDD);
+  area, a 500 µm crystal (Amptek's FAST SDD);
 * looking at the sample through a tube from 7.125 in (181.0 mm) away, so
   Omega = 0.763 msr;
 * at 45 deg to the normal of the untilted sample, in the plane the sample
   is tilted in: a THETA of -9 deg turns the sample towards it, 36 deg out;
-* behind a 125 µm Mylar filter against bremsstrahlung (as specified; the
-  MnPt spectrum's Si K and Ru L lines suggest closer to 55-60 µm);
+* behind a Mylar filter against bremsstrahlung, specified as 125 µm but
+  acting like 62 µm: the thick-target Si K yield gives 63.0 µm for a 258 nm
+  SiO2-on-Si reference (2022) and 60.8 µm for ``examples/MnPt`` (2026)
+  -- an effective value, which also takes up any error in the Si K
+  cross section;
+* resolution fitted to those spectra: Si Kα 78.5 eV, Mn Kα (as the Kα1/Kα2
+  doublet) 122 +- 3 eV FWHM, hence a Fano factor of 0.104 and about 50 eV
+  of electronic noise (the specification says 130 eV at 5.9 keV);
 * energy calibration from the RC43 header of ``examples/MnPt.PIX``
-  (10.097 eV/channel, offset -38.6 eV, channels numbered from 1), and a
-  Fano factor of 0.13 fitted to its Si Kα and Mn Kα widths.
+  (10.097 eV/channel, offset -38.6 eV, channels numbered from 1).
 """
 
 from __future__ import annotations
@@ -91,12 +96,12 @@ class PixeDetector:
     window: Absorber = Absorber("Be", 12.5)
     crystal: Absorber = Absorber("Si", 500.0)
 
-    fwhm_eV: float = 130.0
+    fwhm_eV: float = 122.0
     """Resolution at Mn Kα (5.899 keV)."""
 
-    fano: float = 0.13
+    fano: float = 0.104
 
-    filters: tuple[Absorber, ...] = (Absorber("Mylar", 125.0),)
+    filters: tuple[Absorber, ...] = (Absorber("Mylar", 62.0),)
     """Absorbers in front of the window, in the order the X-rays meet them."""
 
     def exit_angle(self, theta_deg: float) -> float:
