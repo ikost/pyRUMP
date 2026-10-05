@@ -120,11 +120,25 @@ def element_density_g_cm3(element) -> float:
     return element.atomic_density * element.mass / AVOGADRO
 
 
+def absorber_mu(absorber: Absorber, energy_keV, periodic_table, atomic: AtomicData):
+    """``(mu in cm^2/g, density in g/cm^3)`` of an absorber's material: an
+    element, or a compound by the mixture rule (mass fractions from pyRUMP's
+    atomic masses)."""
+    compound = absorber.compound
+    if compound is None:
+        element = periodic_table.by_symbol(absorber.material)
+        return atomic.mu(element.z, energy_keV), element_density_g_cm3(element)
+    elements = {symbol: periodic_table.by_symbol(symbol) for symbol in compound.atoms}
+    grams = {s: n * elements[s].mass for s, n in compound.atoms.items()}
+    total = sum(grams.values())
+    mu = sum(grams[s] / total * atomic.mu(e.z, energy_keV) for s, e in elements.items())
+    return mu, compound.density_g_cm3
+
+
 def transmission(absorber: Absorber, energy_keV, periodic_table, atomic: AtomicData) -> np.ndarray:
     """Fraction of X-rays getting through ``absorber`` at normal incidence."""
-    element = periodic_table.by_symbol(absorber.element)
-    mass_thickness = element_density_g_cm3(element) * absorber.thickness_um * 1e-4
-    solid = np.exp(-atomic.mu(element.z, energy_keV) * mass_thickness)
+    mu, density = absorber_mu(absorber, energy_keV, periodic_table, atomic)
+    solid = np.exp(-mu * density * absorber.thickness_um * 1e-4)
     hole = absorber.hole_percent / 100.0
     return hole + (1.0 - hole) * solid
 
@@ -133,27 +147,26 @@ def efficiency(detector: PixeDetector, energy_keV, periodic_table, atomic: Atomi
     """Intrinsic efficiency (window transmission times absorption in the
     crystal), times the filters' transmission."""
     energy = np.asarray(energy_keV, dtype=np.float64)
-    crystal = periodic_table.by_symbol(detector.crystal.element)
-    crystal_mass = element_density_g_cm3(crystal) * detector.crystal.thickness_um * 1e-4
+    mu, density = absorber_mu(detector.crystal, energy, periodic_table, atomic)
+    crystal_mass = density * detector.crystal.thickness_um * 1e-4
     result = transmission(detector.window, energy, periodic_table, atomic)
-    result = result * -np.expm1(-atomic.mu(crystal.z, energy) * crystal_mass)
+    result = result * -np.expm1(-mu * crystal_mass)
     for absorber in detector.filters:
         result = result * transmission(absorber, energy, periodic_table, atomic)
     return result
 
 
-def pixe_grid(sample, alpha_deg: float, detector: PixeDetector, periodic_table):
+def pixe_grid(sample, alpha_deg: float, exit_deg: float, periodic_table):
     """The sample's slabs for PIXE: RBS's sublayering, only finer."""
     fine = replace(sample, maxpth=min(sample.maxpth, PIXE_MAXPTH))
-    geometry = Geometry(theta=alpha_deg, phi=10.0, psi=detector.angle_deg,
-                        kind=GeometryKind.GENERAL)
+    geometry = Geometry(theta=alpha_deg, phi=10.0, psi=exit_deg, kind=GeometryKind.GENERAL)
     return fine, geometry, build_sample_grid(fine, geometry, periodic_table)
 
 
 def simulate_lines(
     sample,
     beam,
-    alpha_deg: float,
+    theta_deg: float,
     detector: PixeDetector,
     exposure: Exposure,
     registry,
@@ -165,8 +178,10 @@ def simulate_lines(
     """Yield of every line of every film element, strongest first.
 
     ``sample`` is the RBS simulation's :class:`~pyrump.sim.engine.UniformSample`
-    and ``beam`` its :class:`~pyrump.sim.engine.Beam`; ``alpha_deg`` is the
-    beam's angle to the sample normal (the RBS geometry's THETA).
+    and ``beam`` its :class:`~pyrump.sim.engine.Beam`; ``theta_deg`` is the
+    sample's tilt, the RBS geometry's signed THETA. The beam comes in at
+    ``|theta_deg|`` to the normal, the X-rays leave at
+    :meth:`PixeDetector.exit_angle`.
     """
     atomic = atomic or atomic_data()
     ionisation = ionisation_table(ion_name(beam.z, beam.mass))
@@ -175,9 +190,10 @@ def simulate_lines(
             f"beam energy {beam.e0_MeV:g} MeV outside the cross-section tables "
             f"({ionisation.e_min:g}-{ionisation.e_max:g} MeV)"
         )
-    fine, geometry, grid = pixe_grid(sample, alpha_deg, detector, periodic_table)
+    alpha_deg, exit_deg = abs(theta_deg), detector.exit_angle(theta_deg)
+    fine, geometry, grid = pixe_grid(sample, alpha_deg, exit_deg, periodic_table)
     cos_in = np.cos(np.radians(alpha_deg))
-    cos_out = np.cos(np.radians(detector.angle_deg))
+    cos_out = np.cos(np.radians(exit_deg))
     if cos_in <= 0 or cos_out <= 0:
         raise ValueError("the beam and the detector must face the sample's front")
 

@@ -14,7 +14,7 @@ import pytest
 from pyrump.model.spectrum import Calibration
 from pyrump.pixe import yields as yields_module
 from pyrump.pixe.atomic import atomic_data
-from pyrump.pixe.detector import PixeDetector
+from pyrump.pixe.detector import Absorber, PixeDetector, disc_solid_angle_msr
 from pyrump.pixe.production import line_production
 from pyrump.pixe.spectrum import resolution_sigma_keV, synthesize
 from pyrump.pixe.xsect import ion_name, ionisation_table
@@ -25,6 +25,7 @@ from pyrump.pixe.yields import (
     efficiency,
     element_density_g_cm3,
     simulate_lines,
+    transmission,
 )
 from pyrump.sim.engine import Beam, UniformSample
 
@@ -153,8 +154,9 @@ def test_yield_is_linear_in_charge_solid_angle_h_and_live_time(tables):
     assert mn_kalpha(Exposure(charge_uC=20.0)) == pytest.approx(2 * base, rel=1e-12)
     assert mn_kalpha(Exposure(charge_uC=10.0, live_fraction=0.5)) == pytest.approx(base / 2, rel=1e-12)
     assert mn_kalpha(Exposure(charge_uC=10.0, h=(3.0, 1.0, 1.0))) == pytest.approx(3 * base, rel=1e-12)
+    default_msr = PixeDetector().solid_angle_msr
     assert mn_kalpha(Exposure(charge_uC=10.0), PixeDetector(solid_angle_msr=2.5)) == pytest.approx(
-        2.5 * base, rel=1e-12)
+        2.5 / default_msr * base, rel=1e-12)
     assert mn_kalpha(Exposure(charge_uC=10.0, correction=2.0)) == pytest.approx(base / 2, rel=1e-12)
 
 
@@ -226,13 +228,63 @@ def test_escape_peak_moves_area_1_74_kev_down():
 
 
 @needs_data
-def test_efficiency_is_window_times_crystal(tables):
+def test_efficiency_is_window_times_crystal_times_filters(tables):
     table, _ = tables
     atomic = atomic_data()
-    detector = PixeDetector()
+    detector = PixeDetector(window=Absorber("Be", 12.5), crystal=Absorber("Si", 500.0),
+                            filters=(Absorber("Al", 10.0, 20.0),))
     energy = 2.0
-    be, si = table.by_symbol("Be"), table.by_symbol("Si")
-    window = np.exp(-atomic.mu(4, energy) * element_density_g_cm3(be) * 8.0e-4)
-    crystal = 1 - np.exp(-atomic.mu(14, energy) * element_density_g_cm3(si) * 450e-4)
+    be, si, al = (table.by_symbol(s) for s in ("Be", "Si", "Al"))
+    window = np.exp(-atomic.mu(4, energy) * element_density_g_cm3(be) * 12.5e-4)
+    crystal = 1 - np.exp(-atomic.mu(14, energy) * element_density_g_cm3(si) * 500e-4)
+    foil = 0.2 + 0.8 * np.exp(-atomic.mu(13, energy) * element_density_g_cm3(al) * 10e-4)
     assert float(efficiency(detector, energy, table, atomic)) == pytest.approx(
-        float(window * crystal), rel=1e-12)
+        float(window * crystal * foil), rel=1e-12)
+
+
+@needs_data
+def test_mylar_by_the_mixture_rule(tables):
+    """C10H8O4 at 1.40 g/cm^3: mu = sum of mass fraction x element mu."""
+    table, _ = tables
+    atomic = atomic_data()
+    energy = 2.56
+    masses = {s: table.by_symbol(s).mass for s in "CHO"}
+    grams = {"C": 10 * masses["C"], "H": 8 * masses["H"], "O": 4 * masses["O"]}
+    total = sum(grams.values())
+    mu = sum(grams[s] / total * atomic.mu(z, energy) for s, z in (("C", 6), ("H", 1), ("O", 8)))
+    expected = np.exp(-mu * 1.40 * 125e-4)
+    assert float(transmission(Absorber("Mylar", 125.0), energy, table, atomic)) == pytest.approx(
+        float(expected), rel=1e-12)
+    assert 0 < expected < 0.1  # the test means something
+
+
+def test_exit_angle_follows_the_tilt():
+    detector = PixeDetector(angle_deg=45.0)
+    assert detector.exit_angle(-9.0) == 36.0  # turned towards the detector
+    assert detector.exit_angle(9.0) == 54.0
+    assert PixeDetector(angle_deg=45.0, tilt_sign=-1).exit_angle(-9.0) == 54.0
+    assert PixeDetector(angle_deg=45.0, tilt_sign=0).exit_angle(-9.0) == 45.0
+
+
+def test_solid_angle_of_a_round_detector():
+    # Small compared with the distance: A/d^2.
+    assert disc_solid_angle_msr(25.0, 180.975) == pytest.approx(25.0 / 180.975**2 * 1e3, rel=1e-3)
+    # A hemisphere seen from its centre plane: 2 pi.
+    assert disc_solid_angle_msr(np.pi * 1e12, 1e-3) == pytest.approx(2e3 * np.pi, rel=1e-6)
+
+
+@needs_data
+def test_tilt_lengthens_the_way_out(tables):
+    """Turning the sample away from the detector (THETA +9 with the RC43
+    convention) lengthens the X-rays' path through a Pt cap compared with
+    turning it towards (-9)."""
+    table, registry = tables
+    sample = _film(table, [("Pt", 400.0), ("Ti", 0.5)])
+    exposure = Exposure(charge_uC=10.0)
+    detector = PixeDetector(angle_deg=45.0)
+
+    def ti(theta):
+        return _counts(simulate_lines(sample, PROTON, theta, detector, exposure, registry, table),
+                       "Ti", "KL3")
+
+    assert ti(9.0) < ti(-9.0)

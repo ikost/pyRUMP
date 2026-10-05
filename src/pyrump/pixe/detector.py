@@ -2,21 +2,26 @@
 
 The defaults play the part :class:`~pyrump.model.detector.Measurement`'s do
 for RBS: something sensible to simulate with until ``~/.pyrumprc`` or the
-PIXE prompt says otherwise. Where a value could be read off a real
-measurement, it was -- the MnPt example's SDD (an NEC RC43 endstation):
+PIXE prompt says otherwise. They describe a real setup -- the NEC RC43
+endstation the ``examples/MnPt`` pair was measured on:
 
-* energy calibration: the RC43 header of ``examples/MnPt.PIX``
-  (10.097 eV/channel, offset -38.6 eV, channels numbered from 1, 2048 of
-  them);
-* resolution: 131 eV FWHM fitted to its 5.9 keV line, and a Fano factor of
-  0.13 from the same fit together with Si Kα's 79 eV.
-
-The geometry, window and crystal are typical SDD values, not measured ones.
+* an Amptek silicon drift detector: 12.5 µm Be window, 25 mm^2 active
+  area, 130 eV FWHM at 5.9 keV, a 500 µm crystal (Amptek's FAST SDD);
+* looking at the sample through a tube from 7.125 in (181.0 mm) away, so
+  Omega = 0.763 msr;
+* at 45 deg to the normal of the untilted sample, in the plane the sample
+  is tilted in: a THETA of -9 deg turns the sample towards it, 36 deg out;
+* behind a 125 µm Mylar filter against bremsstrahlung (as specified; the
+  MnPt spectrum's Si K and Ru L lines suggest closer to 55-60 µm);
+* energy calibration from the RC43 header of ``examples/MnPt.PIX``
+  (10.097 eV/channel, offset -38.6 eV, channels numbered from 1), and a
+  Fano factor of 0.13 fitted to its Si Kα and Mn Kα widths.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import math
+from dataclasses import dataclass, field
 
 from ..model.spectrum import Calibration
 
@@ -26,16 +31,46 @@ DEFAULT_CALIBRATION = Calibration(kevch=0.01009699, kev0=-0.03864563, first=1.0,
 
 
 @dataclass(frozen=True, slots=True)
-class Absorber:
-    """A uniform layer of one element between the sample and the crystal."""
+class Compound:
+    """An absorber material other than a pure element."""
 
-    element: str
-    """Element symbol."""
+    name: str
+    atoms: dict[str, int]
+    """Stoichiometry: element symbol -> atoms per formula unit."""
+
+    density_g_cm3: float
+
+
+#: Absorber materials known by name. Densities are NIST's (the X-ray mass
+#: attenuation tables' material list).
+COMPOUNDS = {
+    "MYLAR": Compound("Mylar", {"C": 10, "H": 8, "O": 4}, 1.40),
+    "KAPTON": Compound("Kapton", {"C": 22, "H": 10, "N": 2, "O": 5}, 1.42),
+}
+
+
+@dataclass(frozen=True, slots=True)
+class Absorber:
+    """A uniform layer between the sample and the crystal."""
+
+    material: str
+    """An element symbol, or a compound in :data:`COMPOUNDS` (``Mylar``)."""
 
     thickness_um: float
 
     hole_percent: float = 0.0
     """Open area of a "funny filter", in percent; 0 for a solid foil."""
+
+    @property
+    def compound(self) -> Compound | None:
+        return COMPOUNDS.get(self.material.upper())
+
+
+def disc_solid_angle_msr(area_mm2: float, distance_mm: float) -> float:
+    """Solid angle of a round detector of ``area_mm2`` seen on axis from
+    ``distance_mm`` away, in msr."""
+    radius = math.sqrt(area_mm2 / math.pi)
+    return 2 * math.pi * (1 - distance_mm / math.hypot(distance_mm, radius)) * 1000.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,17 +78,28 @@ class PixeDetector:
     """Geometry and response of the X-ray detector."""
 
     angle_deg: float = 45.0
-    """Detector axis to the sample normal, degrees (GUPIX's convention)."""
+    """Detector axis to the normal of the *untilted* sample, degrees."""
 
-    solid_angle_msr: float = 1.0
+    tilt_sign: int = 1
+    """How the sample's tilt (the RBS geometry's THETA) moves the exit
+    angle: ``|angle + tilt_sign * THETA|``. 1 when a negative THETA turns
+    the sample towards the detector, -1 when it turns it away, 0 when the
+    tilt axis leaves the detector direction alone."""
 
-    window: Absorber = Absorber("Be", 8.0)
-    crystal: Absorber = Absorber("Si", 450.0)
+    solid_angle_msr: float = field(default_factory=lambda: disc_solid_angle_msr(25.0, 180.975))
 
-    fwhm_eV: float = 131.0
+    window: Absorber = Absorber("Be", 12.5)
+    crystal: Absorber = Absorber("Si", 500.0)
+
+    fwhm_eV: float = 130.0
     """Resolution at Mn Kα (5.899 keV)."""
 
     fano: float = 0.13
 
-    filters: tuple[Absorber, ...] = ()
+    filters: tuple[Absorber, ...] = (Absorber("Mylar", 125.0),)
     """Absorbers in front of the window, in the order the X-rays meet them."""
+
+    def exit_angle(self, theta_deg: float) -> float:
+        """The X-rays' angle to the sample normal when the sample is tilted
+        by ``theta_deg`` (the RBS THETA, signed)."""
+        return abs(self.angle_deg + self.tilt_sign * theta_deg)

@@ -53,7 +53,7 @@ def resolution_sigma_keV(detector: PixeDetector, energy_keV) -> np.ndarray:
 def escape_fraction(energy_keV: float, detector: PixeDetector, atomic: AtomicData) -> float:
     """Fraction of a line recorded in its Si escape peak (0 for a non-Si
     crystal or a line below the Si K edge)."""
-    if detector.crystal.element != "Si" or energy_keV <= atomic.edge(SI_Z, "K"):
+    if detector.crystal.material != "Si" or energy_keV <= atomic.edge(SI_Z, "K"):
         return 0.0
     omega = atomic.fluorescence_yield(SI_Z, "K")
     jump = atomic.jump_factor(SI_Z, "K")

@@ -8,6 +8,7 @@ tests, so the real dispatch and mode stack are exercised.
 from __future__ import annotations
 
 import shutil
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -100,7 +101,7 @@ def test_pyrumprc_block_ending_in_disable_stores_the_setup_only(empty_session, t
     assert stack == ["rump"] and not empty_session.pixe.enabled
     detector = empty_session.pixe.detector
     assert (detector.angle_deg, detector.solid_angle_msr) == (30, 2.5)
-    assert (detector.window.element, detector.window.thickness_um) == ("Be", 12.5)
+    assert (detector.window.material, detector.window.thickness_um) == ("Be", 12.5)
     assert empty_session.pixe.pair
 
 
@@ -119,7 +120,10 @@ def test_show_prints_commands_that_rebuild_the_setup(empty_session, capsys):
     lines = setup_lines(empty_session)
     fresh = _session()
     run(fresh, *(f"pixe {line}" for line in lines))
-    assert fresh.pixe.detector == empty_session.pixe.detector
+    # SHOW prints the solid angle to 6 digits; everything else exactly.
+    rebuilt, original = fresh.pixe.detector, empty_session.pixe.detector
+    assert rebuilt.solid_angle_msr == pytest.approx(original.solid_angle_msr, rel=1e-6)
+    assert replace(rebuilt, solid_angle_msr=original.solid_angle_msr) == original
     assert fresh.pixe.calibration == empty_session.pixe.calibration
     assert fresh.pixe.pair
     capsys.readouterr()
@@ -336,3 +340,47 @@ def test_simulation_errors_are_reported_not_raised(session, capsys):
     assert _simulation_line(session) is None  # the data are still drawn
     with pytest.raises(CommandError, match="only protons and 4He"):
         run(session, "pixe lines")
+
+
+# -- detector geometry and materials ------------------------------------------
+
+
+def test_compound_filters_and_their_errors(empty_session):
+    run(empty_session, "pixe filter clear", "pixe filter mylar 50", "pixe filter KAPTON 7.5 10")
+    filters = empty_session.pixe.detector.filters
+    assert [(f.material, f.thickness_um, f.hole_percent) for f in filters] == [
+        ("Mylar", 50.0, 0.0), ("Kapton", 7.5, 10.0)]
+    with pytest.raises(CommandError, match="Mylar, Kapton"):
+        run(empty_session, "pixe filter Teflon 10")
+    with pytest.raises(CommandError, match="unknown element"):
+        run(empty_session, "pixe crystal Mylar 500")  # a crystal is an element
+
+
+def test_solid_from_area_and_distance(empty_session, capsys):
+    run(empty_session, "pixe solid 25 7.125 in")
+    assert empty_session.pixe.detector.solid_angle_msr == pytest.approx(0.7633, rel=1e-3)
+    run(empty_session, "pixe solid 25 180.975")
+    assert empty_session.pixe.detector.solid_angle_msr == pytest.approx(0.7633, rel=1e-3)
+    run(empty_session, "pixe solid 1.5")
+    assert empty_session.pixe.detector.solid_angle_msr == 1.5
+    with pytest.raises(CommandError, match="MM or IN"):
+        run(empty_session, "pixe solid 25 7 ft")
+
+
+def test_tiltsign_and_show_report_the_angles(empty_session, capsys):
+    run(empty_session, "theta -9", "pixe tiltsign -1")
+    assert empty_session.pixe.detector.tilt_sign == -1
+    capsys.readouterr()
+    run(empty_session, "pixe show")
+    assert "beam 9 deg, X-rays 54 deg" in capsys.readouterr().out
+    with pytest.raises(CommandError, match="1, -1 or 0"):
+        run(empty_session, "pixe tiltsign 2")
+
+
+def test_defaults_describe_the_rc43_setup():
+    detector = PixeDetector()
+    assert (detector.window.material, detector.window.thickness_um) == ("Be", 12.5)
+    assert detector.fwhm_eV == 130.0
+    assert detector.solid_angle_msr == pytest.approx(0.763, rel=1e-3)
+    assert detector.exit_angle(-9.0) == 36.0
+    assert [(f.material, f.thickness_um) for f in detector.filters] == [("Mylar", 125.0)]

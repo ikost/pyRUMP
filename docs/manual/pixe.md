@@ -153,33 +153,55 @@ start every session with PIXE enabled:
 
 ```
 pixe
- angle 45                  ! detector axis to sample normal, degrees
- solid 1.2                 ! solid angle, msr
- window Be 8               ! window material and thickness, µm
- crystal Si 450            ! crystal thickness, µm
- fwhm 131                  ! resolution at Mn Kα, eV
+ angle 45                  ! detector axis to the untilted sample's normal, degrees
+ tiltsign 1                ! a negative THETA turns the sample towards the detector
+ solid 25 7.125 in         ! 25 mm^2 active area, 7.125 in from the sample
+ window Be 12.5            ! window material and thickness, µm
+ crystal Si 500            ! crystal thickness, µm
+ fwhm 130                  ! resolution at Mn Kα, eV
+ filter clear
+ filter mylar 125          ! absorber against bremsstrahlung, µm
  pair on
 disable
 ```
 
-(The values above are placeholders, not a real detector.) One-shot
-`PIXE <command>` lines work in `~/.pyrumprc` too, and never turn PIXE on.
+One-shot `PIXE <command>` lines work in `~/.pyrumprc` too, and never turn
+PIXE on. `SHOW` prints the current setup as commands in this form, ready to
+paste into `~/.pyrumprc`, followed by the beam and X-ray angles in force.
 
-`SHOW` prints the current setup as commands in this form, ready to paste
-into `~/.pyrumprc`.
+**Geometry.** `ANGLE` is the detector axis's angle to the normal of the
+*untilted* sample. Tilting the sample (the RBS geometry's `THETA`) changes
+both directions: the beam comes in at |THETA| to the normal, and the X-rays
+leave at |ANGLE + TILTSIGN × THETA|. `TILTSIGN 1` (the default) is for a
+sample tilted towards the PIXE detector by a negative THETA, as on the
+RC43 endstation: THETA −9° gives 9° in and 36° out. `TILTSIGN -1` is the
+opposite sense, and `TILTSIGN 0` a tilt axis that leaves the detector
+direction alone.
+
+**Solid angle.** `SOLID <msr>` sets it directly. `SOLID <area mm²>
+<distance> [MM|IN]` computes it for a round detector seen on axis: 25 mm²
+at 7.125 in (181 mm) is 0.763 msr.
+
+**Absorbers.** `WINDOW` and `FILTER` take an element or a compound by
+name: `MYLAR` (C₁₀H₈O₄, 1.40 g/cm³) or `KAPTON` (C₂₂H₁₀N₂O₅, 1.42 g/cm³),
+NIST's compositions and densities, mixed by mass fraction. `CRYSTAL` takes
+an element. A `FILTER` with a hole percentage is a "funny filter": that
+fraction of the X-rays passes unattenuated.
 
 **Built-in defaults.** Without any setup, pyRUMP uses these — like the RBS
-defaults, something sensible to start from. Where a value could be taken
-from a real measurement, it comes from the MnPt example's SDD:
+defaults, something sensible to start from. They describe a real setup:
+the NEC RC43 endstation the MnPt example was measured on, with an Amptek
+silicon drift detector.
 
 | Setting | Default | Source |
 |---|---|---|
-| `ANGLE` | 45° | typical |
-| `SOLID` | 1 msr | typical |
-| `WINDOW` | Be 8 µm | typical |
-| `CRYSTAL` | Si 450 µm | typical |
-| `FWHM` | 131 eV at Mn Kα | fitted to `MnPt.PIX` |
-| `FANO` | 0.13 | fitted to `MnPt.PIX` (with Si Kα's 79 eV) |
+| `ANGLE` | 45°, `TILTSIGN 1` | RC43 endstation |
+| `SOLID` | 0.763 msr | 25 mm² at 7.125 in |
+| `WINDOW` | Be 12.5 µm | Amptek SDD |
+| `CRYSTAL` | Si 500 µm | Amptek FAST SDD (typical) |
+| `FWHM` | 130 eV at Mn Kα | detector specification |
+| `FANO` | 0.13 | fitted to `MnPt.PIX` (Si Kα 79 eV, Mn Kα 131 eV) |
+| `FILTER` | Mylar 125 µm | as specified; see below |
 | `CALIB` | 0.01009699 keV/ch, −0.03864563 keV | `MnPt.PIX`'s RC43 header |
 | `PAIR` | off | |
 | `MARKERS` | on | |
@@ -189,27 +211,33 @@ calibration. A spectrum's own header calibration, when it has one, is used
 for that spectrum; `CALIB` given after `GET` changes the active buffer's
 PIXE calibration too.
 
+**What the MnPt spectrum says about the filter.** With these defaults and
+no fitted parameter, the simulation reproduces Mn K at 0.90 and Pt Lα at
+0.78 of the measured counts — but Ru L (2.56 keV) at only 0.15, and the
+substrate's Si K (1.74 keV) some 300 times too weak. Both low-energy lines
+agree with the data for about 55–60 µm of Mylar instead (Ru L 0.9–1.1,
+Mn K 1.05, Pt Lα 0.81) — close to a standard 2 mil (50.8 µm) foil. Try
+`FILTER CLEAR` then `FILTER MYLAR 58` against your own spectra.
+
 ### Commands (draft)
 
-| Group | Commands |
-|---|---|
 Commands marked † are not implemented yet.
 
 | Group | Commands |
 |---|---|
 | Prompt | `RETURN`, `DISABLE`, `SHOW`, `HELP` |
 | Data | `GET <file>`, `PAIR ON\|OFF`, `BARE <buffer>` †, `LIVETIME <live> <real>` † |
-| Geometry | `ANGLE <deg>` (−90 to 90), `SOLID <msr>` |
-| Detector | `WINDOW <element> <µm>`, `CRYSTAL <element> <µm>`, `FWHM <eV>`, `FANO <F>`, `DEADLAYER <µm>` †, `ESCAPE ON\|OFF`, `TAIL ON\|OFF` † |
-| Absorbers | `FILTER <element> <µm> [<hole %>]`, `FILTER CLEAR` |
+| Geometry | `ANGLE <deg>` (−90 to 90), `TILTSIGN 1\|-1\|0`, `SOLID <msr>` or `SOLID <area mm²> <distance> [MM\|IN]` |
+| Detector | `WINDOW <element\|MYLAR\|KAPTON> <µm>`, `CRYSTAL <element> <µm>`, `FWHM <eV>`, `FANO <F>`, `DEADLAYER <µm>` †, `ESCAPE ON\|OFF`, `TAIL ON\|OFF` † |
+| Absorbers | `FILTER <element\|MYLAR\|KAPTON> <µm> [<hole %>]`, `FILTER CLEAR` |
 | Calibration | `CALIB <gain keV/ch> <offset keV>`, `H <K> <L> <M>` or `H K\|L\|M <value>` |
 | Elements | `LINES [ALL]` (table of lines, energies, cross sections, efficiency and counts), `EXCLUDE <element>` †, `INCLUDE <element>` † |
 | Background | `BGSCALE <s>` †, `SMOOTH <channels>` † |
 | Plot | `PLOT`, `REGION <keV> <keV>` / `REGION ALL`, `COUNTS <low> <high>` / `COUNTS ALL`, `LOG`/`LINEAR`/`SQRT`, `MARKERS ON\|ALL\|OFF`, `FIGSAVE <file>`, `COMPONENTS ON\|OFF` † |
 | Output | `EXPORT <file>` † |
 
-Absorbers are single elements for now; compounds (Mylar, Kapton) will
-follow.
+Other compounds (by formula and density) can be added to the list as
+needed.
 
 ### Physics
 
@@ -268,7 +296,7 @@ with the absorption of the X-rays on their way out
 $$A_{k,\ell} = \exp\!\Big(-\sum_{j<k}\frac{\mu_j\,\rho t_j}{\cos\theta_d}\Big)
 \cdot\frac{1-e^{-x_k}}{x_k},\qquad x_k = \frac{\mu_k\,\rho t_k}{\cos\theta_d}$$
 
-where α is the beam's angle to the sample normal, θ_d the detector's,
+where α is the beam's and θ_d the X-rays' angle to the sample normal (see Geometry above),
 Δm_k the sublayer's areal density, c_Z,k the element's atomic fraction, μ
 the mass attenuation coefficient and ε the detector efficiency. For truly
 thin films A → 1 and E_k → E₀, and this is the plain thin-film formula;

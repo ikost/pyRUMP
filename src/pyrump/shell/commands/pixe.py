@@ -20,7 +20,7 @@ from pathlib import Path
 
 from ...model.spectrum import Spectrum
 from ...pixe.data import PixeData
-from ...pixe.detector import Absorber
+from ...pixe.detector import COMPOUNDS, Absorber, disc_solid_angle_msr
 from ..dispatch import ArgReader, CommandError, CommandTable
 from ..session import Buffer
 from .. import pixe_plotting
@@ -102,14 +102,17 @@ def setup_lines(session) -> list[str]:
     d, c = state.detector, state.calibration
     lines = [
         f"angle {d.angle_deg:g}",
-        f"solid {d.solid_angle_msr:g}",
-        f"window {d.window.element} {d.window.thickness_um:g}",
-        f"crystal {d.crystal.element} {d.crystal.thickness_um:g}",
+        f"tiltsign {d.tilt_sign:d}",
+        f"solid {d.solid_angle_msr:.6g}",
+        f"window {d.window.material} {d.window.thickness_um:g}",
+        f"crystal {d.crystal.material} {d.crystal.thickness_um:g}",
         f"fwhm {d.fwhm_eV:g}",
         f"fano {d.fano:g}",
+        # Replayed, FILTER adds to what is there: start from none.
+        "filter clear",
     ]
     lines += [
-        f"filter {f.element} {f.thickness_um:g} {f.hole_percent:g}" for f in d.filters
+        f"filter {f.material} {f.thickness_um:g} {f.hole_percent:g}" for f in d.filters
     ]
     lines += [
         f"calib {c.kevch:.8g} {c.kev0:.8g}",
@@ -129,6 +132,14 @@ def cmd_show(session, args: ArgReader) -> None:
     print(f"  ! PIXE {'enabled' if state.enabled else 'disabled'}")
     for line in setup_lines(session):
         print(f"  {line}")
+    from ..pixe_sim import reference_buffer
+
+    reference = reference_buffer(session)
+    theta = reference.geometry.theta
+    print(
+        f"  ! with THETA {theta:g}: beam {abs(theta):g} deg, X-rays "
+        f"{state.detector.exit_angle(theta):g} deg to the sample normal"
+    )
     buffer = session.buffers.active_buffer
     if buffer is not None and buffer.pixe is not None:
         print(f"  ! buffer {session.buffers.active}:")
@@ -255,25 +266,80 @@ def _detector_number(field: str, label: str, unit: str, *, low: float = 0.0,
                 raise CommandError(f"{label.upper()}: must be {bound}")
             detector = replace(detector, **{field: value})
             session.pixe.detector = detector
+            pixe_plotting.refresh(session)
         print(f"  {label} {getattr(detector, field):g}{unit}")
 
     handler.__doc__ = f"``{label.upper()} [<value>]`` -- show or set the detector's {label}."
     return handler
 
 
-cmd_angle = _detector_number("angle_deg", "angle", "  ! deg, detector axis to sample normal",
-                             low=-90.0, high=90.0)
-cmd_solid = _detector_number("solid_angle_msr", "solid", "  ! msr")
+cmd_angle = _detector_number(
+    "angle_deg", "angle", "  ! deg, detector axis to the untilted sample's normal",
+    low=-90.0, high=90.0,
+)
+
+
+def cmd_tiltsign(session, args: ArgReader) -> None:
+    """``TILTSIGN 1|-1|0`` -- how the sample's tilt THETA moves the X-rays'
+    exit angle, ``|ANGLE + TILTSIGN x THETA|``: 1 when a negative THETA
+    turns the sample towards the PIXE detector, -1 when away, 0 when the
+    tilt leaves the detector direction alone."""
+    token = args.optional()
+    args.done()
+    detector = session.pixe.detector
+    if token is not None:
+        if token not in ("1", "-1", "0", "+1"):
+            raise CommandError("TILTSIGN: expected 1, -1 or 0")
+        detector = replace(detector, tilt_sign=int(token))
+        session.pixe.detector = detector
+        pixe_plotting.refresh(session)
+    print(f"  tiltsign {detector.tilt_sign:d}")
+
+
+def cmd_solid(session, args: ArgReader) -> None:
+    """``SOLID <msr>``, or ``SOLID <area mm^2> <distance> [MM|IN]`` -- the
+    detector's solid angle, given directly or from its active area and its
+    distance to the sample (a round detector seen on axis)."""
+    detector = session.pixe.detector
+    if args:
+        first = args.number("a solid angle in msr, or an area in mm^2")
+        second = args.optional_number()
+        unit = (args.optional() or "mm").lower()
+        args.done()
+        if unit not in ("mm", "in"):
+            raise CommandError("SOLID: the distance unit is MM or IN")
+        if second is None:
+            value, source = first, ""
+        else:
+            distance = second * (25.4 if unit == "in" else 1.0)
+            if distance <= 0:
+                raise CommandError("SOLID: the distance must be positive")
+            value = disc_solid_angle_msr(first, distance)
+            source = f" ({first:g} mm^2 at {distance:g} mm)"
+        if value <= 0:
+            raise CommandError("SOLID: must be positive")
+        detector = replace(detector, solid_angle_msr=value)
+        session.pixe.detector = detector
+        pixe_plotting.refresh(session)
+        print(f"  solid {value:.6g}  ! msr{source}")
+        return
+    print(f"  solid {detector.solid_angle_msr:.6g}  ! msr")
 cmd_fwhm = _detector_number("fwhm_eV", "fwhm", "  ! eV at Mn Ka")
 cmd_fano = _detector_number("fano", "fano", "")
 
 
-def _absorber(session, args: ArgReader, what: str, *, hole: bool = False) -> Absorber:
-    symbol = args.token("an element symbol")
-    try:
-        element = session.table.by_symbol(symbol)
-    except KeyError as error:
-        raise CommandError(f"{what}: {error}") from None
+def _absorber(session, args: ArgReader, what: str, *, hole: bool = False,
+              compounds: bool = True) -> Absorber:
+    name = args.token("an element symbol" + (" or MYLAR/KAPTON" if compounds else ""))
+    compound = COMPOUNDS.get(name.upper()) if compounds else None
+    if compound is not None:
+        material = compound.name
+    else:
+        try:
+            material = session.table.by_symbol(name).symbol
+        except KeyError as error:
+            known = f" (or {', '.join(c.name for c in COMPOUNDS.values())})" if compounds else ""
+            raise CommandError(f"{what}: {str(error).strip(chr(39))}{known}") from None
     thickness = args.number("a thickness in µm")
     if thickness <= 0:
         raise CommandError(f"{what}: thickness must be positive")
@@ -281,43 +347,45 @@ def _absorber(session, args: ArgReader, what: str, *, hole: bool = False) -> Abs
     if open_area is not None and not 0 <= open_area < 100:
         raise CommandError(f"{what}: hole area must be 0 to 100 %")
     args.done()
-    return Absorber(element.symbol, thickness, open_area or 0.0)
+    return Absorber(material, thickness, open_area or 0.0)
 
 
-def _absorber_command(field: str, label: str):
+def _absorber_command(field: str, label: str, *, compounds: bool):
     def handler(session, args: ArgReader) -> None:
         if args:
-            absorber = _absorber(session, args, label.upper())
+            absorber = _absorber(session, args, label.upper(), compounds=compounds)
             session.pixe.detector = replace(session.pixe.detector, **{field: absorber})
+            pixe_plotting.refresh(session)
         absorber = getattr(session.pixe.detector, field)
-        print(f"  {label} {absorber.element} {absorber.thickness_um:g}  ! µm")
+        print(f"  {label} {absorber.material} {absorber.thickness_um:g}  ! µm")
 
-    handler.__doc__ = (
-        f"``{label.upper()} [<element> <µm>]`` -- show or set the detector's {label}."
-    )
+    what = "<element|MYLAR|KAPTON>" if compounds else "<element>"
+    handler.__doc__ = f"``{label.upper()} [{what} <µm>]`` -- show or set the detector's {label}."
     return handler
 
 
-cmd_window = _absorber_command("window", "window")
-cmd_crystal = _absorber_command("crystal", "crystal")
+cmd_window = _absorber_command("window", "window", compounds=True)
+cmd_crystal = _absorber_command("crystal", "crystal", compounds=False)
 
 
 def cmd_filter(session, args: ArgReader) -> None:
-    """``FILTER <element> <µm> [<hole %>]`` adds an absorber in front of the
-    window; ``FILTER CLEAR`` removes them all."""
+    """``FILTER <element|MYLAR|KAPTON> <µm> [<hole %>]`` adds an absorber in
+    front of the window; ``FILTER CLEAR`` removes them all."""
     if args and args.peek().lower() == "clear":
         args.token()
         args.done()
         session.pixe.detector = replace(session.pixe.detector, filters=())
+        pixe_plotting.refresh(session)
     elif args:
         absorber = _absorber(session, args, "FILTER", hole=True)
         detector = session.pixe.detector
         session.pixe.detector = replace(detector, filters=(*detector.filters, absorber))
+        pixe_plotting.refresh(session)
     filters = session.pixe.detector.filters
     if not filters:
         print("  no filters")
     for f in filters:
-        print(f"  filter {f.element} {f.thickness_um:g} {f.hole_percent:g}  ! µm, hole %")
+        print(f"  filter {f.material} {f.thickness_um:g} {f.hole_percent:g}  ! µm, hole %")
 
 
 def cmd_calib(session, args: ArgReader) -> None:
@@ -525,8 +593,9 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("GET", 3, cmd_get, "read a PIXE spectrum (.PIX) into the active buffer"),
     ("PAIR", 3, cmd_pair, "ON: reading x.RBS also reads x.PIX"),
     # Detector
-    ("ANGLE", 2, cmd_angle, "detector axis to sample normal, degrees"),
-    ("SOLID", 2, cmd_solid, "detector solid angle, msr"),
+    ("ANGLE", 2, cmd_angle, "detector axis to the untilted sample's normal, degrees"),
+    ("TILTSIGN", 2, cmd_tiltsign, "how THETA moves the exit angle: 1, -1 or 0"),
+    ("SOLID", 2, cmd_solid, "solid angle: msr, or area mm^2 and distance [MM|IN]"),
     ("WINDOW", 2, cmd_window, "detector window: element and thickness in µm"),
     ("CRYSTAL", 2, cmd_crystal, "detector crystal: element and thickness in µm"),
     ("FWHM", 2, cmd_fwhm, "resolution at Mn Ka, eV"),
@@ -558,7 +627,8 @@ _HELP_GROUPS: list[tuple[str, list[str]]] = [
     ("Getting around", ["HELP", "RETURN", "DISABLE", "SHOW"]),
     ("Data", ["GET", "PAIR"]),
     ("Detector",
-     ["ANGLE", "SOLID", "WINDOW", "CRYSTAL", "FWHM", "FANO", "FILTER", "CALIB", "ESCAPE"]),
+     ["ANGLE", "TILTSIGN", "SOLID", "WINDOW", "CRYSTAL", "FWHM", "FANO", "FILTER", "CALIB",
+      "ESCAPE"]),
     ("Simulation", ["H", "LINES"]),
     ("PIXE window",
      ["PLOT", "REGION", "COUNTS", "LINEAR", "SQRT", "LOG", "MARKERS", "FIGSAVE"]),
