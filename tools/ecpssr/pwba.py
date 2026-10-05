@@ -26,8 +26,13 @@ SHELLS = {            # name: (n, l, electrons)
     "L1": (2, 0, 2),
     "L2": (2, 1, 2),
     "L3": (2, 1, 4),
+    "M1": (3, 0, 2),
+    "M2": (3, 1, 2),     # 3p1/2: 1/3 of the 3p shell
+    "M3": (3, 1, 4),     # 3p3/2: 2/3
+    "M4": (3, 2, 4),     # 3d3/2: 0.4 of the 3d shell
+    "M5": (3, 2, 6),     # 3d5/2: 0.6
 }
-THETA_MIN = {1: 0.30, 2: 0.30}        # lowest reduced binding energy supported
+THETA_MIN = {1: 0.30, 2: 0.30, 3: 0.30}   # lowest reduced binding energy supported
 Q_GRID = np.geomspace(1e-3, 80.0, 230)
 
 
@@ -38,9 +43,14 @@ def e_grid(n):
     if n == 1:
         neg = np.linspace(e_lo, 0.0, 141)[:-1]
         pos = np.concatenate([np.linspace(0.0, 2.0, 201), np.geomspace(2.0, 80.0, 70)[1:]])
-    else:
+    elif n == 2:
         neg = np.linspace(e_lo, 0.0, 89)[:-1]
         pos = np.concatenate([np.linspace(0.0, 1.0, 161), np.geomspace(1.0, 20.0, 50)[1:]])
+    else:
+        # n = 3 binds 1/18 Hartree (scaled): the steep part sits at lower
+        # continuum energies than for n = 2.
+        neg = np.linspace(e_lo, 0.0, 71)[:-1]
+        pos = np.concatenate([np.linspace(0.0, 0.6, 151), np.geomspace(0.6, 20.0, 55)[1:]])
     return np.concatenate([neg, pos])
 
 

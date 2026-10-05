@@ -8,6 +8,9 @@ Writes ``ecpssr_H1.csv.gz`` and ``ecpssr_He4.csv.gz``, one row per
 
     ion, Z1, A1_u, Z, element, shell, U_keV, E_MeV, sigma_barn
 
+``shell`` is K, L1-L3 (Z = 6-92 / 18-92, Brandt & Lapicki ECPSSR) or M1-M5
+(Z = 50-92, ISICS2011's simplified M-shell ECPSSR -- see ecpssr.py).
+
 ``E_MeV`` is the ion's total lab energy. Energies are log-spaced at
 :data:`PER_DECADE` points per decade, dense enough that interpolating
 ln(sigma) linearly in ln(E) is good to a few tenths of a percent. Binding
@@ -41,7 +44,11 @@ IONS = {
     "He4": dict(Z1=2, A1=4.001506179, E_min=0.2, E_max=12.0),
 }
 SHELLS = [("K", xr.K_SHELL, 6, 92), ("L1", xr.L1_SHELL, 18, 92),
-          ("L2", xr.L2_SHELL, 18, 92), ("L3", xr.L3_SHELL, 18, 92)]
+          ("L2", xr.L2_SHELL, 18, 92), ("L3", xr.L3_SHELL, 18, 92),
+          # M lines matter for PIXE from Sn up (above ~0.5 keV); ISICS2011's model.
+          ("M1", xr.M1_SHELL, 50, 92), ("M2", xr.M2_SHELL, 50, 92),
+          ("M3", xr.M3_SHELL, 50, 92), ("M4", xr.M4_SHELL, 50, 92),
+          ("M5", xr.M5_SHELL, 50, 92)]
 
 
 def energies(e_min: float, e_max: float) -> np.ndarray:
@@ -68,8 +75,12 @@ def main(out: Path) -> None:
                     U = xr.EdgeEnergy(Z, xs)
                     A2 = xr.AtomicWeight(Z)
                     sym = xr.AtomicNumberToSymbol(Z)
+                    # M shells: the united atom's binding energy (ISICS2011).
+                    united = (xr.EdgeEnergy(Z + p["Z1"], xs)
+                              if shell.startswith("M") and Z + p["Z1"] <= 103 else None)
                     for E in grid:
-                        s = ecpssr(shell, p["Z1"], p["A1"], Z, A2, float(E), U)
+                        s = ecpssr(shell, p["Z1"], p["A1"], Z, A2, float(E), U,
+                                   U_united_keV=united)
                         w.writerow([ion, p["Z1"], p["A1"], Z, sym, shell, f"{U:.4f}",
                                     f"{E:.6g}", f"{s:.6e}"])
                         n += 1

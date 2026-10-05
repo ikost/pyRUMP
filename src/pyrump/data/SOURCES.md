@@ -132,7 +132,12 @@ energies, the same as the X-ray tables above. The correction terms were checked 
 term against Geant4's independent ECPSSR code; against ISICS values (Taborda et al.'s fits,
 used for comparison only and not distributed) most cases agree within ±5 %. Theory,
 validation and known deviations: `tools/ecpssr/README.md`. Regenerate with
-`python tools/ecpssr/make_tables.py`. M shells are not tabulated yet.
+`python tools/ecpssr/make_tables.py`. M1–M5 (Z = 50–92) follow the simplified
+M-shell model of ISICS2011, version 5.1 of ISICS (Z. Liu, S.J. Cipolla, Comput. Phys.
+Commun. 97 (1996) 315; S.J. Cipolla, Comput. Phys. Commun. 176 (2007) 157 and 180
+(2009) 1716; CPC Program Library ADDS v5.1, Mendeley Data doi:10.17632/dmjpvt86cx.1),
+implemented independently; against ISICS v5.1 itself, run locally for validation only
+(CPC licence), they agree within 1.1 %.
 
 ## `.adt` / R33 non-Rutherford cross-section files — not bundled
 

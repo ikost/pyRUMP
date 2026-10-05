@@ -94,6 +94,33 @@ def test_l_shell_cascade_written_out():
     assert produced.sigma_barn[0] == pytest.approx(expected, rel=1e-12)
 
 
+def test_m_shell_cascade_written_out():
+    """M5 vacancies collect Coster-Kronig transfers from M1-M4 in turn."""
+    z, energy = 78, np.array([1.9])
+    ion, atomic = ionisation_table("He4"), atomic_data()
+    s = {k: ion.sigma(z, f"M{k}", energy)[0] for k in range(1, 6)}
+    f = {(i, j): atomic.coster_kronig(z, f"M{i}{j}") for i in range(1, 5) for j in range(i + 1, 6)}
+    n1 = s[1]
+    n2 = s[2] + f[1, 2] * n1
+    n3 = s[3] + f[1, 3] * n1 + f[2, 3] * n2
+    n4 = s[4] + f[1, 4] * n1 + f[2, 4] * n2 + f[3, 4] * n3
+    n5 = s[5] + f[1, 5] * n1 + f[2, 5] * n2 + f[3, 5] * n3 + f[4, 5] * n4
+    m_alpha1 = next(l for l in atomic.lines(z) if l.line == "M5N7")
+    expected = n5 * atomic.fluorescence_yield(z, "M5") * m_alpha1.rate
+    produced = next(p for p in line_production(z, energy, ion, atomic) if p.line.line == "M5N7")
+    assert produced.sigma_barn[0] == pytest.approx(expected, rel=1e-12)
+
+
+def test_m_shells_are_tabulated_from_tin_up():
+    table = ionisation_table("H1")
+    assert {"M1", "M2", "M3", "M4", "M5"} <= set(table.shells(50))
+    assert {"M1", "M2", "M3", "M4", "M5"} <= set(table.shells(92))
+    assert not any(s.startswith("M") for s in table.shells(49))
+    # Slow 4He ionises Pt's M shell far more than its L shell.
+    helium = ionisation_table("He4")
+    assert helium.sigma(78, "M5", 1.9) > 1000 * helium.sigma(78, "L3", 1.9)
+
+
 # -- yields -------------------------------------------------------------------
 
 

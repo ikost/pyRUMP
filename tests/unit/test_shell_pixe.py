@@ -411,6 +411,7 @@ def test_lines_lists_film_and_substrate_lines(session, capsys):
     run(session, "pixe lines")
     out = capsys.readouterr().out
     assert "Mn" in out and "KL3" in out and "Pt" in out
+    assert "M5N7" in out  # Pt Ma, now that there are M-shell cross sections
     assert "Si " in out  # the Si substrate's lines too
 
 

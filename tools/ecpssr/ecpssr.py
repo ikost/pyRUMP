@@ -17,6 +17,16 @@ Implementation notes (atomic units unless stated):
   Coulomb       x_C = 2 pi d q0 zeta / (z (1+z)),  d q0 = Z1 Z2 U / (M v1^3)
                 C = p E_{p+1}(x_C)
   M = reduced mass of projectile + target atom (electron masses)
+  M shells (M1-M5), following ISICS2011 (v5.1; Liu & Cipolla, Comput. Phys.
+  Commun. 97 (1996) 315, and Cipolla's updates): Z_s = Z2 - 11.25 (3s, 3p) or
+  Z2 - 21.15 (3d); no Brandt-Lapicki binding/polarization functions --
+  instead the united-atom binding zeta = U_s(Z2+Z1)/U_s(Z2) (the same
+  subshell's binding energy in element Z2+Z1 over its own), or
+  zeta = (1 + Z1/Z_s)^2 when Z1 + Z2 > 103 (ISICS v1.0's form, used for all
+  Z there); no relativistic correction (m_R = 1); energy loss and Coulomb
+  deflection as above with p = 9, 11, 13 for 3s, 3p, 3d. (ISICS leaves out the
+  energy-loss factor f(z); it is kept here, as for K and L -- it is ~1 for
+  these heavy targets.)
   Binding energies U_s: xraylib EdgeEnergy.  zeta*theta must stay >= 0.3, the
   lower limit of the PWBA form-factor grid; below it pwba raises rather than
   clamping (the shipped tables never reach it).
@@ -37,6 +47,13 @@ SHELL_PARAMS = {
     "L1": (2, 4.15, 1.5,  9, 0.40, True),
     "L2": (2, 4.15, 1.25, 11, 0.15, False),
     "L3": (2, 4.15, 1.25, 11, 0.15, False),
+    # M: ISICS2011's simplified treatment (see the module docstring); the
+    # polarization and relativistic columns are unused for n = 3.
+    "M1": (3, 11.25, None, 9, None, None),
+    "M2": (3, 11.25, None, 11, None, None),
+    "M3": (3, 11.25, None, 11, None, None),
+    "M4": (3, 21.15, None, 13, None, None),
+    "M5": (3, 21.15, None, 13, None, None),
 }
 
 
@@ -71,9 +88,12 @@ def pwba(shell):
     return _PWBA[shell]
 
 
-def ecpssr(shell, Z1, A1, Z2, A2, E_MeV, U_keV, parts=False):
+def ecpssr(shell, Z1, A1, Z2, A2, E_MeV, U_keV, parts=False, U_united_keV=None):
     """Ionization cross section (barn) of subshell `shell` of element Z2 by an
-    ion (Z1, mass A1 in u) with lab kinetic energy E_MeV.  U_keV = binding energy."""
+    ion (Z1, mass A1 in u) with lab kinetic energy E_MeV.  U_keV = binding energy.
+
+    ``U_united_keV`` is the same subshell's binding energy in element Z2 + Z1,
+    which M shells need for the united-atom binding when Z1 + Z2 <= 103."""
     n, scr, cpol, p, ycoef, yn = SHELL_PARAMS[shell]
     Zs = Z2 - scr
     U = U_keV * 1e3 / HARTREE_EV                 # Hartree
@@ -84,11 +104,21 @@ def ecpssr(shell, Z1, A1, Z2, A2, E_MeV, U_keV, parts=False):
     eta = v1**2 / Zs**2
     theta = n**2 * U_keV * 1e3 / (Zs**2 * RY_EV)
     xi = 2.0 * n * np.sqrt(eta) / theta
-    h = 2.0 * n * I_func(cpol * n / xi) / (theta * xi**3)
-    g = g_func(shell, xi)
-    zeta = 1.0 + 2.0 * Z1 / (Zs * theta) * (g - h)
-    y = ycoef * (Zs / C_AU)**2 / ((n if yn else 1.0) * xi / zeta)
-    mR = np.sqrt(1.0 + 1.1 * y**2) + y
+    if n == 3:
+        # ISICS2011's M shell: a binding factor alone, no relativity.
+        if Z1 + Z2 <= 103:
+            if U_united_keV is None:
+                raise ValueError(f"{shell} of Z={Z2}: the united atom's binding energy is needed")
+            zeta = U_united_keV / U_keV
+        else:
+            zeta = (1.0 + Z1 / Zs) ** 2
+        mR = 1.0
+    else:
+        h = 2.0 * n * I_func(cpol * n / xi) / (theta * xi**3)
+        g = g_func(shell, xi)
+        zeta = 1.0 + 2.0 * Z1 / (Zs * theta) * (g - h)
+        y = ycoef * (Zs / C_AU)**2 / ((n if yn else 1.0) * xi / zeta)
+        mR = np.sqrt(1.0 + 1.1 * y**2) + y
     sigma0 = 8.0 * np.pi * Z1**2 / Zs**4 * A0SQ_BARN
     eta_R = mR * eta
     tz = zeta * theta                    # pwba raises below its theta >= 0.3 grid

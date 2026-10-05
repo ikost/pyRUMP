@@ -9,12 +9,11 @@
     `SHOW`; the detector and calibration settings with their built-in
     defaults; reading Oxford `.PIX` files; the PIXE window mirroring the
     RBS one (PLOT, OVERLAY, SPLOT, COMPARE with residuals), with markers
-    for the sample's lines and the **simulated film spectrum** (K and L
-    lines of the film and the substrate, with `H`, `ESCAPE` and `LINES`);
-    GUPIX's top-hat digital filter (`DF`) for background-free comparison; the
-    X-ray atomic data and the ECPSSR K/L cross sections. **Not yet:** M-shell
-    cross sections (so no Pt/Au/W M lines in the simulation), the
-    bare-substrate background, and fitting.
+    for the sample's lines and the **simulated spectrum** (K, L and M lines
+    of the film and the substrate, with `H`, `ESCAPE` and `LINES`); GUPIX's
+    top-hat digital filter (`DF`) for background-free comparison; the X-ray
+    atomic data and the ECPSSR K, L and M cross sections. **Not yet:** a
+    model of the continuum (use `DF`), peak tails and pile-up, and fitting.
 
 PIXE adds a second measurement to the one pyRUMP already models. The beam
 that produces the RBS spectrum also ionises inner shells in the sample, and
@@ -342,11 +341,24 @@ Coulomb deflection, perturbed stationary states (binding and polarisation)
 and relativistic effects. pyRUMP ships tables computed by its own
 independent implementation — no ISICS or GUPIX code or data — for
 protons (0.1–5 MeV) and ⁴He (0.2–12 MeV), K shell for Z = 6–92 and L1–L3
-for Z = 18–92, at 50 energies per decade — dense enough that interpolation
-is good to 0.3 %. The generator is in `tools/ecpssr/`, with its theory and
-validation. **M shells are still to be added**; they are essential for
-heavy elements under ⁴He, where the M lines are by far the strongest (Pt
-Mα in the MnPt example).
+for Z = 18–92 and M1–M5 for Z = 50–92, at 50 energies per decade — dense
+enough that interpolation is good to 0.3 %. The generator is in
+`tools/ecpssr/`, with its theory and validation.
+
+The **M shells** matter most for heavy elements under ⁴He, where the M lines
+are by far the strongest (Pt Mα in the MnPt example: about 20,000 b for M5
+at 1.9 MeV, against 4.5 b for L3). They follow the M-shell treatment of
+**ISICS2011** (ISICS version 5.1; Liu & Cipolla 1996, Cipolla 2007, 2009):
+Slater-screened hydrogenic PWBA for 3s/3p/3d, the united-atom binding
+correction ζ = U(Z₂+Z₁)/U(Z₂) — the subshell's binding energy in the
+element Z₂+Z₁ over its own — and the same energy-loss and
+Coulomb-deflection corrections, but no M-specific polarisation or
+relativistic terms.
+
+Compared with ISICS itself (versions 1.0 and 5.1, compiled locally, used for
+validation only and not distributed) and given the same binding energies,
+pyRUMP's tables agree within 1.1 % for M1–M5 and 0.1–1.5 % for K and L
+(except Au K at the lowest velocities, where σ < 0.005 b).
 
 The correction terms were checked term by term against Geant4's
 independent ECPSSR code. Against ISICS values, the tables agree within ±5 %
@@ -446,8 +458,10 @@ the PIXE spectrum, or both at once.
   energy range. Mass attenuation coefficients and detector efficiency below
   1 keV are also uncertain, so light-element results depend on H from
   standards.
-* **M shells** carry larger cross-section uncertainties than K and L, again
-  absorbed into H.
+* **M shells** use ISICS2011's simplified model and carry larger
+  cross-section uncertainties than K and L — expect tens of percent for
+  slow ⁴He — absorbed into H_M from a standard (e.g. an Au film whose
+  thickness RBS has measured).
 * **He beams on light elements** cause multiple ionisation, which shifts
   and broadens the K lines; this is not modelled.
 * Films are laterally uniform and flat with sharp interfaces — the same
@@ -457,6 +471,11 @@ the PIXE spectrum, or both at once.
 
 * W. Brandt, G. Lapicki, Phys. Rev. A 20 (1979) 465; Phys. Rev. A 23 (1981)
   1717 — ECPSSR theory.
+* Z. Liu, S.J. Cipolla, Comput. Phys. Commun. 97 (1996) 315; S.J. Cipolla,
+  Comput. Phys. Commun. 176 (2007) 157 and 180 (2009) 1716 — ISICS, whose
+  2011 version (ISICS2011, CPC Program Library ADDS v5.1,
+  [doi:10.17632/dmjpvt86cx.1](https://doi.org/10.17632/dmjpvt86cx.1)) gives
+  the M-shell treatment used here and served to validate all the tables.
 * J.A. Maxwell, J.L. Campbell, W.J. Teesdale, Nucl. Instr. Meth. B 43 (1989)
   218; J.A. Maxwell, W.J. Teesdale, J.L. Campbell, Nucl. Instr. Meth. B 95
   (1995) 407 — the GUPIX spectrum model and layered-target yields.

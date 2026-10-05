@@ -4,14 +4,15 @@ These tables give ion-induced inner-shell **ionization** cross sections for PIXE
 
 | File | Content |
 |---|---|
-| `src/pyrump/data/pixe/ecpssr_H1.csv.gz` | protons: K (Z = 6–92), L1, L2, L3 (Z = 18–92), E = 0.1–5 MeV (86 energies) |
+| `src/pyrump/data/pixe/ecpssr_H1.csv.gz` | protons: K (Z = 6–92), L1, L2, L3 (Z = 18–92), M1–M5 (Z = 50–92), E = 0.1–5 MeV (86 energies) |
 | `src/pyrump/data/pixe/ecpssr_He4.csv.gz` | ⁴He: same shells and Z ranges, E = 0.2–12 MeV (90 energies) |
 | `tools/ecpssr/validation_vs_ISICS.png` | ratio of these tables to ISICS-derived values |
 | `tools/ecpssr/` | the generator (`ecpssr.py`, `pwba.py`, `gos.py`, `make_tables.py`); its cached L-shell form factors (`gos_20.npz`, `gos_21.npz`) are kept out of git |
 
 pyRUMP reads the tables with `pyrump.pixe.xsect`; nothing here is imported at run time.
 
-M shells are **not included yet** (planned next; see section 6).
+M shells (M1–M5, Z = 50–92) follow the simplified M-shell ECPSSR of ISICS2011
+(ISICS v5.1, section 2b).
 
 ---
 
@@ -25,7 +26,7 @@ One row per (ion, element, subshell, energy):
 | `Z1` | projectile charge (1 or 2) |
 | `A1_u` | projectile (nuclear) mass in u: 1.007276467 (p), 4.001506179 (α) |
 | `Z`, `element` | target atomic number and symbol |
-| `shell` | `K`, `L1`, `L2`, `L3` |
+| `shell` | `K`, `L1`, `L2`, `L3`, `M1` … `M5` |
 | `U_keV` | subshell binding energy used (xraylib `EdgeEnergy`, v4.3.0) |
 | `E_MeV` | **total** lab kinetic energy of the ion (not per nucleon) |
 | `sigma_barn` | ionization cross section in barn (1 b = 10⁻²⁴ cm²) |
@@ -106,6 +107,39 @@ In practice, pyrump's H(E) calibration with standards (separate K and L curves) 
 
 ---
 
+## 2b. M shells: ISICS2011's model
+
+For M1–M5 the Brandt–Lapicki binding, polarization and relativistic
+functions are not available here, so the M shells follow the treatment of
+ISICS2011, version 5.1 of ISICS (Z. Liu, S.J. Cipolla, Comput. Phys. Commun.
+97 (1996) 315; S.J. Cipolla, Comput. Phys. Commun. 176 (2007) 157 and 180 (2009)
+1716; CPC Program Library ADDS v5.1):
+
+| quantity | M shells |
+|---|---|
+| screened charge | Z_s = Z₂ − 11.25 (3s, 3p), Z₂ − 21.15 (3d) |
+| electrons | M1 2, M2 2, M3 4 (3p split ⅓ : ⅔), M4 4, M5 6 (3d split 0.4 : 0.6) |
+| binding + polarization | ζ = U_s(Z₂+Z₁)/U_s(Z₂), the united-atom binding (the subshell's binding energy in element Z₂+Z₁ over its own); (1 + Z₁/Z_s)² when Z₁+Z₂ > 103, as in ISICS v1.0; no g(ξ) or h(ξ) |
+| relativistic | none, m^R = 1 |
+| energy loss, Coulomb deflection | as for K/L, with p = 9, 11, 13 for 3s, 3p, 3d |
+
+ISICS does not apply the energy-loss factor f(z); it is kept here, as for K and L
+(it is ≈ 1 for these heavy targets). The PWBA form factors for 3s, 3p, 3d are computed
+numerically like 2s/2p (`gos_30/31/32.npz`, about 13 minutes in all), not from ISICS's
+analytic expressions.
+
+**Validation against ISICS itself** (v1.0 and v5.1 compiled locally from the CPC
+distribution, used only for this comparison), with ISICS's own binding energies and
+masses so that only the models are compared:
+
+| shells | cases | ours / ISICS |
+|---|---|---|
+| M1–M5 | Sn, W, Pt, Au, Pb, U; H 1–3 MeV, ⁴He 1–3 MeV | 0.989–1.000 against v5.1 (worst 1.1 %, mostly < 0.5 %) |
+| K, L1–L3 | Fe, Ag, Au; H and ⁴He 1–3 MeV | 0.97–1.00 for L; K the same, except Au K at low velocity (0.83–0.97), where only our f(z) differs and σ < 0.005 b. v1.0 and v5.1 give identical K and L |
+
+The united-atom binding of v5.1 lowers the M cross sections by 1–10 % from v1.0's
+(1.9 MeV ⁴He on Pt: M5 −3 %, M2 −10 %).
+
 ## 5. Validation against ISICS-derived values
 
 The reference is the ISICS ECPSSR cross sections as reproduced by the polynomial fits of Taborda et al. (X-Ray Spectrom. 40 (2011) 127), which Geant4 distributes. That data carries a non-commercial, Geant4-only licence, so it was used only for this comparison and is **not** included here.
@@ -136,7 +170,7 @@ python tools/ecpssr/make_tables.py   # writes src/pyrump/data/pixe/; ~10 min wit
 
 - Deleting the `.npz` files forces the numerical L-shell form factors to be recomputed (~11 min).
 - `ecpssr.ecpssr(shell, Z1, A1, Z2, A2, E_MeV, U_keV)` returns a single cross section. It works for any bare light ion (d, ³He) and any energy with θζ ≥ 0.3; below that the PWBA form-factor grid ends and it raises rather than clamping.
-- **M shells (for W, Pt, Au Mα):** the next step is to add 3s/3p/3d form factors in `gos.py` (the bound functions are already there) and the M-shell Brandt–Lapicki corrections in `ecpssr.py`.
+- **M shells:** a fuller M-shell ECPSSR (binding, polarization and relativistic corrections for 3s/3p/3d, as in later ISICS versions) would replace ISICS v1.0's simplified ζ in `ecpssr.py`; the form factors are already there.
 
 ---
 
