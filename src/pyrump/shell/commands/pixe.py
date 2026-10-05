@@ -19,6 +19,8 @@ from __future__ import annotations
 from dataclasses import replace
 from pathlib import Path
 
+import numpy as np
+
 from ...model.spectrum import Spectrum
 from ...pixe.data import PixeData
 from ...pixe.detector import COMPOUNDS, Absorber, disc_solid_angle_msr
@@ -111,9 +113,7 @@ def setup_lines(session) -> list[str]:
         # Replayed, FILTER adds to what is there: start from none.
         "filter clear",
     ]
-    lines += [
-        f"filter {f.material} {f.thickness_um:g} {f.hole_percent:g}" for f in d.filters
-    ]
+    lines += [_filter_line(number, f) for number, f in enumerate(d.filters, start=1)]
     lines += [
         f"calib {c.kevch:.8g} {c.kev0:.8g}",
         f"h {state.h[0]:g} {state.h[1]:g} {state.h[2]:g}",
@@ -342,11 +342,25 @@ def _absorber(session, args: ArgReader, what: str, *, hole: bool = False,
     thickness = args.number("a thickness in µm")
     if thickness <= 0:
         raise CommandError(f"{what}: thickness must be positive")
-    open_area = args.optional_number() if hole else None
-    if open_area is not None and not 0 <= open_area < 100:
-        raise CommandError(f"{what}: hole area must be 0 to 100 %")
+    open_area = _hole(args, what) if hole else None
     args.done()
     return Absorber(material, thickness, open_area or 0.0)
+
+
+def _hole(args: ArgReader, what: str) -> float | None:
+    """An optional open area: ``60``, ``60%``, ``HOLE 60`` or ``HOLE 60%``."""
+    token = args.optional()
+    if token is not None and token.lower() == "hole":
+        token = args.token("the hole area, %")
+    if token is None:
+        return None
+    try:
+        value = float(token.rstrip("%"))
+    except ValueError:
+        raise CommandError(f"{what}: expected a hole area in %, not {token!r}") from None
+    if not 0 <= value < 100:
+        raise CommandError(f"{what}: hole area must be 0 to 100 %")
+    return value
 
 
 def _absorber_command(field: str, label: str, *, compounds: bool):
@@ -367,24 +381,74 @@ cmd_window = _absorber_command("window", "window", compounds=True)
 cmd_crystal = _absorber_command("crystal", "crystal", compounds=False)
 
 
+def _filter_number(token: str, count: int, *, existing: bool) -> int:
+    """A filter's number, 1 facing the sample: an existing one, or (to set
+    one) up to one past the last, so the list has no gaps."""
+    try:
+        number = int(token)
+    except ValueError:
+        raise CommandError(
+            "FILTER: give the filter's number first, e.g. FILTER 1 MYLAR 50 "
+            "(1 faces the sample)"
+        ) from None
+    if existing and not 1 <= number <= count:
+        raise CommandError(f"FILTER: there is no filter {number}")
+    if not existing and not 1 <= number <= count + 1:
+        raise CommandError(f"FILTER: set filter {count + 1} first (filters are numbered without gaps)")
+    return number
+
+
+def _filter_line(number: int, f: Absorber) -> str:
+    hole = f" hole {f.hole_percent:g}%" if f.hole_percent else ""
+    return f"filter {number} {f.material} {f.thickness_um:g}{hole}"
+
+
+#: Energies at which FILTER reports the filters' total transmission, keV.
+_TRANSMISSION_AT = (1.5, 2.5, 5.0, 10.0)
+
+
 def cmd_filter(session, args: ArgReader) -> None:
-    """``FILTER <element|MYLAR|KAPTON> <µm> [<hole %>]`` adds an absorber in
-    front of the window; ``FILTER CLEAR`` removes them all."""
-    if args and args.peek().lower() == "clear":
-        args.token()
-        args.done()
-        session.pixe.detector = replace(session.pixe.detector, filters=())
+    """``FILTER`` lists the absorbers between sample and window, numbered
+    from the sample outwards (1 faces the sample), with their total
+    transmission. ``FILTER <n> <element|MYLAR|KAPTON> <µm> [[HOLE] <%>]``
+    sets filter *n* -- replacing it, or adding it after the last; ``FILTER
+    CLEAR`` removes them all, ``FILTER CLEAR <n>`` one of them (the ones
+    after it move up)."""
+    from ...pixe.atomic import atomic_data
+    from ...pixe.yields import transmission
+
+    detector = session.pixe.detector
+    filters = list(detector.filters)
+    if args:
+        first = args.token()
+        if first.lower() == "clear":
+            token = args.optional()
+            args.done()
+            if token is None:
+                filters = []
+            else:
+                del filters[_filter_number(token, len(filters), existing=True) - 1]
+        else:
+            number = _filter_number(first, len(filters), existing=False)
+            absorber = _absorber(session, args, f"FILTER {number}", hole=True)
+            if number > len(filters):
+                filters.append(absorber)
+            else:
+                filters[number - 1] = absorber
+        session.pixe.detector = replace(detector, filters=tuple(filters))
         pixe_plotting.refresh(session)
-    elif args:
-        absorber = _absorber(session, args, "FILTER", hole=True)
-        detector = session.pixe.detector
-        session.pixe.detector = replace(detector, filters=(*detector.filters, absorber))
-        pixe_plotting.refresh(session)
-    filters = session.pixe.detector.filters
     if not filters:
         print("  no filters")
-    for f in filters:
-        print(f"  filter {f.material} {f.thickness_um:g} {f.hole_percent:g}  ! µm, hole %")
+        return
+    for number, f in enumerate(filters, start=1):
+        print(f"  {_filter_line(number, f)}  ! µm")
+    atomic = atomic_data()
+    total = [
+        float(np.prod([transmission(f, e, session.table, atomic) for f in filters]))
+        for e in _TRANSMISSION_AT
+    ]
+    print("  ! transmission: " + ", ".join(
+        f"{e:g} keV {value:.3g}" for e, value in zip(_TRANSMISSION_AT, total)))
 
 
 def cmd_calib(session, args: ArgReader) -> None:
@@ -677,7 +741,7 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("CRYSTAL", 2, cmd_crystal, "detector crystal: element and thickness in µm"),
     ("FWHM", 2, cmd_fwhm, "resolution at Mn Ka, eV"),
     ("FANO", 2, cmd_fano, "Fano factor"),
-    ("FILTER", 3, cmd_filter, "add an absorber (element, µm, hole %), or FILTER CLEAR"),
+    ("FILTER", 3, cmd_filter, "list filters; FILTER n material µm [hole %]; FILTER CLEAR [n]"),
     ("CALIB", 3, cmd_calib, "energy calibration: keV/channel and offset in keV"),
     ("H", 1, cmd_h, "instrumental constant for K, L, M lines (H K L M, or H K|L|M v)"),
     ("ESCAPE", 2, cmd_escape, "Si escape peaks in the simulation: ON or OFF"),

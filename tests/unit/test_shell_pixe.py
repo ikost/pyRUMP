@@ -115,7 +115,7 @@ def test_built_in_defaults_without_a_pyrumprc(empty_session):
 
 
 def test_show_prints_commands_that_rebuild_the_setup(empty_session, capsys):
-    run(empty_session, "pixe angle 30", "pixe filter Al 25 10", "pixe calib 0.0101 -0.04",
+    run(empty_session, "pixe angle 30", "pixe filter 2 Al 25 hole 10%", "pixe calib 0.0101 -0.04",
         "pixe pair on")
     lines = setup_lines(empty_session)
     fresh = _session()
@@ -139,7 +139,10 @@ def test_show_prints_commands_that_rebuild_the_setup(empty_session, capsys):
         ("pixe solid 0", "positive"),
         ("pixe window Xx 8", "unknown element"),
         ("pixe crystal Si -1", "positive"),
-        ("pixe filter Al 25 100", "hole area"),
+        ("pixe filter 2 Al 25 100", "hole area"),
+        ("pixe filter Al 25", "the filter's number first"),
+        ("pixe filter 3 Al 25", "set filter 2 first"),
+        ("pixe filter clear 4", "no filter 4"),
         ("pixe calib -0.01 0", "gain must be positive"),
         ("pixe pair maybe", "ON or OFF"),
     ],
@@ -425,13 +428,30 @@ def test_simulation_errors_are_reported_not_raised(session, capsys):
 # -- detector geometry and materials ------------------------------------------
 
 
-def test_compound_filters_and_their_errors(empty_session):
-    run(empty_session, "pixe filter clear", "pixe filter mylar 50", "pixe filter KAPTON 7.5 10")
-    filters = empty_session.pixe.detector.filters
-    assert [(f.material, f.thickness_um, f.hole_percent) for f in filters] == [
-        ("Mylar", 50.0, 0.0), ("Kapton", 7.5, 10.0)]
+def test_numbered_filters(empty_session, capsys):
+    """Numbered from the sample outwards; setting n replaces it or adds it
+    after the last, CLEAR n removes one and the rest move up."""
+    run(empty_session, "pixe filter 1 mylar 50 hole 60%", "pixe filter 2 Al 10 45%",
+        "pixe filter 3 KAPTON 7.5")
+
+    def stack():
+        return [(f.material, f.thickness_um, f.hole_percent)
+                for f in empty_session.pixe.detector.filters]
+
+    assert stack() == [("Mylar", 50.0, 60.0), ("Al", 10.0, 45.0), ("Kapton", 7.5, 0.0)]
+    run(empty_session, "pixe filter 2 Be 25")
+    assert stack()[1] == ("Be", 25.0, 0.0)
+    run(empty_session, "pixe filter clear 2")
+    assert stack() == [("Mylar", 50.0, 60.0), ("Kapton", 7.5, 0.0)]
+    capsys.readouterr()
+    run(empty_session, "pixe filter")
+    out = capsys.readouterr().out
+    assert "filter 1 Mylar 50 hole 60%" in out and "filter 2 Kapton 7.5" in out
+    assert "transmission" in out
+    run(empty_session, "pixe filter clear")
+    assert stack() == []
     with pytest.raises(CommandError, match="Mylar, Kapton"):
-        run(empty_session, "pixe filter Teflon 10")
+        run(empty_session, "pixe filter 1 Teflon 10")
     with pytest.raises(CommandError, match="unknown element"):
         run(empty_session, "pixe crystal Mylar 500")  # a crystal is an element
 

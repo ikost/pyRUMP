@@ -220,7 +220,7 @@ pixe
  fwhm 122                  ! resolution at Mn Kα, eV
  fano 0.104
  filter clear
- filter mylar 62           ! absorber against bremsstrahlung, µm (effective)
+ filter 1 mylar 62         ! absorber against bremsstrahlung, µm (effective)
  pair on
 disable
 ```
@@ -245,8 +245,24 @@ at 7.125 in (181 mm) is 0.763 msr.
 **Absorbers.** `WINDOW` and `FILTER` take an element or a compound by
 name: `MYLAR` (C₁₀H₈O₄, 1.40 g/cm³) or `KAPTON` (C₂₂H₁₀N₂O₅, 1.42 g/cm³),
 NIST's compositions and densities, mixed by mass fraction. `CRYSTAL` takes
-an element. A `FILTER` with a hole percentage is a "funny filter": that
-fraction of the X-rays passes unattenuated.
+an element.
+
+**Filters** are numbered from the sample outwards — filter 1 faces the
+sample — and the X-rays cross them all:
+
+```
+PIXE Command: filter 1 mylar 50 hole 60%     /* sets (or replaces) filter 1 */
+PIXE Command: filter 2 al 10 45%             /* a second one, once 1 exists */
+PIXE Command: filter                         /* lists them, with the total
+                                                transmission at 1.5-10 keV */
+PIXE Command: filter clear 2                 /* removes filter 2            */
+PIXE Command: filter clear                   /* removes them all            */
+```
+
+A filter can only be set next to the existing ones, so the numbering has no
+gaps; removing one moves the ones after it up. A hole percentage (`HOLE`
+and `%` are optional) makes a "funny filter": that fraction of the X-rays
+passes unattenuated.
 
 **Built-in defaults.** Without any setup, pyRUMP uses these — like the RBS
 defaults, something sensible to start from. They describe a real setup:
@@ -306,7 +322,7 @@ Commands marked † are not implemented yet.
 | Data | `GET <file>`, `PAIR ON\|OFF`, `BARE <buffer>` †, `LIVETIME <live> <real>` † |
 | Geometry | `ANGLE <deg>` (−90 to 90), `TILTSIGN 1\|-1\|0`, `SOLID <msr>` or `SOLID <area mm²> <distance> [MM\|IN]` |
 | Detector | `WINDOW <element\|MYLAR\|KAPTON> <µm>`, `CRYSTAL <element> <µm>`, `FWHM <eV>`, `FANO <F>`, `DEADLAYER <µm>` †, `ESCAPE ON\|OFF`, `TAIL ON\|OFF` † |
-| Absorbers | `FILTER <element\|MYLAR\|KAPTON> <µm> [<hole %>]`, `FILTER CLEAR` |
+| Absorbers | `FILTER` (list), `FILTER <n> <element\|MYLAR\|KAPTON> <µm> [[HOLE] <%>]`, `FILTER CLEAR [<n>]` |
 | Calibration | `CALIB <gain keV/ch> <offset keV>`, `H <K> <L> <M>` or `H K\|L\|M <value>` |
 | Simulation | `LINES [ALL]` (table of lines, energies, cross sections, efficiency and counts), `EXCLUDE <element>` †, `INCLUDE <element>` † |
 | Background | `BGSCALE <s>` †, `SMOOTH <channels>` † |
