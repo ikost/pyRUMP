@@ -239,6 +239,16 @@ def areal_structure_label(
     return " - ".join(parts)
 
 
+def _length_unit(token: str) -> str:
+    """A thickness unit as typed, except Angstroms always spelt ``A``.
+
+    Unit lookup is case-insensitive, so ``Thick 150 a`` already simulates
+    correctly; this only keeps the displayed unit (plot legend, SIM SHOW) from
+    reading ``[150a]``.
+    """
+    return "A" if token.upper() == "A" else token
+
+
 def canonical_symbol(token: str) -> str:
     """An element symbol spelt the standard way: ``si``/``SI`` -> ``Si``.
 
@@ -394,13 +404,13 @@ class SampleEditor:
         elif command.startswith("thick"):
             layer = self._writable()
             layer.thickness = float(rest[0])
-            layer.unit = rest[1] if len(rest) > 1 else "A"
+            layer.unit = _length_unit(rest[1]) if len(rest) > 1 else "A"
         elif command.startswith("sublay"):
             self._writable().sublayers = int(float(rest[0]))
         elif command.startswith("sthick"):
             layer = self._writable()
             layer.sub_thickness = float(rest[0])
-            layer.sub_unit = rest[1] if len(rest) > 1 else "A"
+            layer.sub_unit = _length_unit(rest[1]) if len(rest) > 1 else "A"
         elif command.startswith("comp"):
             self._writable().composition = _element_pairs(rest)
         elif command.startswith("species"):

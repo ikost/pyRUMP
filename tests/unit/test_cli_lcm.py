@@ -127,6 +127,15 @@ def test_structure_label_is_substrate_first():
     assert structure_label(script) == "Si [500/cm2] - Mn3Pt [150A] - Ru [30A]"
 
 
+def test_structure_label_spells_angstroms_with_a_capital_a():
+    script = parse_lcm(
+        "Sim Reset\nLayer 1\n Thick 30 a\n Sthickness 10 a\n Composition Ru 1 /\n"
+        "Next\n Thick 500 /cm2\n Composition Si 1 /\n"
+    )
+    assert script.layers[0].sub_unit == "A"
+    assert structure_label(script) == "Si [500/cm2] - Ru [30A]"
+
+
 @needs_data
 def test_areal_structure_label_gives_every_layer_in_1e15_atoms_per_cm2():
     table = PeriodicTable.load(DATA / "atom4.dat", DATA / "pscoef.dat")
