@@ -167,23 +167,6 @@ class _Curve:
     spectrum: Spectrum | None
     label: str
     simulated: bool = False
-    variance: np.ndarray | None = None
-    """Per-channel variance, once the curve has been digitally filtered."""
-
-
-def _filtered(session, curve: _Curve) -> _Curve:
-    """The curve through the top-hat digital filter (DF ON), with the lobes
-    sized by the detector's FWHM at each channel."""
-    from ..pixe.digital_filter import apply, lobe_widths
-    from ..pixe.spectrum import SIGMA_PER_FWHM, resolution_sigma_keV
-
-    calibration = curve.spectrum.calibration
-    centres = calibration.edge_energy(np.arange(calibration.npt)) + calibration.kevch / 2
-    fwhm = resolution_sigma_keV(session.pixe.detector, centres) / SIGMA_PER_FWHM
-    half, wing = lobe_widths(calibration, fwhm, session.pixe.filter_settings)
-    counts, variance = apply(curve.spectrum.counts, half, wing)
-    return _Curve(Spectrum(counts=counts, calibration=calibration), curve.label,
-                  curve.simulated, variance)
 
 
 def _curve(session, item: ViewItem, simulation) -> _Curve:
@@ -228,8 +211,6 @@ def draw(session, *, required: bool = True) -> bool:
         return False
     simulation = _simulation(session) if any(i.kind != "data" for i in state.view) else None
     curves = [_curve(session, item, simulation) for item in state.view]
-    if state.filter:
-        curves = [_filtered(session, c) if c.spectrum is not None else c for c in curves]
     drawable = [c for c in curves if c.spectrum is not None]
     notes = [c.label for c in curves if c.spectrum is None]
 
@@ -238,11 +219,10 @@ def draw(session, *, required: bool = True) -> bool:
     )
     reference = (drawable[0].spectrum.calibration if drawable
                  else session.pixe.calibration)
-    low, high = _region(state, reference)
+    low, high = region_indices(state, reference)
 
     if compare:
-        draw_comparison = _draw_filtered_comparison if state.filter else _draw_comparison
-        figure = draw_comparison(session, curves, (low, high))
+        figure = _draw_comparison(session, curves, (low, high))
         ax = figure.axes[0]
         shown = [c.spectrum.counts[low:high + 1] for c in drawable]
     else:
@@ -266,26 +246,18 @@ def draw(session, *, required: bool = True) -> bool:
                     lw=1.2 if curve.simulated else 1.0, color=color, label=curve.label)
             shown.append(spectrum.counts[low:stop + 1])
         ax.set_xlabel("Energy (keV)")
-        ax.set_ylabel("Filtered counts" if state.filter else "Counts")
+        ax.set_ylabel("Counts")
         if drawable and state.plot.labels:
             ax.legend(frameon=False, fontsize="small")
 
     _channel_axis(ax, reference)
     first, last = reference.edge_energy([low, high + 1])
     ax.set_xlim(first, last)
-    if state.filter:
-        # Filtered spectra go negative: always a linear axis, autoscaled
-        # unless COUNTS pins it.
-        ax.set_yscale("linear")
-        ax.autoscale(axis="y")
-        if state.plot.ylow is not None or state.plot.yhigh is not None:
-            ax.set_ylim(bottom=state.plot.ylow, top=state.plot.yhigh)
-    else:
-        _apply_scale(ax, state.plot)
-        _apply_limits(ax, state.plot)
-        if state.plot.yscale == "log" and state.plot.ylow is None:
-            # Empty channels would drag a log axis down to its clip floor.
-            ax.set_ylim(bottom=0.5)
+    _apply_scale(ax, state.plot)
+    _apply_limits(ax, state.plot)
+    if state.plot.yscale == "log" and state.plot.ylow is None:
+        # Empty channels would drag a log axis down to its clip floor.
+        ax.set_ylim(bottom=0.5)
     if notes:
         ax.text(0.01, 0.97 if not drawable else 0.80, "\n".join(notes), transform=ax.transAxes,
                 va="top", ha="left", fontsize="small", color="0.35")
@@ -299,14 +271,13 @@ def draw(session, *, required: bool = True) -> bool:
         marks = _line_marks(ax, sample_elements(session), major_only=state.markers == "on")
         if marks:
             if state.plot.yhigh is None and shown:
-                _make_headroom(ax, np.concatenate(shown),
-                               "linear" if state.filter else state.plot.yscale)
+                _make_headroom(ax, np.concatenate(shown), state.plot.yscale)
             _draw_marks(ax, marks)
     show(figure)
     return True
 
 
-def _region(state, calibration) -> tuple[int, int]:
+def region_indices(state, calibration) -> tuple[int, int]:
     """REGION (channel numbers, as the file numbers them) as indices into
     a spectrum with ``calibration``; the whole spectrum by default."""
     first = int(round(calibration.first))
@@ -315,49 +286,6 @@ def _region(state, calibration) -> tuple[int, int]:
     if high <= low:
         raise CommandError(f"no PIXE channels between {state.low} and {state.high}")
     return low, high
-
-
-def _draw_filtered_comparison(session, curves, region):
-    """DF ON: filtered data against the filtered simulation, with residuals
-    (sim - data) / sigma, sigma propagated through the filter from the
-    data's counts, and chi-square over the channels shown."""
-    data, theory, *rest = curves
-    low, high = region
-    figure = figure_for(session, residuals=True)
-    top, bottom = figure.axes
-    top.clear()
-    bottom.clear()
-    x = data.spectrum.energies[low:high + 1]
-    observed = data.spectrum.counts[low:high + 1]
-    expected = theory.spectrum.counts[low:high + 1]
-    top.step(x, observed, where="mid", lw=1.0, color="0.20", label=data.label)
-    top.plot(x, expected, lw=1.2, color="crimson", label=theory.label)
-    for position, curve in enumerate(rest):
-        if curve.spectrum is not None:
-            top.plot(x, curve.spectrum.counts[low:high + 1], lw=1.0,
-                     color=_SIM_COLORS[(position + 1) % len(_SIM_COLORS)], label=curve.label)
-    top.axhline(0, color="0.6", lw=0.6)
-    top.set_ylabel("Filtered counts")
-    top.legend(frameon=False, fontsize="small")
-
-    sigma = np.sqrt(data.variance[low:high + 1])
-    usable = np.isfinite(observed) & np.isfinite(expected) & (sigma > 0)
-    residual = np.full(observed.size, np.nan)
-    residual[usable] = (expected[usable] - observed[usable]) / sigma[usable]
-    bottom.axhspan(-1, 1, color="0.85", zorder=0)
-    bottom.axhline(0, color="0.4", lw=0.8)
-    bottom.plot(x, residual, lw=0.9, color="crimson")
-    bottom.set_ylabel(r"residual ($\sigma$)")
-    bottom.set_xlabel("Energy (keV)")
-    if usable.any():
-        limit = max(3.0, float(np.nanmax(np.abs(residual))))
-        bottom.set_ylim(-limit, limit)
-        reduced = float(np.nansum(residual**2) / usable.sum())
-        bottom.text(0.98, 0.95, f"filtered: reduced chi-square {reduced:.4f} ({usable.sum()} channels)",
-                    transform=bottom.transAxes, ha="right", va="top", fontsize="small",
-                    bbox={"boxstyle": "round", "facecolor": "white", "alpha": 0.7,
-                          "edgecolor": "none"})
-    return figure
 
 
 def _channel_axis(ax, calibration) -> None:

@@ -118,7 +118,6 @@ def setup_lines(session) -> list[str]:
         f"calib {c.kevch:.8g} {c.kev0:.8g}",
         f"h {state.h[0]:g} {state.h[1]:g} {state.h[2]:g}",
         f"escape {'on' if state.escape else 'off'}",
-        *_filter_lines(state),
         f"pair {'on' if state.pair else 'off'}",
         f"markers {state.markers}",
     ]
@@ -514,57 +513,6 @@ def cmd_escape(session, args: ArgReader) -> None:
     print(f"  escape {'on' if session.pixe.escape else 'off'}")
 
 
-def _filter_lines(state) -> list[str]:
-    f = state.filter_settings
-    split = "df split off" if f.split_keV is None else (
-        f"df split {f.split_keV:g} {f.split_upper:g} {f.split_lower:g}")
-    return [f"df width {f.upper:g} {f.lower:g}", split, f"df {'on' if state.filter else 'off'}"]
-
-
-def cmd_df(session, args: ArgReader) -> None:
-    """``DF ON|OFF`` (DIGITALFILTER) -- GUPIX's top-hat digital filter for
-    the PIXE window and its comparison: it removes the slowly varying
-    continuum from data and simulation alike, so no background model is
-    needed. ``DF WIDTH <UW> <LW>`` sets the central lobe and each wing in
-    units of the FWHM (default 1 0.5, Schamber and Statham's compromise);
-    ``DF SPLIT <keV> <UW> <LW>`` uses wider lobes above an energy (GUPIX's
-    two-region filter, e.g. DF SPLIT 6 3 0.5); ``DF SPLIT OFF``."""
-    from dataclasses import replace as replace_settings
-
-    state = session.pixe
-    token = args.optional()
-    if token is not None:
-        word = token.lower()
-        if word in ("on", "off"):
-            args.done()
-            state.filter = word == "on"
-        elif word == "width":
-            upper, lower = args.number("the central lobe, in FWHM"), args.number("each wing, in FWHM")
-            args.done()
-            if upper <= 0 or lower <= 0:
-                raise CommandError("DF WIDTH: widths must be positive")
-            state.filter_settings = replace_settings(state.filter_settings, upper=upper, lower=lower)
-        elif word == "split":
-            if args.peek() is not None and args.peek().lower() == "off":
-                args.token()
-                args.done()
-                state.filter_settings = replace_settings(state.filter_settings, split_keV=None)
-            else:
-                energy = args.number("the split energy, keV")
-                upper = args.number("the central lobe above it, in FWHM")
-                lower = args.number("each wing above it, in FWHM")
-                args.done()
-                if energy <= 0 or upper <= 0 or lower <= 0:
-                    raise CommandError("DF SPLIT: values must be positive")
-                state.filter_settings = replace_settings(
-                    state.filter_settings, split_keV=energy, split_upper=upper, split_lower=lower)
-        else:
-            raise CommandError("DF: expected ON, OFF, WIDTH <UW> <LW> or SPLIT <keV> <UW> <LW>")
-        pixe_plotting.refresh(session)
-    for line in _filter_lines(state):
-        print(f"  {line}")
-
-
 def cmd_lines(session, args: ArgReader) -> None:
     """``LINES [ALL]`` -- the simulated lines: energy, cross section at the
     beam energy, detector efficiency and counts, strongest first. Lines
@@ -597,6 +545,158 @@ def cmd_lines(session, args: ArgReader) -> None:
         key = f"{line.symbol} {line.family}"
         totals[key] = totals.get(key, 0.0) + line.counts
     print("  totals:  " + ", ".join(f"{k} {v:.4g}" for k, v in totals.items()))
+
+
+# ---------------------------------------------------------------------------
+# Exports
+# ---------------------------------------------------------------------------
+
+
+def pixe_target(target: Path) -> Path:
+    """The PIXE export's file next to ``target``: ``fit.txt`` -> ``fit_pixe.txt``."""
+    return target.with_name(f"{target.stem}_pixe{target.suffix}")
+
+
+def _pixe_export_buffer(session) -> tuple[int, Buffer]:
+    index = session.buffers.active
+    buffer = session.buffers.get(index) if index else None
+    if buffer is None or buffer.pixe is None:
+        raise CommandError("no PIXE spectrum in the active buffer: PIXE GET <file>")
+    return index, buffer
+
+
+def _pixe_header(session, index: int, buffer: Buffer, what: str) -> list[str]:
+    """What is needed to read a PIXE export: the spectrum, the run it shares
+    with the RBS spectrum, and the PIXE setup."""
+    import datetime
+
+    from ... import __version__
+    from .rump import _wrascii_beam_code
+
+    data, b, g, m = buffer.pixe, buffer.beam, buffer.geometry, buffer.measurement
+    c = data.calibration
+    detector = session.pixe.detector
+    times = (f"live {data.live_time_s:g} s  real {data.real_time_s:g} s"
+             f"  (live fraction {data.live_fraction:.6f})"
+             if data.live_time_s and data.real_time_s else "live/real time unknown")
+    return [
+        f"pyRUMP {__version__} PIXE {what} export, {datetime.date.today().isoformat()}",
+        f"PIXE data      {data.path.name if data.path else data.identifier}"
+        f"  ({data.path if data.path else '-'}, buffer {index})",
+        f"Date           {data.date}" if data.date else f"Date           {buffer.date}",
+        f"Times          {times}",
+        f"Calibration    {c.kevch:.8g} keV/ch  offset {c.kev0:.8g} keV"
+        f"  first channel {c.first:g}  {c.npt} channels",
+        f"Beam           {_wrascii_beam_code(session, b)}  {b.e0_MeV:.6f} MeV",
+        f"Angles         theta {g.theta:g} deg: beam {abs(g.theta):g} deg,"
+        f" X-rays {detector.exit_angle(g.theta):g} deg to the sample normal",
+        f"Dose           charge {m.charge_uC:.6f} uC  charge state {m.charge_state}"
+        f"  corr {m.correction:.6f}",
+        f"Setup          {'; '.join(setup_lines(session))}",
+    ]
+
+
+def _pixe_columns(buffer: Buffer) -> dict[str, np.ndarray]:
+    spectrum = buffer.pixe.spectrum
+    return {
+        "channel": np.arange(spectrum.counts.size) + int(round(spectrum.calibration.first)),
+        "energy_keV": spectrum.energies,
+    }
+
+
+def write_pixe_export(session, target: Path) -> None:
+    """PIXE ``EXPORT``: the active buffer's PIXE spectrum as columns."""
+    from ...io.ascii import write_columns
+    from .rump import _export_delimiter
+
+    index, buffer = _pixe_export_buffer(session)
+    counts = np.asarray(buffer.pixe.spectrum.counts, dtype=np.float64)
+    columns = _pixe_columns(buffer)
+    columns["counts"] = counts
+    columns["error"] = np.sqrt(np.clip(counts, 0.0, None))
+    write_columns(
+        target, columns,
+        comments=[*_pixe_header(session, index, buffer, "spectrum"),
+                  "channel is numbered as in the spectrum file; energy_keV is the lower edge "
+                  "of each channel; error is sqrt(counts)"],
+        delimiter=_export_delimiter(target), formats={"channel": "d", "energy_keV": ".4f"},
+    )
+    print(f"wrote {target}: {counts.size} PIXE channels from buffer {index}")
+
+
+def write_pixe_exportcmp(session, target: Path) -> None:
+    """PIXE ``EXPORTCMP``: data, simulation (total and per element),
+    difference and Poisson residual."""
+    from ...fit.objective import chi_square, poisson_residuals
+    from ...io.ascii import write_columns
+    from ..pixe_sim import simulate
+    from .rump import _export_delimiter, _export_sample_lines
+
+    index, buffer = _pixe_export_buffer(session)
+    try:
+        result = simulate(session)
+    except (ValueError, KeyError) as error:
+        raise CommandError(f"EXPORTCMP: {str(error).strip(chr(39))}") from None
+    if result is None:
+        raise CommandError("EXPORTCMP: no SIM sample to simulate")
+    spectrum = buffer.pixe.spectrum
+    counts = np.asarray(spectrum.counts, dtype=np.float64)
+    simulation = np.asarray(result.counts, dtype=np.float64)
+    residual, _ = poisson_residuals(counts, simulation)
+    residual[simulation <= 0] = np.nan
+
+    low, high = pixe_plotting.region_indices(session.pixe, spectrum.calibration)
+    mask = np.zeros(counts.size, dtype=bool)
+    mask[low:high + 1] = True
+    summary = chi_square(counts, simulation, valid=mask)
+    span = (f"channels {spectrum.calibration.first + low:g}-{spectrum.calibration.first + high:g}")
+    gof = [f"GOF            reduced chi-square {summary.reduced:.4f} ({summary.dof} dof) over {span}"]
+
+    columns = _pixe_columns(buffer)
+    columns.update(counts=counts, simulation=simulation, diff=counts - simulation,
+                   residual=residual)
+    for symbol, part in result.by_element.items():
+        columns[f"sim_{symbol}"] = np.asarray(part, dtype=np.float64)
+    notes = ["channel is numbered as in the spectrum file; energy_keV is the lower edge of "
+             "each channel; residual is the Poisson residual in sigma (nan where the "
+             "simulation is zero); sim_<element> are each element's simulated lines"]
+    write_columns(
+        target, columns,
+        comments=[*_pixe_header(session, index, buffer, "COMPARE"),
+                  *_export_sample_lines(session), *gof, *notes],
+        delimiter=_export_delimiter(target), formats={"channel": "d", "energy_keV": ".4f"},
+    )
+    print(f"wrote {target}: {counts.size} PIXE channels, reduced chi-square "
+          f"{summary.reduced:.4f} ({summary.dof} dof)")
+
+
+def paired_export(session, target: Path, *, compare: bool) -> None:
+    """After a RUMP-level EXPORT/EXPORTCMP: with PAIR ON and a PIXE spectrum
+    in the active buffer, the PIXE file too, as ``<name>_pixe``."""
+    buffer = session.buffers.active_buffer
+    if not session.pixe.pair or not session.buffers.active or buffer is None or buffer.pixe is None:
+        return
+    (write_pixe_exportcmp if compare else write_pixe_export)(session, pixe_target(target))
+
+
+def cmd_export(session, args: ArgReader) -> None:
+    """``EXPORT <file>`` -- write the active buffer's PIXE spectrum as plain
+    columns (channel, energy, counts, error) to ``<file>_pixe``, under a
+    ``#``-commented header with the PIXE setup. At the RUMP level, EXPORT
+    writes the RBS spectrum, and with PAIR ON this file as well."""
+    from .rump import _export_target
+
+    write_pixe_export(session, pixe_target(_export_target(args)))
+
+
+def cmd_exportcmp(session, args: ArgReader) -> None:
+    """``EXPORTCMP <file>`` (synonym ``EC``) -- write the PIXE comparison as
+    columns to ``<file>_pixe``: channel, energy, counts, simulation, diff,
+    Poisson residual and each element's simulated lines; chi-square in the
+    header."""
+    from .rump import _export_target
+
+    write_pixe_exportcmp(session, pixe_target(_export_target(args)))
 
 
 # ---------------------------------------------------------------------------
@@ -745,8 +845,6 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("CALIB", 3, cmd_calib, "energy calibration: keV/channel and offset in keV"),
     ("H", 1, cmd_h, "instrumental constant for K, L, M lines (H K L M, or H K|L|M v)"),
     ("ESCAPE", 2, cmd_escape, "Si escape peaks in the simulation: ON or OFF"),
-    ("DIGITALFILTER", 3, cmd_df, "top-hat filter removing the continuum: ON, OFF, WIDTH, SPLIT"),
-    ("DF", -2, cmd_df, "synonym for DIGITALFILTER"),
     # Typed in full only: LIN, LINE stay LINEAR's, as at the RUMP level.
     ("LINES", 0, cmd_lines, "table of the simulated lines (ALL: weak ones too)"),
     # The PIXE window
@@ -760,6 +858,9 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("LOG", 2, _scale("log"), "logarithmic yield axis (the default)"),
     ("MARKERS", 2, cmd_markers, "label the sample's lines: ON, ALL or OFF"),
     ("FIGSAVE", 3, cmd_figsave, "save the PIXE window to an image file"),
+    ("EXPORTCMP", 7, cmd_exportcmp, "write the PIXE comparison as columns to <file>_pixe"),
+    ("EC", -2, cmd_exportcmp, "synonym for EXPORTCMP"),
+    ("EXPORT", 4, cmd_export, "write the PIXE spectrum as columns to <file>_pixe"),
     ("HCOPY", -5, cmd_figsave, "synonym for FIGSAVE"),
 ]
 
@@ -769,7 +870,7 @@ TABLE.note_synonym("HELP", "?")
 TABLE.note_synonym("RETURN", "QUIT", "Q")
 TABLE.note_synonym("FIGSAVE", "HCOPY")
 TABLE.note_synonym("COMPARE", "CMP")
-TABLE.note_synonym("DIGITALFILTER", "DF")
+TABLE.note_synonym("EXPORTCMP", "EC")
 
 _HELP_GROUPS: list[tuple[str, list[str]]] = [
     ("Getting around", ["HELP", "RETURN", "DISABLE", "SHOW"]),
@@ -779,5 +880,6 @@ _HELP_GROUPS: list[tuple[str, list[str]]] = [
       "ESCAPE"]),
     ("Simulation", ["H", "LINES"]),
     ("PIXE window",
-     ["PLOT", "COMPARE", "DIGITALFILTER", "REGION", "COUNTS", "LINEAR", "SQRT", "LOG", "MARKERS", "FIGSAVE"]),
+     ["PLOT", "COMPARE", "REGION", "COUNTS", "LINEAR", "SQRT", "LOG", "MARKERS", "FIGSAVE"]),
+    ("Exports", ["EXPORT", "EXPORTCMP"]),
 ]

@@ -1096,7 +1096,9 @@ def cmd_exportcmp(session, args: ArgReader) -> None:
     counts, and a count-based chi-square, whatever NORMALIZE says; the header
     gives the factor to convert. ``.csv`` is comma-separated, anything else
     tab-separated, and a bare filename gets ``.txt``. Buffer 0 is refreshed
-    first if the sample changed, and no plot needs to be on screen.
+    first if the sample changed, and no plot needs to be on screen. With
+    PIXE's PAIR ON and a PIXE spectrum in the buffer, the PIXE comparison is
+    written too, as ``<file>_pixe``.
     """
     from ...fit.objective import poisson_residuals
     from ...io.ascii import write_columns
@@ -1137,6 +1139,9 @@ def cmd_exportcmp(session, args: ArgReader) -> None:
         formats={"channel": "d", "energy_keV": ".4f"},
     )
     print(f"wrote {target}: {n_channels} channels, {gof}")
+    from .pixe import paired_export
+
+    paired_export(session, target, compare=True)
 
 
 def cmd_export(session, args: ArgReader) -> None:
@@ -1150,7 +1155,8 @@ def cmd_export(session, args: ArgReader) -> None:
     Buffer 0 exports the simulation, recomputed first if the sample changed,
     and its header adds the physics settings and the sample. ``.csv`` is
     comma-separated, anything else tab-separated, and a bare filename gets
-    ``.txt``.
+    ``.txt``. With PIXE's PAIR ON and a PIXE spectrum in the buffer, the
+    PIXE spectrum is written too, as ``<file>_pixe``.
     """
     from ...io.ascii import write_columns
 
@@ -1176,6 +1182,9 @@ def cmd_export(session, args: ArgReader) -> None:
         formats={"channel": "d", "energy_keV": ".4f"},
     )
     print(f"wrote {target}: {counts.size} channels from buffer {index}")
+    from .pixe import paired_export
+
+    paired_export(session, target, compare=False)
 
 
 def cmd_figsave(session, args: ArgReader) -> None:

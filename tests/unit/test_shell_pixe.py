@@ -487,35 +487,6 @@ def test_defaults_describe_the_rc43_setup():
     assert [(f.material, f.thickness_um) for f in detector.filters] == [("Mylar", 62.0)]
 
 
-# -- the digital filter ---------------------------------------------------------
-
-
-def test_df_filters_the_comparison(session):
-    stack = run(session, f"sim get {EXAMPLES / 'MnPt.lcm'}", f"pixe get {EXAMPLES / 'MnPt.PIX'}",
-                "pixe", "df on", "cmp")
-    top, bottom = session.pixe.figure.axes
-    assert top.get_ylabel() == "Filtered counts" and top.get_yscale() == "linear"
-    assert any("filtered: reduced chi-square" in t.get_text() for t in bottom.texts)
-    run(session, "df off", stack=stack)
-    assert session.pixe.figure.axes[0].get_yscale() == "log"
-
-
-def test_df_settings(empty_session):
-    run(empty_session, "pixe df width 1.5 0.75", "pixe df split 6 3 0.5", "pixe digitalfilter on")
-    state = empty_session.pixe
-    assert state.filter
-    assert (state.filter_settings.upper, state.filter_settings.lower) == (1.5, 0.75)
-    assert state.filter_settings.split_keV == 6.0
-    lines = setup_lines(empty_session)
-    assert {"df width 1.5 0.75", "df split 6 3 0.5", "df on"} <= set(lines)
-    run(empty_session, "pixe df split off")
-    assert state.filter_settings.split_keV is None
-    with pytest.raises(CommandError, match="expected ON, OFF"):
-        run(empty_session, "pixe df maybe")
-    with pytest.raises(CommandError, match="positive"):
-        run(empty_session, "pixe df width 0 1")
-
-
 def test_lin_is_the_linear_axis_and_lines_must_be_typed_in_full(session, capsys):
     stack = run(session, f"sim get {EXAMPLES / 'MnPt.lcm'}", f"pixe get {EXAMPLES / 'MnPt.PIX'}",
                 "pixe")
@@ -525,3 +496,43 @@ def test_lin_is_the_linear_axis_and_lines_must_be_typed_in_full(session, capsys)
     capsys.readouterr()
     run(session, "lines", stack=stack)
     assert "KL3" in capsys.readouterr().out
+
+
+# -- exports --------------------------------------------------------------------
+
+
+def _columns(path: Path) -> tuple[list[str], np.ndarray]:
+    lines = [l for l in path.read_text().splitlines() if not l.startswith("#")]
+    delimiter = "," if path.suffix == ".csv" else "\t"
+    names = lines[0].split(delimiter)
+    return names, np.array([[float(v) for v in l.split(delimiter)] for l in lines[1:]])
+
+
+def test_rump_level_exports_add_the_pixe_file_in_pair_mode(session, tmp_path):
+    run(session, f"sim get {EXAMPLES / 'MnPt.lcm'}", f"pixe get {EXAMPLES / 'MnPt.PIX'}")
+    run(session, f"export {tmp_path / 'off'}", f"ec {tmp_path / 'offc'}")
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["off.txt", "offc.txt"]
+    run(session, "pixe pair on", f"export {tmp_path / 'on'}", f"ec {tmp_path / 'onc.csv'}")
+    assert (tmp_path / "on_pixe.txt").exists() and (tmp_path / "onc_pixe.csv").exists()
+    names, rows = _columns(tmp_path / "on_pixe.txt")
+    assert names == ["channel", "energy_keV", "counts", "error"]
+    assert rows[0, 0] == 1  # numbered as in the .PIX file
+    np.testing.assert_allclose(rows[:, 2], session.buffers[1].pixe.spectrum.counts)
+
+
+def test_pixe_prompt_exports_only_the_pixe_file(session, tmp_path):
+    stack = run(session, f"sim get {EXAMPLES / 'MnPt.lcm'}", f"pixe get {EXAMPLES / 'MnPt.PIX'}",
+                "pixe pair on", "pixe")
+    run(session, f"export {tmp_path / 'a'}", f"exportcmp {tmp_path / 'b'}", stack=stack)
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["a_pixe.txt", "b_pixe.txt"]
+    names, rows = _columns(tmp_path / "b_pixe.txt")
+    assert names[:6] == ["channel", "energy_keV", "counts", "simulation", "diff", "residual"]
+    assert {"sim_Mn", "sim_Pt", "sim_Ru", "sim_Si"} <= set(names)
+    elements = rows[:, [names.index(n) for n in names if n.startswith("sim_")]].sum(axis=1)
+    np.testing.assert_allclose(elements, rows[:, names.index("simulation")], rtol=1e-5, atol=1e-5)
+
+
+def test_pixe_export_needs_pixe_data(session, tmp_path):
+    stack = run(session, "pixe")
+    with pytest.raises(CommandError, match="no PIXE spectrum"):
+        run(session, f"export {tmp_path / 'x'}", stack=stack)

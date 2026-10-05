@@ -10,10 +10,9 @@
     defaults; reading Oxford `.PIX` files; the PIXE window mirroring the
     RBS one (PLOT, OVERLAY, SPLOT, COMPARE with residuals), with markers
     for the sample's lines and the **simulated spectrum** (K, L and M lines
-    of the film and the substrate, with `H`, `ESCAPE` and `LINES`); GUPIX's
-    top-hat digital filter (`DF`) for background-free comparison; the X-ray
-    atomic data and the ECPSSR K, L and M cross sections. **Not yet:** a
-    model of the continuum (use `DF`), peak tails and pile-up, and fitting.
+    of the film and the substrate, with `H`, `ESCAPE` and `LINES`); exports;
+    the X-ray atomic data and the ECPSSR K, L and M cross sections. **Not
+    yet:** a model of the continuum, peak tails and pile-up, and fitting.
 
 PIXE adds a second measurement to the one pyRUMP already models. The beam
 that produces the RBS spectrum also ionises inner shells in the sample, and
@@ -107,34 +106,6 @@ Inside the PIXE prompt, `REGION`, `COUNTS`, `LOG`/`LINEAR`/`SQRT` and
 window, as before. `REGION` is in **channels**, as the spectrum file
 numbers them, like the RBS window's: `REGION 220 1190`.
 
-**The digital filter.** `DF ON` (`DIGITALFILTER`) passes everything the
-PIXE window shows — data, simulation and comparison — through GUPIX's
-top-hat filter: each channel becomes the mean of a central lobe minus the
-mean of two wings around it. The kernel has zero area and is symmetric, so
-a constant or sloping continuum filters to zero and any slowly varying one
-nearly so, while peaks survive with negative side lobes. The continuum then
-needs no model at all. The y axis turns linear (filtered spectra go
-negative), and the comparison's residuals become (filtered simulation −
-filtered data)/σ, σ propagated through the filter from the data's counts
-(at least 1 per channel), with the reduced chi-square over the channels
-shown. Filtered residuals are sensitive to peak position and width, which
-makes them a good check of the energy calibration and resolution.
-
-The filter's two constants are its lobe widths, in units of the detector
-FWHM at each channel, so the filter widens with energy along with the
-peaks (GUPIX's variable filter):
-
-* `DF WIDTH <UW> <LW>` — the central lobe and each wing; default `1 0.5`,
-  Schamber's and Statham's compromise between suppressing the background
-  and keeping the peak information. Wider lobes suppress more background
-  but merge close peaks.
-* `DF SPLIT <keV> <UW> <LW>` — wider lobes above an energy, GUPIX's
-  two-region filter: e.g. `DF SPLIT 6 3 0.5` for the few weak, isolated
-  peaks at high energy. `DF SPLIT OFF` removes it.
-
-Channels within a filter's reach of either end of the spectrum have no
-filtered value.
-
 **FIGSAVE.** At the RUMP level, `FIGSAVE fit` saves the RBS window as
 `fit.png` — and with `PAIR ON` and the PIXE window open, the PIXE window
 next to it as `fit_pixe.png`. Inside the PIXE prompt, `FIGSAVE` saves the
@@ -201,6 +172,30 @@ Channel   Contents
 * The file has **no charge**; see above.
 * Header labels vary between exports (`Coarse`/`Course`, tabs or spaces,
   CRLF line ends), so the reader keys on the label text, not on positions.
+
+### Exports
+
+`EXPORT` and `EXPORTCMP` (`EC`) write the PIXE spectrum, or the PIXE
+comparison, as plain columns for Origin, Excel, gnuplot or pandas — always
+to `<file>_pixe`, next to the RBS file of the same name:
+
+| Where | `PAIR ON`, PIXE spectrum in the buffer | otherwise |
+|---|---|---|
+| RUMP level `EXPORT f`, `EC f` | `f.txt` (RBS) **and** `f_pixe.txt` (PIXE) | `f.txt` (RBS) |
+| PIXE prompt `EXPORT f`, `EC f` | `f_pixe.txt` (PIXE only) | `f_pixe.txt` (PIXE only) |
+
+`EXPORT`'s columns are `channel` (as the spectrum file numbers them),
+`energy_keV` (lower edge of the channel), `counts` and `error` (√counts).
+`EXPORTCMP` has `channel`, `energy_keV`, `counts`, `simulation`, `diff`,
+`residual` (Poisson, in σ), then one column per element of the sample with
+its simulated lines (`sim_Mn`, `sim_Pt`, …).
+
+The `#` header records what is needed to read them: the PIXE file, live and
+real time, calibration, beam, the beam and X-ray angles in force, the dose,
+the whole PIXE setup (as `SHOW` prints it), and for `EXPORTCMP` the physics
+settings, the sample and the reduced chi-square over the PIXE `REGION`.
+A `.csv` file is comma-separated, anything
+else tab-separated, and a bare filename gets `.txt`.
 
 ### Detector setup
 
@@ -303,9 +298,6 @@ spectra from this setup, four years apart, pin them down:
 * The RC43 header calibration puts Si Kα within 0.4 eV of its true energy
   but Mn Kα 19 eV high — 0.46 % too much gain. Gain and offset need fitting;
   the header is a good start.
-* The reference's continuum, filtered with `DF WIDTH 1 0.5`, comes down to
-  the counting noise (reduced chi-square 0.99 at 0.4–1.3 keV); narrower or
-  wider lobes do worse.
 
 Its spectrum has nothing at 2.05 keV (0.6 % of Si K, from Si K's own tail),
 so the 2.05 keV peak in MnPt (16.6 % of its Si K) comes from the sample —
@@ -325,8 +317,8 @@ Commands marked † are not implemented yet.
 | Calibration | `CALIB <gain keV/ch> <offset keV>`, `H <K> <L> <M>` or `H K\|L\|M <value>` |
 | Simulation | `LINES [ALL]` (typed in full — `LIN` is `LINEAR`; table of lines, energies, cross sections, efficiency and counts), `EXCLUDE <element>` †, `INCLUDE <element>` † |
 | Background | `BGSCALE <s>` †, `SMOOTH <channels>` † |
-| Plot | `PLOT [buffer]`, `COMPARE` / `CMP`, `DF ON\|OFF`, `DF WIDTH <UW> <LW>`, `DF SPLIT <keV> <UW> <LW>` / `DF SPLIT OFF`, `REGION <channel> <channel>` / `REGION ALL`, `COUNTS <low> <high>` / `COUNTS ALL`, `LOG`/`LINEAR`/`SQRT`, `MARKERS ON\|ALL\|OFF`, `FIGSAVE <file>`, `COMPONENTS ON\|OFF` † |
-| Output | `EXPORT <file>` † |
+| Plot | `PLOT [buffer]`, `COMPARE` / `CMP`, `REGION <channel> <channel>` / `REGION ALL`, `COUNTS <low> <high>` / `COUNTS ALL`, `LOG`/`LINEAR`/`SQRT`, `MARKERS ON\|ALL\|OFF`, `FIGSAVE <file>`, `COMPONENTS ON\|OFF` † |
+| Output | `EXPORT <file>`, `EXPORTCMP <file>` / `EC` (to `<file>_pixe`; at the RUMP level with `PAIR ON` as well) |
 
 Other compounds (by formula and density) can be added to the list as
 needed.

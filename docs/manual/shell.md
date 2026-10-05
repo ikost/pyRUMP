@@ -271,6 +271,10 @@ Your wish? cmp                  /* check the fit                     */
 Your wish? ec MA8410-fit.csv    /* data, simulation, residuals, GOF  */
 ```
 
+With PIXE's `PAIR ON` and a PIXE spectrum in the active buffer, the PIXE
+comparison is written too, next to it as `<file>_pixe` (`MA8410-fit_pixe.csv`);
+see [PIXE exports](pixe.md#exports).
+
 ### `EXPORT` `[new]`
 
 ```
@@ -295,6 +299,9 @@ counts/msr/µC. Values are always raw counts, whatever `NORMALIZE` says.
 With buffer 0 active (`POINTAT 0`), `EXPORT` writes the simulation. It is
 recomputed first if the sample changed, and the header adds the physics
 settings and the sample structure, as entered and in 10¹⁵ at/cm².
+
+With PIXE's `PAIR ON` and a PIXE spectrum in the active buffer, the PIXE
+spectrum is written too, as `<file>_pixe`; see [PIXE exports](pixe.md#exports).
 
 A `.csv` file is comma-separated and anything else tab-separated; a bare
 filename gets `.txt`. It works at the SIM and PERT levels too. `GET`
