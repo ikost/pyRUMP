@@ -460,7 +460,36 @@ def test_tiltsign_and_show_report_the_angles(empty_session, capsys):
 def test_defaults_describe_the_rc43_setup():
     detector = PixeDetector()
     assert (detector.window.material, detector.window.thickness_um) == ("Be", 12.5)
-    assert detector.fwhm_eV == 130.0
+    assert (detector.fwhm_eV, detector.fano) == (122.0, 0.104)
     assert detector.solid_angle_msr == pytest.approx(0.763, rel=1e-3)
     assert detector.exit_angle(-9.0) == 36.0
-    assert [(f.material, f.thickness_um) for f in detector.filters] == [("Mylar", 125.0)]
+    assert [(f.material, f.thickness_um) for f in detector.filters] == [("Mylar", 62.0)]
+
+
+# -- the digital filter ---------------------------------------------------------
+
+
+def test_df_filters_the_comparison(session):
+    stack = run(session, f"sim get {EXAMPLES / 'MnPt.lcm'}", f"pixe get {EXAMPLES / 'MnPt.PIX'}",
+                "pixe", "df on", "cmp")
+    top, bottom = session.pixe.figure.axes
+    assert top.get_ylabel() == "Filtered counts" and top.get_yscale() == "linear"
+    assert any("filtered: reduced chi-square" in t.get_text() for t in bottom.texts)
+    run(session, "df off", stack=stack)
+    assert session.pixe.figure.axes[0].get_yscale() == "log"
+
+
+def test_df_settings(empty_session):
+    run(empty_session, "pixe df width 1.5 0.75", "pixe df split 6 3 0.5", "pixe digitalfilter on")
+    state = empty_session.pixe
+    assert state.filter
+    assert (state.filter_settings.upper, state.filter_settings.lower) == (1.5, 0.75)
+    assert state.filter_settings.split_keV == 6.0
+    lines = setup_lines(empty_session)
+    assert {"df width 1.5 0.75", "df split 6 3 0.5", "df on"} <= set(lines)
+    run(empty_session, "pixe df split off")
+    assert state.filter_settings.split_keV is None
+    with pytest.raises(CommandError, match="expected ON, OFF"):
+        run(empty_session, "pixe df maybe")
+    with pytest.raises(CommandError, match="positive"):
+        run(empty_session, "pixe df width 0 1")

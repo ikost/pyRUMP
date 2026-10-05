@@ -118,6 +118,7 @@ def setup_lines(session) -> list[str]:
         f"calib {c.kevch:.8g} {c.kev0:.8g}",
         f"h {state.h[0]:g} {state.h[1]:g} {state.h[2]:g}",
         f"escape {'on' if state.escape else 'off'}",
+        *_filter_lines(state),
         f"pair {'on' if state.pair else 'off'}",
         f"markers {state.markers}",
     ]
@@ -449,6 +450,57 @@ def cmd_escape(session, args: ArgReader) -> None:
     print(f"  escape {'on' if session.pixe.escape else 'off'}")
 
 
+def _filter_lines(state) -> list[str]:
+    f = state.filter_settings
+    split = "df split off" if f.split_keV is None else (
+        f"df split {f.split_keV:g} {f.split_upper:g} {f.split_lower:g}")
+    return [f"df width {f.upper:g} {f.lower:g}", split, f"df {'on' if state.filter else 'off'}"]
+
+
+def cmd_df(session, args: ArgReader) -> None:
+    """``DF ON|OFF`` (DIGITALFILTER) -- GUPIX's top-hat digital filter for
+    the PIXE window and its comparison: it removes the slowly varying
+    continuum from data and simulation alike, so no background model is
+    needed. ``DF WIDTH <UW> <LW>`` sets the central lobe and each wing in
+    units of the FWHM (default 1 0.5, Schamber and Statham's compromise);
+    ``DF SPLIT <keV> <UW> <LW>`` uses wider lobes above an energy (GUPIX's
+    two-region filter, e.g. DF SPLIT 6 3 0.5); ``DF SPLIT OFF``."""
+    from dataclasses import replace as replace_settings
+
+    state = session.pixe
+    token = args.optional()
+    if token is not None:
+        word = token.lower()
+        if word in ("on", "off"):
+            args.done()
+            state.filter = word == "on"
+        elif word == "width":
+            upper, lower = args.number("the central lobe, in FWHM"), args.number("each wing, in FWHM")
+            args.done()
+            if upper <= 0 or lower <= 0:
+                raise CommandError("DF WIDTH: widths must be positive")
+            state.filter_settings = replace_settings(state.filter_settings, upper=upper, lower=lower)
+        elif word == "split":
+            if args.peek() is not None and args.peek().lower() == "off":
+                args.token()
+                args.done()
+                state.filter_settings = replace_settings(state.filter_settings, split_keV=None)
+            else:
+                energy = args.number("the split energy, keV")
+                upper = args.number("the central lobe above it, in FWHM")
+                lower = args.number("each wing above it, in FWHM")
+                args.done()
+                if energy <= 0 or upper <= 0 or lower <= 0:
+                    raise CommandError("DF SPLIT: values must be positive")
+                state.filter_settings = replace_settings(
+                    state.filter_settings, split_keV=energy, split_upper=upper, split_lower=lower)
+        else:
+            raise CommandError("DF: expected ON, OFF, WIDTH <UW> <LW> or SPLIT <keV> <UW> <LW>")
+        pixe_plotting.refresh(session)
+    for line in _filter_lines(state):
+        print(f"  {line}")
+
+
 def cmd_lines(session, args: ArgReader) -> None:
     """``LINES [ALL]`` -- the simulated lines: energy, cross section at the
     beam energy, detector efficiency and counts, strongest first. Lines
@@ -629,6 +681,8 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("CALIB", 3, cmd_calib, "energy calibration: keV/channel and offset in keV"),
     ("H", 1, cmd_h, "instrumental constant for K, L, M lines (H K L M, or H K|L|M v)"),
     ("ESCAPE", 2, cmd_escape, "Si escape peaks in the simulation: ON or OFF"),
+    ("DIGITALFILTER", 3, cmd_df, "top-hat filter removing the continuum: ON, OFF, WIDTH, SPLIT"),
+    ("DF", -2, cmd_df, "synonym for DIGITALFILTER"),
     ("LINES", 2, cmd_lines, "table of the simulated lines (ALL: weak ones too)"),
     # The PIXE window
     ("PLOT", 2, cmd_plot, "draw a buffer's PIXE spectrum (0: the simulation)"),
@@ -650,6 +704,7 @@ TABLE.note_synonym("HELP", "?")
 TABLE.note_synonym("RETURN", "QUIT", "Q")
 TABLE.note_synonym("FIGSAVE", "HCOPY")
 TABLE.note_synonym("COMPARE", "CMP")
+TABLE.note_synonym("DIGITALFILTER", "DF")
 
 _HELP_GROUPS: list[tuple[str, list[str]]] = [
     ("Getting around", ["HELP", "RETURN", "DISABLE", "SHOW"]),
@@ -659,5 +714,5 @@ _HELP_GROUPS: list[tuple[str, list[str]]] = [
       "ESCAPE"]),
     ("Simulation", ["H", "LINES"]),
     ("PIXE window",
-     ["PLOT", "COMPARE", "REGION", "COUNTS", "LINEAR", "SQRT", "LOG", "MARKERS", "FIGSAVE"]),
+     ["PLOT", "COMPARE", "DIGITALFILTER", "REGION", "COUNTS", "LINEAR", "SQRT", "LOG", "MARKERS", "FIGSAVE"]),
 ]

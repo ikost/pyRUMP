@@ -34,6 +34,7 @@ from ..model.spectrum import Calibration, Spectrum
 from ..physics.xsec.rutherford import ScreeningModel
 from ..pixe.data import PixeData
 from ..pixe.detector import DEFAULT_CALIBRATION, PixeDetector
+from ..pixe.digital_filter import FilterSettings
 from ..script.lcm import Script
 from ..sim.engine import Beam
 
@@ -449,6 +450,10 @@ class PixeState:
     h: tuple[float, float, float] = (1.0, 1.0, 1.0)
     #: Whether the simulation includes Si escape peaks.
     escape: bool = True
+    #: The top-hat digital filter (DF ON/OFF): background removal for the
+    #: PIXE window and its comparison, and its lobe widths.
+    filter: bool = False
+    filter_settings: FilterSettings = field(default_factory=FilterSettings)
     #: The last simulation error reported, so a redraw doesn't repeat it.
     last_error: str | None = None
     #: The PIXE window, separate from the RBS one (:attr:`Session.figure`).
