@@ -513,3 +513,14 @@ def test_df_settings(empty_session):
         run(empty_session, "pixe df maybe")
     with pytest.raises(CommandError, match="positive"):
         run(empty_session, "pixe df width 0 1")
+
+
+def test_lin_is_the_linear_axis_and_lines_must_be_typed_in_full(session, capsys):
+    stack = run(session, f"sim get {EXAMPLES / 'MnPt.lcm'}", f"pixe get {EXAMPLES / 'MnPt.PIX'}",
+                "pixe")
+    for abbreviation in ("lin", "line", "linear"):
+        run(session, "log", abbreviation, stack=stack)
+        assert session.pixe.plot.yscale == "linear", abbreviation
+    capsys.readouterr()
+    run(session, "lines", stack=stack)
+    assert "KL3" in capsys.readouterr().out

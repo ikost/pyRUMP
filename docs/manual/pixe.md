@@ -324,7 +324,7 @@ Commands marked † are not implemented yet.
 | Detector | `WINDOW <element\|MYLAR\|KAPTON> <µm>`, `CRYSTAL <element> <µm>`, `FWHM <eV>`, `FANO <F>`, `DEADLAYER <µm>` †, `ESCAPE ON\|OFF`, `TAIL ON\|OFF` † |
 | Absorbers | `FILTER` (list), `FILTER <n> <element\|MYLAR\|KAPTON> <µm> [[HOLE] <%>]`, `FILTER CLEAR [<n>]` |
 | Calibration | `CALIB <gain keV/ch> <offset keV>`, `H <K> <L> <M>` or `H K\|L\|M <value>` |
-| Simulation | `LINES [ALL]` (table of lines, energies, cross sections, efficiency and counts), `EXCLUDE <element>` †, `INCLUDE <element>` † |
+| Simulation | `LINES [ALL]` (typed in full — `LIN` is `LINEAR`; table of lines, energies, cross sections, efficiency and counts), `EXCLUDE <element>` †, `INCLUDE <element>` † |
 | Background | `BGSCALE <s>` †, `SMOOTH <channels>` † |
 | Plot | `PLOT [buffer]`, `COMPARE` / `CMP`, `DF ON\|OFF`, `DF WIDTH <UW> <LW>`, `DF SPLIT <keV> <UW> <LW>` / `DF SPLIT OFF`, `REGION <channel> <channel>` / `REGION ALL`, `COUNTS <low> <high>` / `COUNTS ALL`, `LOG`/`LINEAR`/`SQRT`, `MARKERS ON\|ALL\|OFF`, `FIGSAVE <file>`, `COMPONENTS ON\|OFF` † |
 | Output | `EXPORT <file>` † |

@@ -747,7 +747,8 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("ESCAPE", 2, cmd_escape, "Si escape peaks in the simulation: ON or OFF"),
     ("DIGITALFILTER", 3, cmd_df, "top-hat filter removing the continuum: ON, OFF, WIDTH, SPLIT"),
     ("DF", -2, cmd_df, "synonym for DIGITALFILTER"),
-    ("LINES", 2, cmd_lines, "table of the simulated lines (ALL: weak ones too)"),
+    # Typed in full only: LIN, LINE stay LINEAR's, as at the RUMP level.
+    ("LINES", 0, cmd_lines, "table of the simulated lines (ALL: weak ones too)"),
     # The PIXE window
     ("PLOT", 2, cmd_plot, "draw a buffer's PIXE spectrum (0: the simulation)"),
     ("COMPARE", 0, cmd_compare, "PIXE data against the simulation, with residuals"),
