@@ -238,3 +238,50 @@ def test_pump_services_both_windows(session):
     run(session, f"pixe get {EXAMPLES / 'MnPt.PIX'}", "pixe", "return", "plot 1")
     plotting._last_pump = 0.0
     plotting.pump(session)  # Agg: nothing to flush, but must not trip over two figures
+
+
+# -- line markers -------------------------------------------------------------
+
+
+def _labels(session) -> list[str]:
+    return [text.get_text() for text in session.pixe.figure.axes[0].texts]
+
+
+def test_markers_label_the_sim_samples_lines(session):
+    run(session, f"sim get {EXAMPLES / 'MnPt.lcm'}", f"pixe get {EXAMPLES / 'MnPt.PIX'}",
+        "pixe", "region 0.5 12")
+    labels = " ".join(_labels(session))
+    for expected in ("Mn Kα", "Mn Kβ", "Pt Lα", "Ru Lα", "Si Kα"):
+        assert expected in labels
+    assert "Pt Mα/Mβ" in labels  # too close to tell apart: one label
+    assert "Ru Ll" not in labels  # a minor line: only with MARKERS ALL
+
+
+def test_markers_all_and_off(session):
+    stack = run(session, f"sim get {EXAMPLES / 'MnPt.lcm'}",
+                f"pixe get {EXAMPLES / 'MnPt.PIX'}", "pixe", "region 0.5 12", "markers all")
+    assert "Ru Ll" in " ".join(_labels(session))
+    run(session, "markers off", stack=stack)
+    assert not any(label.startswith(("Mn", "Pt", "Ru", "Si")) for label in _labels(session))
+    with pytest.raises(CommandError, match="ON, ALL or OFF"):
+        run(session, "markers some", stack=stack)
+
+
+def test_markers_skip_rbs_absorber_layers(empty_session):
+    from pyrump.shell.pixe_plotting import sample_elements
+
+    run(empty_session, "sim layer 1", "sim thick 1000 A", "sim composition Al 1 /",
+        "sim next", "sim thick 500 A", "sim composition Ti 1 /", "sim absorber 1")
+    assert sample_elements(empty_session) == [(22, "Ti")]
+
+
+def test_crowded_labels_spread_apart_but_keep_their_order():
+    from pyrump.shell.pixe_plotting import _spread
+
+    wanted = [2.0, 2.01, 2.02, 5.0, 9.99]
+    positions = _spread(wanted, 0.1, 0.0, 10.0)
+    assert positions == sorted(positions)
+    assert all(b - a >= 0.1 - 1e-12 for a, b in zip(positions, positions[1:]))
+    assert positions[3] == 5.0  # an uncrowded label stays where its line is
+    assert np.mean(positions[:3]) == pytest.approx(np.mean(wanted[:3]))
+    assert positions[-1] <= 10.0

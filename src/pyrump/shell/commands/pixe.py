@@ -114,6 +114,7 @@ def setup_lines(session) -> list[str]:
     lines += [
         f"calib {c.kevch:.8g} {c.kev0:.8g}",
         f"pair {'on' if state.pair else 'off'}",
+        f"markers {state.markers}",
     ]
     return lines
 
@@ -408,6 +409,19 @@ def _scale(name: str):
     return handler
 
 
+def cmd_markers(session, args: ArgReader) -> None:
+    """``MARKERS ON|ALL|OFF`` -- label the lines of the SIM sample's
+    elements: ON the main ones (Kα, Kβ, Lα, Lβ1, Lβ2, Lγ1, Mα, Mβ), ALL
+    also Ll, Mζ and Mγ."""
+    token = args.optional()
+    args.done()
+    if token is not None:
+        if token.lower() not in ("on", "all", "off"):
+            raise CommandError("MARKERS: expected ON, ALL or OFF")
+        session.pixe.markers = token.lower()
+    _redraw_or(session, f"  markers {session.pixe.markers}")
+
+
 def cmd_figsave(session, args: ArgReader) -> None:
     """``FIGSAVE <file>`` -- save the PIXE window to an image file."""
     path = Path(args.token("an output image file"))
@@ -454,6 +468,7 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("LINEAR", 2, _scale("linear"), "linear yield axis"),
     ("SQRT", 2, _scale("sqrt"), "square-root yield axis"),
     ("LOG", 2, _scale("log"), "logarithmic yield axis (the default)"),
+    ("MARKERS", 2, cmd_markers, "label the sample's lines: ON, ALL or OFF"),
     ("FIGSAVE", 3, cmd_figsave, "save the PIXE window to an image file"),
     ("HCOPY", -5, cmd_figsave, "synonym for FIGSAVE"),
 ]
@@ -468,5 +483,6 @@ _HELP_GROUPS: list[tuple[str, list[str]]] = [
     ("Getting around", ["HELP", "RETURN", "DISABLE", "SHOW"]),
     ("Data", ["GET", "PAIR"]),
     ("Detector", ["ANGLE", "SOLID", "WINDOW", "CRYSTAL", "FWHM", "FANO", "FILTER", "CALIB"]),
-    ("PIXE window", ["PLOT", "REGION", "COUNTS", "LINEAR", "SQRT", "LOG", "FIGSAVE"]),
+    ("PIXE window",
+     ["PLOT", "REGION", "COUNTS", "LINEAR", "SQRT", "LOG", "MARKERS", "FIGSAVE"]),
 ]

@@ -53,7 +53,7 @@ pyrump = "pyrump.cli.__main__:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-pyrump = ["data/*.dat", "data/*.kal", "data/*.tab", "data/SOURCES.md"]
+pyrump = ["data/*.dat", "data/*.kal", "data/*.tab", "data/SOURCES.md", "data/pixe/*.csv", "data/pixe/*.csv.gz"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

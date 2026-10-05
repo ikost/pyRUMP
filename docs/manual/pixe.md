@@ -7,9 +7,10 @@
 
     **Working so far:** the PIXE prompt with `GET`, `PAIR`, `DISABLE` and
     `SHOW`; the detector and calibration settings with their built-in
-    defaults; reading Oxford `.PIX` files; and the PIXE window showing the
-    measured spectrum. **Not yet:** the simulation, line markers, the
-    bare-substrate background and fitting.
+    defaults; reading Oxford `.PIX` files; the PIXE window showing the
+    measured spectrum with markers for the sample's lines; and the X-ray
+    atomic-data tables. **Not yet:** the ionisation cross sections, the
+    simulation, the bare-substrate background and fitting.
 
 PIXE adds a second measurement to the one pyRUMP already models. The beam
 that produces the RBS spectrum also ionises inner shells in the sample, and
@@ -65,8 +66,14 @@ The PIXE window shows:
 * the simulation: film peaks plus the background;
 * optionally the separate contributions: each element's peaks, the
   background, the Si escape peaks;
-* labelled markers for the lines (Mn Kα, Pt Mα, Ru Lα, …), like `ELEMENT`'s
-  edge ticks;
+* markers for the lines of every element in the SIM sample (Mn Kα, Pt Mα,
+  Ru Lα, …): a tick at each line's energy hanging from the top edge, led to
+  a vertical label. Where lines crowd, the labels are spread apart and the
+  ticks stay at the true energies; lines too close to tell apart share one
+  label ("Pt Mα/Mβ"). The yield axis leaves room above the tallest peak for
+  them. `MARKERS ON` (the default) marks Kα, Kβ, Lα, Lβ1, Lβ2, Lγ1, Mα and
+  Mβ; `MARKERS ALL` adds Ll, Mζ and Mγ; `MARKERS OFF` hides them. RBS
+  absorber layers are left out — the beam never reaches them;
 * with `COMPARE`, a residuals panel below the spectrum.
 
 Inside the PIXE prompt, `REGION`, `COUNTS`, `LOG`/`LINEAR`/`SQRT` and
@@ -173,6 +180,7 @@ from a real measurement, it comes from the MnPt example's SDD:
 | `FANO` | 0.13 | fitted to `MnPt.PIX` (with Si Kα's 79 eV) |
 | `CALIB` | 0.01009699 keV/ch, −0.03864563 keV | `MnPt.PIX`'s RC43 header |
 | `PAIR` | off | |
+| `MARKERS` | on | |
 
 `CALIB` is the fallback for a spectrum whose header has no usable
 calibration. A spectrum's own header calibration, when it has one, is used
@@ -195,7 +203,7 @@ Commands marked † are not implemented yet.
 | Calibration | `CALIB <gain keV/ch> <offset keV>`, `H K\|L\|M <value>` † |
 | Elements | `LINES` † (table of lines, energies, cross sections and yields), `EXCLUDE <element>` †, `INCLUDE <element>` † |
 | Background | `BGSCALE <s>` †, `SMOOTH <channels>` † |
-| Plot | `PLOT`, `REGION <keV> <keV>` / `REGION ALL`, `COUNTS <low> <high>` / `COUNTS ALL`, `LOG`/`LINEAR`/`SQRT`, `FIGSAVE <file>`, `MARKERS ON\|OFF` †, `COMPONENTS ON\|OFF` † |
+| Plot | `PLOT`, `REGION <keV> <keV>` / `REGION ALL`, `COUNTS <low> <high>` / `COUNTS ALL`, `LOG`/`LINEAR`/`SQRT`, `MARKERS ON\|ALL\|OFF`, `FIGSAVE <file>`, `COMPONENTS ON\|OFF` † |
 | Output | `EXPORT <file>` † |
 
 Absorbers are single elements for now; compounds (Mylar, Kapton) will
@@ -224,8 +232,14 @@ ln σ versus ln E, never extrapolated.
 #### From vacancies to X-rays
 
 Fluorescence yields ω, Coster–Kronig probabilities f, radiative rates F,
-line energies and absorption edges come from
-[xraylib](https://github.com/tschoonj/xraylib). Vacancies are carried down
+line energies, absorption edges and mass attenuation coefficients come from
+[xraylib](https://github.com/tschoonj/xraylib) 4.3.0. pyRUMP does not need
+xraylib installed: `tools/pixe_atomic.py` generated the tables once, and
+they ship with pyRUMP (`pyrump/data/pixe/`, with their provenance and
+xraylib's licence in `data/SOURCES.md`), so results only change when the
+tables are deliberately regenerated. The attenuation table is sampled so
+that interpolating it reproduces xraylib within about 0.1 %, absorption
+edges included. Vacancies are carried down
 the shell by Coster–Kronig transitions before they decay. For the L shell:
 
 $$n_1 = \sigma_{L1},\qquad n_2 = \sigma_{L2} + f_{12}\,n_1,\qquad

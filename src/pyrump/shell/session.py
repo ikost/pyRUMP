@@ -434,6 +434,9 @@ class PixeState:
     emin: float | None = None
     emax: float | None = None
     plot: PlotState = field(default_factory=lambda: PlotState(yscale="log"))
+    #: Line markers for the SIM sample's elements: "on" (main lines), "all"
+    #: or "off".
+    markers: str = "on"
     #: The PIXE window, separate from the RBS one (:attr:`Session.figure`).
     figure: object | None = None
 
