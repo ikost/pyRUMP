@@ -7,9 +7,10 @@
 
     **Working so far:** the PIXE prompt with `GET`, `PAIR`, `DISABLE` and
     `SHOW`; the detector and calibration settings with their built-in
-    defaults; reading Oxford `.PIX` files; the PIXE window with the
-    measured spectrum, markers for the sample's lines and the **simulated
-    film spectrum** (K and L lines, with `H`, `ESCAPE` and `LINES`); the
+    defaults; reading Oxford `.PIX` files; the PIXE window mirroring the
+    RBS one (PLOT, OVERLAY, SPLOT, COMPARE with residuals), with markers
+    for the sample's lines and the **simulated film spectrum** (K and L
+    lines, with `H`, `ESCAPE` and `LINES`); the
     X-ray atomic data and the ECPSSR K/L cross sections. **Not yet:** M-shell
     cross sections (so no Pt/Au/W M lines in the simulation), the
     bare-substrate background, and fitting.
@@ -34,23 +35,25 @@ Scope of the first version:
 
 `PIXE` opens its own `PIXE Command:` prompt, like [SIM](sim.md) and
 [PERT](pert.md). Entering it the first time **enables** PIXE: from then on
-the PIXE spectrum and its simulation are kept up to date alongside the RBS
-ones, and the PIXE plot window appears. `RETURN` goes back to the RUMP
-level and leaves PIXE enabled.
+every RBS plot command shows PIXE too (see the next section). Entering
+opens no window by itself. `RETURN` goes back to the RUMP level and leaves
+PIXE enabled.
 
 `DISABLE` turns PIXE off and leaves the PIXE prompt in one step. The PIXE
-window closes, and the settings are kept for next time. Entering `PIXE`
-again enables it again.
+window closes, and the settings and the buffers' PIXE spectra are kept for
+next time. Entering `PIXE` again enables it again.
 
 From the RUMP level, `PIXE <command>` runs a single PIXE command without
-entering the prompt.
+entering the prompt, and never turns PIXE on.
 
 ```
-Your wish? pixe
-PIXE Command: get MnPt.PIX
-PIXE Command: show
+Your wish? pixe pair on                /* x.RBS brings x.PIX along   */
+Your wish? xeq MnPt.RBS                /* both spectra, no window yet */
+Your wish? sim get MnPt.lcm
+Your wish? pixe                        /* PIXE on                    */
 PIXE Command: return
-Your wish? compare                     /* RBS window and PIXE window */
+Your wish? compare                     /* RBS and PIXE comparisons   */
+Your wish? figsave fit                 /* fit.png and fit_pixe.png   */
 ...
 Your wish? pixe disable                /* back to RBS only           */
 ```
@@ -61,13 +64,32 @@ PIXE draws in **its own matplotlib window**, separate from the RBS window,
 so the two can be sized and placed independently (for example one on each
 screen). The RBS window behaves exactly as without PIXE.
 
+**While PIXE is enabled, the PIXE window mirrors the RBS window** — the same
+buffers, the PIXE spectrum where the RBS window shows the RBS one:
+
+| At the RUMP level | RBS window | PIXE window |
+|---|---|---|
+| `PLOT 1` | buffer 1 | buffer 1's PIXE spectrum |
+| `OVERLAY 2` | adds buffer 2 | adds buffer 2's PIXE spectrum |
+| `PLOT 0` | the simulation | the PIXE simulation |
+| `SIM SPLOT Mn`, `SIM SPLOT 2` | one element's or layer's part | the same part of the PIXE simulation |
+| `COMPARE` / `CMP` | data, simulation, residuals | the same, for PIXE |
+| `REPLOT` | redraw | redraw |
+
+A buffer with no PIXE spectrum is named in the PIXE window ("buffer 2: no
+PIXE spectrum") rather than left out silently. Reading data (`GET`, `XEQ`
+with `PAIR ON`, `PIXE GET`) and changing a PIXE setting only update a PIXE
+window that is already open; they never open one.
+
+Inside the PIXE prompt, `PLOT [buffer]` (`PLOT 0`: the simulation) and
+`COMPARE` draw in the PIXE window alone and leave the RBS window as it is.
+
 The PIXE window shows:
 
-* the measured PIXE spectrum, against energy in keV, on a logarithmic yield
-  axis by default;
-* the simulation: film peaks plus the background;
-* optionally the separate contributions: each element's peaks, the
-  background, the Si escape peaks;
+* the spectra against **energy** (bottom axis) with the **channel** numbers
+  on top, on a logarithmic yield axis by default;
+* the simulation of the SIM sample's film lines; the background is still
+  to come;
 * markers for the lines of every element in the SIM sample (Mn Kα, Pt Mα,
   Ru Lα, …): a tick at each line's energy hanging from the top edge, led to
   a vertical label. Where lines crowd, the labels are spread apart and the
@@ -76,11 +98,18 @@ The PIXE window shows:
   them. `MARKERS ON` (the default) marks Kα, Kβ, Lα, Lβ1, Lβ2, Lγ1, Mα and
   Mβ; `MARKERS ALL` adds Ll, Mζ and Mγ; `MARKERS OFF` hides them. RBS
   absorber layers are left out — the beam never reaches them;
-* with `COMPARE`, a residuals panel below the spectrum.
+* with `COMPARE`, the Poisson residuals below the spectrum and the reduced
+  chi-square over the channels shown, as in the RBS comparison.
 
 Inside the PIXE prompt, `REGION`, `COUNTS`, `LOG`/`LINEAR`/`SQRT` and
-`FIGSAVE` act on the PIXE window (with `REGION` in keV). At the RUMP level
-they act on the RBS window, as before.
+`FIGSAVE` act on the PIXE window; at the RUMP level they act on the RBS
+window, as before. `REGION` is in **channels**, as the spectrum file
+numbers them, like the RBS window's: `REGION 220 1190`.
+
+**FIGSAVE.** At the RUMP level, `FIGSAVE fit` saves the RBS window as
+`fit.png` — and with `PAIR ON` and the PIXE window open, the PIXE window
+next to it as `fit_pixe.png`. Inside the PIXE prompt, `FIGSAVE` saves the
+PIXE window alone.
 
 ### PIXE data and buffers
 
@@ -233,7 +262,7 @@ Commands marked † are not implemented yet.
 | Calibration | `CALIB <gain keV/ch> <offset keV>`, `H <K> <L> <M>` or `H K\|L\|M <value>` |
 | Elements | `LINES [ALL]` (table of lines, energies, cross sections, efficiency and counts), `EXCLUDE <element>` †, `INCLUDE <element>` † |
 | Background | `BGSCALE <s>` †, `SMOOTH <channels>` † |
-| Plot | `PLOT`, `REGION <keV> <keV>` / `REGION ALL`, `COUNTS <low> <high>` / `COUNTS ALL`, `LOG`/`LINEAR`/`SQRT`, `MARKERS ON\|ALL\|OFF`, `FIGSAVE <file>`, `COMPONENTS ON\|OFF` † |
+| Plot | `PLOT [buffer]`, `COMPARE` / `CMP`, `REGION <channel> <channel>` / `REGION ALL`, `COUNTS <low> <high>` / `COUNTS ALL`, `LOG`/`LINEAR`/`SQRT`, `MARKERS ON\|ALL\|OFF`, `FIGSAVE <file>`, `COMPONENTS ON\|OFF` † |
 | Output | `EXPORT <file>` † |
 
 Other compounds (by formula and density) can be added to the list as

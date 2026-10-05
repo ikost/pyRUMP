@@ -1,26 +1,66 @@
 """The PIXE window: a second matplotlib figure next to the RBS one.
 
-Kept apart from :mod:`pyrump.shell.plotting` on purpose. The RBS window's
+Kept apart from :mod:`pyrump.shell.plotting` on purpose: the RBS window's
 layout, reuse and focus handling stay exactly as they are whether PIXE is on
-or not; this module only borrows its yield-axis and show helpers. The PIXE
-window shows the ACTIVE buffer's PIXE spectrum against energy, and follows
-the RBS window: every RBS redraw redraws it too while PIXE is enabled.
+or not; this module only borrows its yield-axis and show helpers.
+
+**What the window shows** is a *view* (:attr:`PixeState.view`): a list of
+items, each a buffer's PIXE spectrum, the PIXE simulation, or one element's
+or one layer's part of it, optionally as a comparison (data, simulation and
+residuals). While PIXE is enabled the view mirrors the RBS window -- every
+RBS PLOT, OVERLAY, SPLOT, COMPARE or REPLOT rebuilds it from the RBS traces
+and draws it (:func:`follow`) -- so the same buffers appear in both. The
+PIXE prompt's own PLOT and COMPARE set it directly. Reading data and
+changing settings only update a window that is already open
+(:func:`refresh`); they never open one.
+
+The x axis is energy (bottom) with channels on top; REGION is in channels,
+like the RBS window's.
 """
 
 from __future__ import annotations
 
+import warnings
+from dataclasses import dataclass
+
 import numpy as np
 
 from .. import __version__
+from ..model.spectrum import Spectrum
 from .dispatch import CommandError
-from .plotting import _apply_limits, _apply_scale, buffer_stem, require_matplotlib, show
+from .plotting import (
+    COMPARE_DATA,
+    _apply_limits,
+    _apply_scale,
+    buffer_label,
+    require_matplotlib,
+    show,
+)
 
 #: Default window size in inches, a little smaller than the RBS window's.
 DEFAULT_SIZE = (8.0, 5.0)
 
 
-def figure_for(session):
-    """The PIXE figure and its axes, created on first use.
+@dataclass(frozen=True, slots=True)
+class ViewItem:
+    """One thing the PIXE window shows."""
+
+    kind: str
+    """``"data"`` (a buffer's PIXE spectrum), ``"sim"`` (the simulation),
+    ``"element"`` or ``"layer"`` (part of the simulation)."""
+
+    index: int = 0
+    """The buffer, for ``"data"``; the 0-based layer, for ``"layer"``."""
+
+    element: str = ""
+    """The symbol, for ``"element"``."""
+
+
+# -- the window -----------------------------------------------------------------
+
+
+def figure_for(session, *, residuals: bool = False):
+    """The PIXE figure, with one panel or a spectrum + residuals pair.
 
     A window the user closed by hand is reopened at the default size; a live
     one keeps whatever size and position the user gave it.
@@ -35,113 +75,250 @@ def figure_for(session):
         figure = plt.figure()
         figure.set_size_inches(*DEFAULT_SIZE)
         figure.canvas.manager.set_window_title(f"pyRUMP {__version__} - PIXE")
-    if len(figure.axes) != 1:
+    wanted = 2 if residuals else 1
+    if len(figure.axes) != wanted:
         figure.clf()
-        figure.add_subplot(1, 1, 1)
+        if residuals:
+            figure.subplots(2, 1, sharex=True,
+                            gridspec_kw={"height_ratios": [3, 1], "hspace": 0.05})
+        else:
+            figure.add_subplot(1, 1, 1)
     state.figure = figure
-    return figure, figure.axes[0]
+    return figure
+
+
+def is_open(session) -> bool:
+    """Whether the PIXE window is on screen (not closed by hand)."""
+    figure = session.pixe.figure
+    return figure is not None and require_matplotlib().fignum_exists(figure.number)
 
 
 def close(session) -> None:
     """Close the PIXE window, if it is open."""
-    figure = session.pixe.figure
+    if is_open(session):
+        require_matplotlib().close(session.pixe.figure)
     session.pixe.figure = None
-    if figure is None:
+
+
+# -- when to draw -----------------------------------------------------------------
+
+
+def view_from_traces(traces) -> tuple[list[ViewItem], bool]:
+    """The PIXE view matching the RBS window's traces."""
+    items: list[ViewItem] = []
+    compare = bool(traces) and traces[0].key == COMPARE_DATA
+    for trace in traces:
+        key = trace.key
+        if isinstance(key, str) and key.startswith("splot:element:"):
+            items.append(ViewItem("element", element=key.rsplit(":", 1)[1]))
+        elif isinstance(key, str) and key.startswith("splot:layer:"):
+            items.append(ViewItem("layer", index=int(key.rsplit(":", 1)[1]) - 1))
+        elif trace.index == 0:
+            items.append(ViewItem("sim"))
+        else:
+            items.append(ViewItem("data", index=trace.index))
+    return items, compare
+
+
+def follow(session) -> None:
+    """After an RBS redraw: show the same buffers in the PIXE window, while
+    PIXE is enabled. This is what opens the PIXE window."""
+    if not session.pixe.enabled:
         return
-    plt = require_matplotlib()
-    if plt.fignum_exists(figure.number):
-        plt.close(figure)
+    session.pixe.view, session.pixe.compare = view_from_traces(session.traces)
+    draw(session, required=False)
 
 
-def pixe_buffer(session):
-    """The ACTIVE buffer, if it holds a PIXE spectrum."""
-    buffer = session.buffers.active_buffer
-    return buffer if buffer is not None and buffer.pixe is not None else None
+def refresh(session) -> None:
+    """After new data or a changed setting: forget the cached simulation and
+    redraw the PIXE window -- only if it is already open."""
+    session.pixe.cache = None
+    if session.pixe.enabled and session.pixe.view and is_open(session):
+        draw(session, required=False)
+
+
+# -- the simulation ---------------------------------------------------------------
 
 
 def _simulation(session):
-    """The PIXE simulation, or ``None``. A failure is reported once, not on
+    """The PIXE simulation (cached until the sample, the active buffer or a
+    PIXE setting changes), or ``None``. A failure is reported once, not on
     every redraw, and never stops the data from being drawn."""
     from .pixe_sim import simulate
 
+    state = session.pixe
+    if state.cache is not None:
+        return state.cache
     try:
         result = simulate(session)
     except (ValueError, KeyError) as error:
         message = str(error).strip("'")
-        if message != session.pixe.last_error:
+        if message != state.last_error:
             print(f"  PIXE simulation: {message}")
-            session.pixe.last_error = message
+            state.last_error = message
         return None
-    session.pixe.last_error = None
+    state.last_error = None
+    state.cache = result
     return result
 
 
+@dataclass(slots=True)
+class _Curve:
+    spectrum: Spectrum | None
+    label: str
+    simulated: bool = False
+
+
+def _curve(session, item: ViewItem, simulation) -> _Curve:
+    """A view item as a spectrum to draw (``None`` with a note when there is
+    nothing to show for it)."""
+    if item.kind == "data":
+        buffer = session.buffers.get(item.index)
+        label = buffer_label(session, buffer, item.index) if buffer is not None else ""
+        if buffer is None or buffer.pixe is None:
+            return _Curve(None, f"buffer {item.index}: no PIXE spectrum")
+        return _Curve(buffer.pixe.spectrum, label or f"buffer {item.index}")
+    if simulation is None:
+        return _Curve(None, "no PIXE simulation" if session.script.layers else "no SIM sample",
+                      simulated=True)
+    calibration = simulation.calibration
+    if item.kind == "sim":
+        counts, label = simulation.counts, "simulation"
+    elif item.kind == "element":
+        counts = simulation.by_element.get(item.element, np.zeros(calibration.npt))
+        label = f"SIM({item.element})"
+    else:
+        counts, label = simulation.by_layer(item.index), f"SIM(layer {item.index + 1})"
+    return _Curve(Spectrum(counts=counts, calibration=calibration), label, simulated=True)
+
+
+# -- drawing ----------------------------------------------------------------------
+
+_COLORS = ("0.20", "steelblue", "darkgreen", "darkorange", "purple")
+_SIM_COLORS = ("crimson", "orchid", "teal", "goldenrod")
+
+
 def draw(session, *, required: bool = True) -> bool:
-    """Draw the ACTIVE buffer's PIXE spectrum and the simulation of the SIM
-    sample. Returns whether anything was drawn.
+    """Draw the current view. Returns whether the window was drawn.
 
-    Either may be missing: with no PIXE spectrum the simulation is drawn on
-    the default calibration, with no sample only the data. ``required``
-    makes having neither an error (the PIXE prompt's own PLOT); otherwise --
-    an RBS redraw refreshing this window -- there is simply nothing to do.
+    ``required`` makes an empty view an error (the PIXE prompt's PLOT with
+    nothing to show); otherwise there is simply nothing to do.
     """
-    buffer = pixe_buffer(session)
-    simulation = _simulation(session)
-    if buffer is None and simulation is None:
-        if required:
-            raise CommandError(
-                "nothing to plot: no PIXE spectrum in the active buffer (PIXE GET <file>) "
-                "and no SIM sample"
-            )
-        return False
-
     state = session.pixe
-    calibration = buffer.pixe.calibration if buffer is not None else simulation.calibration
-    energies = calibration.edge_energy(np.arange(calibration.npt))
-    keep = np.ones(energies.size, dtype=bool)
-    if state.emin is not None:
-        keep &= energies >= state.emin
-    if state.emax is not None:
-        keep &= energies <= state.emax
-    if keep.sum() < 2:
-        raise CommandError(
-            f"no PIXE channels between {state.emin} and {state.emax} keV"
-        )
+    if not state.view:
+        if required:
+            raise CommandError("nothing to plot: PLOT or COMPARE first")
+        return False
+    simulation = _simulation(session) if any(i.kind != "data" for i in state.view) else None
+    curves = [_curve(session, item, simulation) for item in state.view]
+    drawable = [c for c in curves if c.spectrum is not None]
+    notes = [c.label for c in curves if c.spectrum is None]
 
-    figure, ax = figure_for(session)
-    ax.clear()
-    shown = []
-    if buffer is not None:
-        data = buffer.pixe
-        counts = np.asarray(data.spectrum.counts, dtype=float)
-        ax.step(energies[keep], counts[keep], where="mid", lw=1.0, color="0.20",
-                label=data.path.name if data.path else (data.identifier or "PIXE"))
-        shown.append(counts[keep])
-    if simulation is not None:
-        ax.step(energies[keep], simulation.counts[keep], where="mid", lw=1.2,
-                color="crimson", label="simulation")
-        shown.append(simulation.counts[keep])
-    ax.set_xlim(energies[keep][0], energies[keep][-1])
-    ax.set_xlabel("Energy (keV)")
-    ax.set_ylabel("Counts")
-    title = buffer_stem(buffer) if buffer is not None else ""
-    ax.set_title(title or "PIXE", fontsize="medium")
+    compare = state.compare and len(curves) >= 2 and all(
+        c.spectrum is not None for c in curves[:2]
+    )
+    reference = (drawable[0].spectrum.calibration if drawable
+                 else session.pixe.calibration)
+    low, high = _region(state, reference)
+
+    if compare:
+        figure = _draw_comparison(session, curves, (low, high))
+        ax = figure.axes[0]
+        shown = [c.spectrum.counts[low:high + 1] for c in drawable]
+    else:
+        figure = figure_for(session)
+        ax = figure.axes[0]
+        ax.clear()
+        shown = []
+        sims = 0
+        for position, curve in enumerate(drawable):
+            spectrum = curve.spectrum
+            stop = min(high, spectrum.counts.size - 1)
+            if stop <= low:
+                continue
+            x = spectrum.energies[low:stop + 1]
+            if curve.simulated:
+                color = _SIM_COLORS[sims % len(_SIM_COLORS)]
+                sims += 1
+            else:
+                color = _COLORS[position % len(_COLORS)]
+            ax.step(x, spectrum.counts[low:stop + 1], where="mid",
+                    lw=1.2 if curve.simulated else 1.0, color=color, label=curve.label)
+            shown.append(spectrum.counts[low:stop + 1])
+        ax.set_xlabel("Energy (keV)")
+        ax.set_ylabel("Counts")
+        if drawable and state.plot.labels:
+            ax.legend(frameon=False, fontsize="small")
+
+    _channel_axis(ax, reference)
+    first, last = reference.edge_energy([low, high + 1])
+    ax.set_xlim(first, last)
     _apply_scale(ax, state.plot)
     _apply_limits(ax, state.plot)
     if state.plot.yscale == "log" and state.plot.ylow is None:
         # Empty channels would drag a log axis down to its clip floor.
         ax.set_ylim(bottom=0.5)
-    if state.plot.labels:
-        ax.legend(frameon=False, fontsize="small")
-    figure.tight_layout()
+    if notes:
+        ax.text(0.01, 0.97 if not drawable else 0.80, "\n".join(notes), transform=ax.transAxes,
+                va="top", ha="left", fontsize="small", color="0.35")
+    with warnings.catch_warnings():
+        # The channel axis on top is a secondary axis, which tight_layout
+        # can't place in the two-panel comparison; it warns but lays out
+        # the panels correctly regardless.
+        warnings.filterwarnings("ignore", message=".*not compatible with tight_layout")
+        figure.tight_layout()
     if state.markers != "off":
         marks = _line_marks(ax, sample_elements(session), major_only=state.markers == "on")
         if marks:
-            if state.plot.yhigh is None:
+            if state.plot.yhigh is None and shown:
                 _make_headroom(ax, np.concatenate(shown), state.plot.yscale)
             _draw_marks(ax, marks)
     show(figure)
     return True
+
+
+def _region(state, calibration) -> tuple[int, int]:
+    """REGION (channel numbers, as the file numbers them) as indices into
+    a spectrum with ``calibration``; the whole spectrum by default."""
+    first = int(round(calibration.first))
+    low = 0 if state.low is None else max(0, state.low - first)
+    high = calibration.npt - 1 if state.high is None else min(calibration.npt - 1, state.high - first)
+    if high <= low:
+        raise CommandError(f"no PIXE channels between {state.low} and {state.high}")
+    return low, high
+
+
+def _channel_axis(ax, calibration) -> None:
+    """Channel numbers along the top edge, matching the energy axis below."""
+    gain, offset = calibration.kevch, calibration.kev0
+    top = ax.secondary_xaxis(
+        "top", functions=(lambda e: (e - offset) / gain, lambda c: c * gain + offset)
+    )
+    top.set_xlabel("Channel", fontsize="small")
+    top.tick_params(labelsize="small")
+
+
+def _draw_comparison(session, curves, region):
+    """Data, simulation and residuals -- the RBS COMPARE layout, in keV."""
+    from ..fit.objective import chi_square
+    from ..plot.spectra import plot_comparison
+
+    data, theory, *rest = curves
+    observed = np.asarray(data.spectrum.counts, dtype=float)
+    expected = np.asarray(theory.spectrum.counts, dtype=float)
+    n = min(observed.size, expected.size)
+    mask = np.zeros(n, dtype=bool)
+    mask[region[0]:region[1] + 1] = True
+    summary = chi_square(observed[:n], expected[:n], valid=mask, n_parameters=0)
+    figure = figure_for(session, residuals=True)
+    for ax in figure.axes:
+        ax.clear()
+    return plot_comparison(
+        data.spectrum, theory.spectrum, energy_axis=True, region=region, figure=figure,
+        data_label=data.label, simulation_label=theory.label,
+        goodness_of_fit=f"reduced chi-square {summary.reduced:.4f} ({summary.dof} dof)",
+        overlays=[(c.spectrum, c.label) for c in rest if c.spectrum is not None],
+    )
 
 
 def sample_elements(session) -> list[tuple[int, str]]:
@@ -271,9 +448,3 @@ def _merged(marks, gap: float) -> list[tuple[float, str]]:
         label = " / ".join(f"{symbol} {'/'.join(lines)}" for symbol, lines in by_element.items())
         merged.append((sum(m[0] for m in cluster) / len(cluster), label))
     return merged
-
-
-def refresh(session) -> None:
-    """Follow an RBS redraw: redraw the PIXE window while PIXE is enabled."""
-    if session.pixe.enabled:
-        draw(session, required=False)

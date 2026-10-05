@@ -428,12 +428,20 @@ class PixeState:
     detector: PixeDetector = field(default_factory=PixeDetector)
     #: For a spectrum whose header has no usable calibration.
     calibration: Calibration = DEFAULT_CALIBRATION
-    #: The PIXE window's energy range in keV (``None``: the whole spectrum),
-    #: and its yield axis -- of :class:`PlotState`, only the yield fields
-    #: (``ylow``, ``yhigh``, ``yscale``) are used.
-    emin: float | None = None
-    emax: float | None = None
+    #: The PIXE window's channel range (channel numbers as the spectrum
+    #: file numbers them; ``None``: the whole spectrum), and its yield axis --
+    #: of :class:`PlotState`, only the yield fields (``ylow``, ``yhigh``,
+    #: ``yscale``, ``labels``) are used.
+    low: int | None = None
+    high: int | None = None
     plot: PlotState = field(default_factory=lambda: PlotState(yscale="log"))
+    #: What the PIXE window shows (:mod:`pyrump.shell.pixe_plotting`), and
+    #: whether as a comparison with residuals.
+    view: list = field(default_factory=list)
+    compare: bool = False
+    #: The last PIXE simulation, until the sample, the active buffer or a
+    #: PIXE setting changes.
+    cache: object | None = None
     #: Line markers for the SIM sample's elements: "on" (main lines), "all"
     #: or "off".
     markers: str = "on"
@@ -539,8 +547,9 @@ class Session:
         raise KeyError(f"no buffer named {token!r}")
 
     def touch(self) -> None:
-        """Mark the simulation stale."""
+        """Mark the simulation stale -- the RBS one and the PIXE one."""
         self.dirty = True
+        self.pixe.cache = None
 
     # -- the implicit simulation ------------------------------------------
 

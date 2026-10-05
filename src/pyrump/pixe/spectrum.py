@@ -24,7 +24,7 @@ That fraction moves from the line's peak to its escape peak.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import numpy as np
 from scipy.special import ndtr
@@ -74,6 +74,13 @@ class PixeSpectrum:
     by_element: dict[str, np.ndarray]
     lines: list[LineYield]
     calibration: Calibration
+    detector: PixeDetector
+    escape: bool = True
+
+    def by_layer(self, layer: int) -> np.ndarray:
+        """The part of the spectrum from one SIM layer (0 = the surface)."""
+        lines = [replace(line, counts=line.by_layer.get(layer, 0.0)) for line in self.lines]
+        return synthesize(lines, self.calibration, self.detector, escape=self.escape).counts
 
 
 def synthesize(
@@ -104,4 +111,7 @@ def synthesize(
         add(line.energy_keV - escape_shift, line.counts * eta, element)
     for spectrum in by_element.values():
         total += spectrum
-    return PixeSpectrum(counts=total, by_element=by_element, lines=lines, calibration=calibration)
+    return PixeSpectrum(
+        counts=total, by_element=by_element, lines=lines, calibration=calibration,
+        detector=detector, escape=escape,
+    )

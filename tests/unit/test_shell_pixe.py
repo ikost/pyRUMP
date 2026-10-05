@@ -79,12 +79,12 @@ def test_entering_turns_pixe_on_and_return_keeps_it_on(session):
 
 
 def test_disable_turns_pixe_off_and_leaves(session):
-    stack = run(session, f"pixe get {EXAMPLES / 'MnPt.PIX'}", "pixe")
+    stack = run(session, f"pixe get {EXAMPLES / 'MnPt.PIX'}", "pixe", "plot")
     assert session.pixe.figure is not None
     run(session, "disable", stack=stack)
     assert stack == ["rump"]
     assert not session.pixe.enabled and session.pixe.figure is None
-    assert session.buffers[1].pixe is not None  # the data stays
+    assert session.buffers[1].pixe is not None  # the data stay
 
 
 def test_one_shots_do_not_turn_pixe_on(empty_session):
@@ -212,30 +212,113 @@ def test_pair_off_or_no_companion_leaves_the_buffer_alone(empty_session, tmp_pat
 # -- the PIXE window ----------------------------------------------------------
 
 
-def test_the_pixe_window_follows_rbs_redraws(session):
-    run(session, f"pixe get {EXAMPLES / 'MnPt.PIX'}")
-    run(session, "plot 1")
+def _pixe_labels(session) -> list[str]:
+    return [line.get_label() for line in session.pixe.figure.axes[0].lines
+            if not line.get_label().startswith("_")]
+
+
+def _two_buffers(session, tmp_path):
+    """Buffer 1 with MnPt's RBS + PIXE pair, buffer 2 with a second copy."""
+    for name in ("a", "b"):
+        shutil.copy(EXAMPLES / "MnPt.RBS", tmp_path / f"{name}.RBS")
+        shutil.copy(EXAMPLES / "MnPt.PIX", tmp_path / f"{name}.PIX")
+    run(session, "pixe pair on", f"xeq {tmp_path / 'a.RBS'}", f"xeq {tmp_path / 'b.RBS'}")
+
+
+def test_loading_and_entering_open_no_window(empty_session):
+    run(empty_session, f"pixe get {EXAMPLES / 'MnPt.PIX'}", "pixe", "return",
+        "pixe fwhm 125", "pixe pair on", f"xeq {EXAMPLES / 'MnPt.RBS'}")
+    assert empty_session.pixe.figure is None
+
+
+def test_plot_shows_the_same_buffer_in_both_windows(session):
+    run(session, f"pixe get {EXAMPLES / 'MnPt.PIX'}", "plot 1")
     assert session.pixe.figure is None  # PIXE is off
     run(session, "pixe", "return", "plot 1")
-    assert session.pixe.figure is not None
-    assert session.figure is not session.pixe.figure
+    assert session.pixe.figure is not None and session.figure is not session.pixe.figure
+    assert len(_pixe_labels(session)) == 1
 
 
-def test_region_and_figsave(session, tmp_path):
-    stack = run(session, f"pixe get {EXAMPLES / 'MnPt.PIX'}", "pixe", "region 12 0.5")
-    assert (session.pixe.emin, session.pixe.emax) == (0.5, 12)
+def test_overlay_adds_the_second_buffers_pixe(empty_session, tmp_path):
+    _two_buffers(empty_session, tmp_path)
+    run(empty_session, "pixe", "return", "plot 1", "overlay 2")
+    assert len(_pixe_labels(empty_session)) == 2
+
+
+def test_a_buffer_without_pixe_is_noted(session):
+    run(session, "pixe", "return", "plot 1")
+    notes = [text.get_text() for text in session.pixe.figure.axes[0].texts]
+    assert any("buffer 1: no PIXE spectrum" in note for note in notes)
+
+
+def test_plot_0_and_splot_show_the_simulation(session):
+    run(session, f"sim get {EXAMPLES / 'MnPt.lcm'}", f"pixe get {EXAMPLES / 'MnPt.PIX'}",
+        "pixe", "return", "plot 0")
+    assert _pixe_labels(session) == ["simulation"]
+    run(session, "plot 1", "sim splot Mn", "sim splot 2")
+    labels = _pixe_labels(session)
+    assert "SIM(Mn)" in labels and "SIM(layer 2)" in labels
+
+
+def test_compare_draws_data_simulation_and_residuals(session):
+    run(session, f"sim get {EXAMPLES / 'MnPt.lcm'}", f"pixe get {EXAMPLES / 'MnPt.PIX'}",
+        "pixe", "return", "compare")
+    figure = session.pixe.figure
+    assert len(figure.axes) == 2  # spectrum and residuals
+    assert "simulation" in _pixe_labels(session)
+    # On the residuals panel, as in the RBS COMPARE.
+    assert any("chi-square" in text.get_text() for text in figure.axes[1].texts)
+    run(session, "plot 1")  # back to one panel
+    assert len(session.pixe.figure.axes) == 1
+
+
+def test_compare_inside_the_pixe_prompt_leaves_rbs_alone(session):
+    stack = run(session, f"sim get {EXAMPLES / 'MnPt.lcm'}", f"pixe get {EXAMPLES / 'MnPt.PIX'}",
+                "pixe", "cmp")
+    assert len(session.pixe.figure.axes) == 2
+    assert session.figure is None
+    run(session, "plot", stack=stack)
+    assert len(session.pixe.figure.axes) == 1
+
+
+def test_settings_redraw_an_open_window_with_a_fresh_simulation(session):
+    stack = run(session, f"sim get {EXAMPLES / 'MnPt.lcm'}", f"pixe get {EXAMPLES / 'MnPt.PIX'}",
+                "pixe", "plot 0")
+    before = np.max(_sim_curve(session).get_ydata())
+    run(session, "solid 1.5263", stack=stack)  # twice the default
+    after = np.max(_sim_curve(session).get_ydata())
+    assert after == pytest.approx(2 * before, rel=1e-3)
+    run(session, "return", "charge 20", "pixe plot 0")  # an RBS parameter: the cache goes too
+    assert np.max(_sim_curve(session).get_ydata()) == pytest.approx(4 * before, rel=1e-3)
+
+
+def test_region_is_in_channels_with_energy_below_and_channels_on_top(session):
+    stack = run(session, f"pixe get {EXAMPLES / 'MnPt.PIX'}", "pixe", "plot", "region 1200 50")
+    assert (session.pixe.low, session.pixe.high) == (50, 1200)
+    calibration = session.buffers[1].pixe.calibration
     left, right = session.pixe.figure.axes[0].get_xlim()
-    assert left >= 0.4 and right <= 12.1
-    run(session, f"figsave {tmp_path / 'pixe'}", stack=stack)
-    assert (tmp_path / "pixe.png").stat().st_size > 0
+    assert left == pytest.approx(50 * calibration.kevch + calibration.kev0)
+    assert right == pytest.approx(1201 * calibration.kevch + calibration.kev0)
+    assert session.pixe.figure.axes[0].child_axes  # the channel axis on top
     with pytest.raises(CommandError, match="no PIXE channels"):
-        run(session, "region 30 40", stack=stack)
+        run(session, "region 5000 6000", stack=stack)
 
 
-def test_plot_needs_pixe_data(session):
+def test_figsave_saves_both_windows_in_pair_mode(session, tmp_path):
+    run(session, f"pixe get {EXAMPLES / 'MnPt.PIX'}", "pixe", "return", "plot 1")
+    run(session, f"figsave {tmp_path / 'one'}")
+    assert (tmp_path / "one.png").exists() and not (tmp_path / "one_pixe.png").exists()
+    run(session, "pixe pair on", f"figsave {tmp_path / 'two'}")
+    assert (tmp_path / "two.png").exists() and (tmp_path / "two_pixe.png").exists()
     stack = run(session, "pixe")
-    with pytest.raises(CommandError, match="no PIXE spectrum"):
-        run(session, "plot", stack=stack)
+    run(session, f"figsave {tmp_path / 'three'}", stack=stack)
+    assert (tmp_path / "three.png").exists() and not (tmp_path / "three_pixe.png").exists()
+
+
+def test_plot_in_the_pixe_prompt_needs_something_to_show(empty_session):
+    stack = run(empty_session, "pixe")
+    with pytest.raises(CommandError, match="no active"):
+        run(empty_session, "cmp", stack=stack)
 
 
 def test_pump_services_both_windows(session):
@@ -253,7 +336,7 @@ def _labels(session) -> list[str]:
 
 def test_markers_label_the_sim_samples_lines(session):
     run(session, f"sim get {EXAMPLES / 'MnPt.lcm'}", f"pixe get {EXAMPLES / 'MnPt.PIX'}",
-        "pixe", "region 0.5 12")
+        "pixe", "plot", "region 50 1190")
     labels = " ".join(_labels(session))
     for expected in ("Mn Kα", "Mn Kβ", "Pt Lα", "Ru Lα", "Si Kα"):
         assert expected in labels
@@ -263,7 +346,8 @@ def test_markers_label_the_sim_samples_lines(session):
 
 def test_markers_all_and_off(session):
     stack = run(session, f"sim get {EXAMPLES / 'MnPt.lcm'}",
-                f"pixe get {EXAMPLES / 'MnPt.PIX'}", "pixe", "region 0.5 12", "markers all")
+                f"pixe get {EXAMPLES / 'MnPt.PIX'}", "pixe", "plot", "region 50 1190",
+                "markers all")
     assert "Ru Ll" in " ".join(_labels(session))
     run(session, "markers off", stack=stack)
     assert not any(label.startswith(("Mn", "Pt", "Ru", "Si")) for label in _labels(session))
@@ -294,28 +378,23 @@ def test_crowded_labels_spread_apart_but_keep_their_order():
 # -- the simulation in the shell ----------------------------------------------
 
 
-def _simulation_line(session):
+def _sim_curve(session):
     ax = session.pixe.figure.axes[0]
     return next((line for line in ax.lines if line.get_label() == "simulation"), None)
 
 
-def test_simulation_is_drawn_over_the_data(session):
-    run(session, f"sim get {EXAMPLES / 'MnPt.lcm'}", f"pixe get {EXAMPLES / 'MnPt.PIX'}", "pixe")
-    curve = _simulation_line(session)
-    assert curve is not None and np.max(curve.get_ydata()) > 0
-
-
 def test_simulation_alone_without_pixe_data(empty_session):
-    run(empty_session, f"sim get {EXAMPLES / 'MnPt.lcm'}", "mev 1.9", "beam 4He", "pixe")
-    assert _simulation_line(empty_session) is not None
+    run(empty_session, f"sim get {EXAMPLES / 'MnPt.lcm'}", "mev 1.9", "beam 4He", "pixe",
+        "plot 0")
+    assert _sim_curve(empty_session) is not None
 
 
 def test_h_scales_the_simulation(session):
     stack = run(session, f"sim get {EXAMPLES / 'MnPt.lcm'}",
-                f"pixe get {EXAMPLES / 'MnPt.PIX'}", "pixe")
-    before = np.array(_simulation_line(session).get_ydata())
+                f"pixe get {EXAMPLES / 'MnPt.PIX'}", "pixe", "cmp")
+    before = np.array(_sim_curve(session).get_ydata())
     run(session, "h 2 2 2", stack=stack)
-    after = np.array(_simulation_line(session).get_ydata())
+    after = np.array(_sim_curve(session).get_ydata())
     np.testing.assert_allclose(after, 2 * before, rtol=1e-9)
     run(session, "h K 1", stack=stack)
     assert session.pixe.h == (1.0, 2.0, 2.0)
@@ -334,10 +413,11 @@ def test_lines_lists_the_film_lines(session, capsys):
 
 def test_simulation_errors_are_reported_not_raised(session, capsys):
     run(session, f"sim get {EXAMPLES / 'MnPt.lcm'}", f"pixe get {EXAMPLES / 'MnPt.PIX'}",
-        "beam 7Li", "pixe")
+        "beam 7Li", "pixe", "return", "plot 1", "overlay 0")
     out = capsys.readouterr().out
     assert "only protons and 4He" in out
-    assert _simulation_line(session) is None  # the data are still drawn
+    assert _sim_curve(session) is None  # the data are still drawn
+    assert len(_pixe_labels(session)) == 1
     with pytest.raises(CommandError, match="only protons and 4He"):
         run(session, "pixe lines")
 

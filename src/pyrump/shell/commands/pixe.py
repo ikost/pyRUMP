@@ -1,7 +1,8 @@
 """PIXE: the X-ray sub-processor.
 
-Entering ``PIXE`` turns PIXE on: from then on the PIXE window follows the
-RBS one, showing the ACTIVE buffer's PIXE spectrum. ``DISABLE`` turns it off
+Entering ``PIXE`` turns PIXE on: from then on every RBS PLOT, OVERLAY,
+SPLOT and COMPARE shows the same buffers in the PIXE window
+(:mod:`pyrump.shell.pixe_plotting`). ``DISABLE`` turns it off
 and leaves the prompt in one step; ``RETURN`` leaves PIXE on. One-shot
 ``PIXE <command>`` from the RUMP level runs a single command without
 entering, and does not turn PIXE on -- so ``~/.pyrumprc`` can set up the
@@ -44,8 +45,7 @@ def enter(session, args: ArgReader) -> None:
     state = session.pixe
     if not state.enabled:
         state.enabled = True
-        print("PIXE enabled (DISABLE turns it off)")
-        pixe_plotting.draw(session, required=False)
+        print("PIXE enabled: PLOT and COMPARE now show PIXE too (DISABLE turns it off)")
     raise EnterMode("pixe")
 
 
@@ -169,8 +169,7 @@ def cmd_get(session, args: ArgReader) -> None:
         session.buffers.active = index
     attach(session, buffer, path)
     print(f"  {path.name} -> PIXE of buffer {index}")
-    if session.pixe.enabled:
-        pixe_plotting.draw(session, required=False)
+    pixe_plotting.refresh(session)
 
 
 def attach(session, buffer: Buffer, path: Path) -> None:
@@ -195,8 +194,7 @@ def pair(session, buffer: Buffer | None, rbs_path: Path) -> None:
         return
     attach(session, buffer, companion)
     print(f"  PAIR: {companion.name} -> PIXE of this buffer")
-    if session.pixe.enabled:
-        pixe_plotting.draw(session, required=False)
+    pixe_plotting.refresh(session)
 
 
 def _companion(rbs_path: Path) -> Path | None:
@@ -405,8 +403,7 @@ def cmd_calib(session, args: ArgReader) -> None:
         if buffer is not None and buffer.pixe is not None:
             spectrum = buffer.pixe.spectrum
             spectrum.calibration = replace(spectrum.calibration, kevch=gain, kev0=offset)
-            if state.enabled:
-                pixe_plotting.draw(session, required=False)
+        pixe_plotting.refresh(session)
     buffer = session.buffers.active_buffer
     calibration = (
         buffer.pixe.calibration
@@ -492,35 +489,63 @@ def cmd_lines(session, args: ArgReader) -> None:
 
 
 def _redraw_or(session, message: str) -> None:
-    if not pixe_plotting.draw(session, required=False):
+    """Redraw an open PIXE window; otherwise just report the setting."""
+    if pixe_plotting.is_open(session) and session.pixe.view:
+        pixe_plotting.draw(session, required=False)
+    else:
         print(message)
 
 
 def cmd_plot(session, args: ArgReader) -> None:
-    """``PLOT`` -- draw the active buffer's PIXE spectrum."""
+    """``PLOT [buffer]`` -- draw a buffer's PIXE spectrum (default: the
+    active one); ``PLOT 0`` the simulation. Leaves the RBS window alone."""
+    token = args.optional()
     args.done()
+    index = session.buffers.active if token is None else _resolve(session, token)
+    item = pixe_plotting.ViewItem("sim") if index == 0 else pixe_plotting.ViewItem("data", index)
+    session.pixe.view, session.pixe.compare = [item], False
     pixe_plotting.draw(session)
 
 
+def cmd_compare(session, args: ArgReader) -> None:
+    """``COMPARE`` -- the active buffer's PIXE spectrum against the
+    simulation, with residuals. Leaves the RBS window alone."""
+    args.done()
+    index = session.buffers.active
+    if session.buffers.get(index) is None or index == 0:
+        raise CommandError("no active data buffer: GET a spectrum first")
+    session.pixe.view = [pixe_plotting.ViewItem("data", index), pixe_plotting.ViewItem("sim")]
+    session.pixe.compare = True
+    pixe_plotting.draw(session)
+
+
+def _resolve(session, token: str) -> int:
+    try:
+        index = session.resolve(token)
+    except KeyError as error:
+        raise CommandError(str(error).strip("'")) from None
+    if index != 0 and session.buffers.get(index) is None:
+        raise CommandError(f"buffer {index} is empty")
+    return index
+
+
 def cmd_region(session, args: ArgReader) -> None:
-    """``REGION <keV> <keV>`` -- the energy range shown; ``REGION ALL`` the
-    whole spectrum; no argument shows it."""
+    """``REGION <channel> <channel>`` -- the channel range shown (as the
+    spectrum file numbers its channels); ``REGION ALL`` the whole spectrum;
+    no argument shows it. The energy axis below and the channel axis on top
+    follow."""
     state = session.pixe
     if args and args.peek().lower() == "all":
         args.token()
-        state.emin = state.emax = None
+        state.low = state.high = None
     elif args:
-        low = args.number("the lowest energy, keV")
-        high = args.number("the highest energy, keV")
+        low = args.integer("the first channel")
+        high = args.integer("the last channel")
         if low == high:
-            raise CommandError(f"empty region: {low} to {high} keV")
-        state.emin, state.emax = min(low, high), max(low, high)
+            raise CommandError(f"empty region: {low} to {high}")
+        state.low, state.high = min(low, high), max(low, high)
     args.done()
-    span = (
-        "all"
-        if state.emin is None and state.emax is None
-        else f"{state.emin:g} to {state.emax:g} keV"
-    )
+    span = "all" if state.low is None and state.high is None else f"{state.low} to {state.high}"
     _redraw_or(session, f"  region {span}")
 
 
@@ -606,8 +631,10 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("ESCAPE", 2, cmd_escape, "Si escape peaks in the simulation: ON or OFF"),
     ("LINES", 2, cmd_lines, "table of the simulated lines (ALL: weak ones too)"),
     # The PIXE window
-    ("PLOT", 2, cmd_plot, "draw the active buffer's PIXE spectrum"),
-    ("REGION", 3, cmd_region, "energy range shown, keV (ALL for everything)"),
+    ("PLOT", 2, cmd_plot, "draw a buffer's PIXE spectrum (0: the simulation)"),
+    ("COMPARE", 0, cmd_compare, "PIXE data against the simulation, with residuals"),
+    ("CMP", -3, cmd_compare, "synonym for COMPARE"),
+    ("REGION", 3, cmd_region, "channel range shown (ALL for everything)"),
     ("COUNTS", 2, cmd_counts, "yield range (ALL to autoscale)"),
     ("LINEAR", 2, _scale("linear"), "linear yield axis"),
     ("SQRT", 2, _scale("sqrt"), "square-root yield axis"),
@@ -622,6 +649,7 @@ for _name, _minlen, _handler, _help in _ENTRIES:
 TABLE.note_synonym("HELP", "?")
 TABLE.note_synonym("RETURN", "QUIT", "Q")
 TABLE.note_synonym("FIGSAVE", "HCOPY")
+TABLE.note_synonym("COMPARE", "CMP")
 
 _HELP_GROUPS: list[tuple[str, list[str]]] = [
     ("Getting around", ["HELP", "RETURN", "DISABLE", "SHOW"]),
@@ -631,5 +659,5 @@ _HELP_GROUPS: list[tuple[str, list[str]]] = [
       "ESCAPE"]),
     ("Simulation", ["H", "LINES"]),
     ("PIXE window",
-     ["PLOT", "REGION", "COUNTS", "LINEAR", "SQRT", "LOG", "MARKERS", "FIGSAVE"]),
+     ["PLOT", "COMPARE", "REGION", "COUNTS", "LINEAR", "SQRT", "LOG", "MARKERS", "FIGSAVE"]),
 ]

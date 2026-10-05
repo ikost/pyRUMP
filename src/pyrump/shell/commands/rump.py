@@ -1188,7 +1188,14 @@ def cmd_figsave(session, args: ArgReader) -> None:
     so there is no legacy command to match. The image format is whatever
     matplotlib infers from the extension (``.png`` default, also ``.pdf``,
     ``.svg``, ...); raster formats are written at ``FIGSAVE_DPI``.
+
+    With PIXE's ``PAIR ON`` and the PIXE window open, the PIXE window is saved
+    too, next to it as ``<name>_pixe.<ext>`` -- the two spectra of one run
+    belong together. The PIXE prompt's own FIGSAVE saves the PIXE window
+    alone.
     """
+    from .. import pixe_plotting
+
     path = Path(args.token("an output image file"))
     args.done()
     if session.figure is None:
@@ -1197,6 +1204,10 @@ def cmd_figsave(session, args: ArgReader) -> None:
         path = path.with_suffix(".png")
     session.figure.savefig(path, dpi=FIGSAVE_DPI)
     print(f"wrote {path}")
+    if session.pixe.pair and pixe_plotting.is_open(session):
+        pixe_path = path.with_name(f"{path.stem}_pixe{path.suffix}")
+        session.pixe.figure.savefig(pixe_path, dpi=FIGSAVE_DPI)
+        print(f"wrote {pixe_path}")
 
 
 def cmd_display(session, args: ArgReader) -> None:

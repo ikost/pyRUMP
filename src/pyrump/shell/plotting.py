@@ -246,10 +246,10 @@ def draw(session) -> None:
 
 
 def _refresh_pixe(session) -> None:
-    """Keep the PIXE window on the same buffer as the RBS one."""
+    """While PIXE is enabled, show the same buffers in the PIXE window."""
     from . import pixe_plotting
 
-    pixe_plotting.refresh(session)
+    pixe_plotting.follow(session)
 
 
 def goodness_of_fit(
