@@ -59,25 +59,46 @@ def pixe_buffer(session):
     return buffer if buffer is not None and buffer.pixe is not None else None
 
 
-def draw(session, *, required: bool = True) -> bool:
-    """Draw the ACTIVE buffer's PIXE spectrum. Returns whether anything was
-    drawn.
+def _simulation(session):
+    """The PIXE simulation, or ``None``. A failure is reported once, not on
+    every redraw, and never stops the data from being drawn."""
+    from .pixe_sim import simulate
 
-    ``required`` makes a missing spectrum an error (the PIXE prompt's own
-    PLOT); otherwise -- an RBS redraw refreshing this window -- there is
-    simply nothing to do.
+    try:
+        result = simulate(session)
+    except (ValueError, KeyError) as error:
+        message = str(error).strip("'")
+        if message != session.pixe.last_error:
+            print(f"  PIXE simulation: {message}")
+            session.pixe.last_error = message
+        return None
+    session.pixe.last_error = None
+    return result
+
+
+def draw(session, *, required: bool = True) -> bool:
+    """Draw the ACTIVE buffer's PIXE spectrum and the simulation of the SIM
+    sample. Returns whether anything was drawn.
+
+    Either may be missing: with no PIXE spectrum the simulation is drawn on
+    the default calibration, with no sample only the data. ``required``
+    makes having neither an error (the PIXE prompt's own PLOT); otherwise --
+    an RBS redraw refreshing this window -- there is simply nothing to do.
     """
     buffer = pixe_buffer(session)
-    if buffer is None:
+    simulation = _simulation(session)
+    if buffer is None and simulation is None:
         if required:
-            raise CommandError("no PIXE spectrum in the active buffer: PIXE GET <file>")
+            raise CommandError(
+                "nothing to plot: no PIXE spectrum in the active buffer (PIXE GET <file>) "
+                "and no SIM sample"
+            )
         return False
 
     state = session.pixe
-    data = buffer.pixe
-    counts = np.asarray(data.spectrum.counts, dtype=float)
-    energies = data.spectrum.energies
-    keep = np.ones(counts.size, dtype=bool)
+    calibration = buffer.pixe.calibration if buffer is not None else simulation.calibration
+    energies = calibration.edge_energy(np.arange(calibration.npt))
+    keep = np.ones(energies.size, dtype=bool)
     if state.emin is not None:
         keep &= energies >= state.emin
     if state.emax is not None:
@@ -89,12 +110,22 @@ def draw(session, *, required: bool = True) -> bool:
 
     figure, ax = figure_for(session)
     ax.clear()
-    ax.step(energies[keep], counts[keep], where="mid", lw=1.0, color="0.20",
-            label=data.path.name if data.path else (data.identifier or "PIXE"))
+    shown = []
+    if buffer is not None:
+        data = buffer.pixe
+        counts = np.asarray(data.spectrum.counts, dtype=float)
+        ax.step(energies[keep], counts[keep], where="mid", lw=1.0, color="0.20",
+                label=data.path.name if data.path else (data.identifier or "PIXE"))
+        shown.append(counts[keep])
+    if simulation is not None:
+        ax.step(energies[keep], simulation.counts[keep], where="mid", lw=1.2,
+                color="crimson", label="simulation")
+        shown.append(simulation.counts[keep])
     ax.set_xlim(energies[keep][0], energies[keep][-1])
     ax.set_xlabel("Energy (keV)")
     ax.set_ylabel("Counts")
-    ax.set_title(buffer_stem(buffer) or "PIXE", fontsize="medium")
+    title = buffer_stem(buffer) if buffer is not None else ""
+    ax.set_title(title or "PIXE", fontsize="medium")
     _apply_scale(ax, state.plot)
     _apply_limits(ax, state.plot)
     if state.plot.yscale == "log" and state.plot.ylow is None:
@@ -107,7 +138,7 @@ def draw(session, *, required: bool = True) -> bool:
         marks = _line_marks(ax, sample_elements(session), major_only=state.markers == "on")
         if marks:
             if state.plot.yhigh is None:
-                _make_headroom(ax, counts[keep], state.plot.yscale)
+                _make_headroom(ax, np.concatenate(shown), state.plot.yscale)
             _draw_marks(ax, marks)
     show(figure)
     return True

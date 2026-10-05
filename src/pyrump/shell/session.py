@@ -437,6 +437,12 @@ class PixeState:
     #: Line markers for the SIM sample's elements: "on" (main lines), "all"
     #: or "off".
     markers: str = "on"
+    #: The instrumental constant H for K, L and M lines.
+    h: tuple[float, float, float] = (1.0, 1.0, 1.0)
+    #: Whether the simulation includes Si escape peaks.
+    escape: bool = True
+    #: The last simulation error reported, so a redraw doesn't repeat it.
+    last_error: str | None = None
     #: The PIXE window, separate from the RBS one (:attr:`Session.figure`).
     figure: object | None = None
 

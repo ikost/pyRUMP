@@ -7,10 +7,12 @@
 
     **Working so far:** the PIXE prompt with `GET`, `PAIR`, `DISABLE` and
     `SHOW`; the detector and calibration settings with their built-in
-    defaults; reading Oxford `.PIX` files; the PIXE window showing the
-    measured spectrum with markers for the sample's lines; and the X-ray
-    atomic-data tables. **Not yet:** the ionisation cross sections, the
-    simulation, the bare-substrate background and fitting.
+    defaults; reading Oxford `.PIX` files; the PIXE window with the
+    measured spectrum, markers for the sample's lines and the **simulated
+    film spectrum** (K and L lines, with `H`, `ESCAPE` and `LINES`); the
+    X-ray atomic data and the ECPSSR K/L cross sections. **Not yet:** M-shell
+    cross sections (so no Pt/Au/W M lines in the simulation), the
+    bare-substrate background, and fitting.
 
 PIXE adds a second measurement to the one pyRUMP already models. The beam
 that produces the RBS spectrum also ionises inner shells in the sample, and
@@ -198,10 +200,10 @@ Commands marked † are not implemented yet.
 | Prompt | `RETURN`, `DISABLE`, `SHOW`, `HELP` |
 | Data | `GET <file>`, `PAIR ON\|OFF`, `BARE <buffer>` †, `LIVETIME <live> <real>` † |
 | Geometry | `ANGLE <deg>` (−90 to 90), `SOLID <msr>` |
-| Detector | `WINDOW <element> <µm>`, `CRYSTAL <element> <µm>`, `FWHM <eV>`, `FANO <F>`, `DEADLAYER <µm>` †, `ESCAPE ON\|OFF` †, `TAIL ON\|OFF` † |
+| Detector | `WINDOW <element> <µm>`, `CRYSTAL <element> <µm>`, `FWHM <eV>`, `FANO <F>`, `DEADLAYER <µm>` †, `ESCAPE ON\|OFF`, `TAIL ON\|OFF` † |
 | Absorbers | `FILTER <element> <µm> [<hole %>]`, `FILTER CLEAR` |
-| Calibration | `CALIB <gain keV/ch> <offset keV>`, `H K\|L\|M <value>` † |
-| Elements | `LINES` † (table of lines, energies, cross sections and yields), `EXCLUDE <element>` †, `INCLUDE <element>` † |
+| Calibration | `CALIB <gain keV/ch> <offset keV>`, `H <K> <L> <M>` or `H K\|L\|M <value>` |
+| Elements | `LINES [ALL]` (table of lines, energies, cross sections, efficiency and counts), `EXCLUDE <element>` †, `INCLUDE <element>` † |
 | Background | `BGSCALE <s>` †, `SMOOTH <channels>` † |
 | Plot | `PLOT`, `REGION <keV> <keV>` / `REGION ALL`, `COUNTS <low> <high>` / `COUNTS ALL`, `LOG`/`LINEAR`/`SQRT`, `MARKERS ON\|ALL\|OFF`, `FIGSAVE <file>`, `COMPONENTS ON\|OFF` † |
 | Output | `EXPORT <file>` † |
@@ -219,7 +221,9 @@ Coulomb deflection, perturbed stationary states (binding and polarisation)
 and relativistic effects. pyRUMP ships tables computed by its own
 independent implementation — no ISICS or GUPIX code or data — for
 protons (0.1–5 MeV) and ⁴He (0.2–12 MeV), K shell for Z = 6–92 and L1–L3
-for Z = 18–92. **M shells are still to be added**; they are essential for
+for Z = 18–92, at 50 energies per decade — dense enough that interpolation
+is good to 0.3 %. The generator is in `tools/ecpssr/`, with its theory and
+validation. **M shells are still to be added**; they are essential for
 heavy elements under ⁴He, where the M lines are by far the strongest (Pt
 Mα in the MnPt example).
 

@@ -285,3 +285,54 @@ def test_crowded_labels_spread_apart_but_keep_their_order():
     assert positions[3] == 5.0  # an uncrowded label stays where its line is
     assert np.mean(positions[:3]) == pytest.approx(np.mean(wanted[:3]))
     assert positions[-1] <= 10.0
+
+
+# -- the simulation in the shell ----------------------------------------------
+
+
+def _simulation_line(session):
+    ax = session.pixe.figure.axes[0]
+    return next((line for line in ax.lines if line.get_label() == "simulation"), None)
+
+
+def test_simulation_is_drawn_over_the_data(session):
+    run(session, f"sim get {EXAMPLES / 'MnPt.lcm'}", f"pixe get {EXAMPLES / 'MnPt.PIX'}", "pixe")
+    curve = _simulation_line(session)
+    assert curve is not None and np.max(curve.get_ydata()) > 0
+
+
+def test_simulation_alone_without_pixe_data(empty_session):
+    run(empty_session, f"sim get {EXAMPLES / 'MnPt.lcm'}", "mev 1.9", "beam 4He", "pixe")
+    assert _simulation_line(empty_session) is not None
+
+
+def test_h_scales_the_simulation(session):
+    stack = run(session, f"sim get {EXAMPLES / 'MnPt.lcm'}",
+                f"pixe get {EXAMPLES / 'MnPt.PIX'}", "pixe")
+    before = np.array(_simulation_line(session).get_ydata())
+    run(session, "h 2 2 2", stack=stack)
+    after = np.array(_simulation_line(session).get_ydata())
+    np.testing.assert_allclose(after, 2 * before, rtol=1e-9)
+    run(session, "h K 1", stack=stack)
+    assert session.pixe.h == (1.0, 2.0, 2.0)
+    with pytest.raises(CommandError, match="positive"):
+        run(session, "h 0 1 1", stack=stack)
+
+
+def test_lines_lists_the_film_lines(session, capsys):
+    run(session, f"sim get {EXAMPLES / 'MnPt.lcm'}", f"pixe get {EXAMPLES / 'MnPt.PIX'}")
+    capsys.readouterr()
+    run(session, "pixe lines")
+    out = capsys.readouterr().out
+    assert "Mn" in out and "KL3" in out and "Pt" in out
+    assert "Si " not in out  # the substrate's lines come from the bare spectrum
+
+
+def test_simulation_errors_are_reported_not_raised(session, capsys):
+    run(session, f"sim get {EXAMPLES / 'MnPt.lcm'}", f"pixe get {EXAMPLES / 'MnPt.PIX'}",
+        "beam 7Li", "pixe")
+    out = capsys.readouterr().out
+    assert "only protons and 4He" in out
+    assert _simulation_line(session) is None  # the data are still drawn
+    with pytest.raises(CommandError, match="only protons and 4He"):
+        run(session, "pixe lines")

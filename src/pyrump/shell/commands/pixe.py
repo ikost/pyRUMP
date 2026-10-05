@@ -113,6 +113,8 @@ def setup_lines(session) -> list[str]:
     ]
     lines += [
         f"calib {c.kevch:.8g} {c.kev0:.8g}",
+        f"h {state.h[0]:g} {state.h[1]:g} {state.h[2]:g}",
+        f"escape {'on' if state.escape else 'off'}",
         f"pair {'on' if state.pair else 'off'}",
         f"markers {state.markers}",
     ]
@@ -346,6 +348,76 @@ def cmd_calib(session, args: ArgReader) -> None:
     print(f"  calib {calibration.kevch:.8g} {calibration.kev0:.8g}  ! keV/ch, keV")
 
 
+def cmd_h(session, args: ArgReader) -> None:
+    """``H <K> <L> <M>`` or ``H K|L|M <value>`` -- the instrumental constant
+    for each shell's lines: measured yield = H x calculated yield. It takes
+    up the solid angle, charge and database errors; set it from standards."""
+    state = session.pixe
+    if args:
+        first = args.token("H values, or K, L or M")
+        if first.upper() in ("K", "L", "M"):
+            value = args.number("an H value")
+            values = list(state.h)
+            values["KLM".index(first.upper())] = value
+        else:
+            try:
+                values = [float(first), args.number("H for L lines"), args.number("H for M lines")]
+            except ValueError:
+                raise CommandError("H: expected K L M values, or K|L|M <value>") from None
+        args.done()
+        if any(v <= 0 for v in values):
+            raise CommandError("H: values must be positive")
+        state.h = tuple(values)
+        pixe_plotting.refresh(session)
+    print(f"  h {state.h[0]:g} {state.h[1]:g} {state.h[2]:g}  ! K, L, M")
+
+
+def cmd_escape(session, args: ArgReader) -> None:
+    """``ESCAPE ON|OFF`` -- whether the simulation includes Si escape peaks."""
+    token = args.optional()
+    args.done()
+    if token is not None:
+        if token.lower() not in ("on", "off"):
+            raise CommandError("ESCAPE: expected ON or OFF")
+        session.pixe.escape = token.lower() == "on"
+        pixe_plotting.refresh(session)
+    print(f"  escape {'on' if session.pixe.escape else 'off'}")
+
+
+def cmd_lines(session, args: ArgReader) -> None:
+    """``LINES [ALL]`` -- the simulated lines: energy, cross section at the
+    beam energy, detector efficiency and counts, strongest first. Lines
+    under 0.1 % of the strongest are left out unless ALL is given."""
+    from ..pixe_sim import simulate
+
+    token = args.optional()
+    args.done()
+    show_all = token is not None and token.lower() == "all"
+    try:
+        result = simulate(session)
+    except (ValueError, KeyError) as error:
+        raise CommandError(f"LINES: {str(error).strip(chr(39))}") from None
+    if result is None:
+        raise CommandError("LINES: no SIM sample to simulate")
+    if not result.lines:
+        print("  no film lines: the sample is a substrate only")
+        return
+    strongest = result.lines[0].counts
+    print("  element  line    E (keV)   sigma (b)   efficiency      counts")
+    for line in result.lines:
+        if not show_all and line.counts < 1e-3 * strongest:
+            continue
+        print(
+            f"  {line.symbol:<7}  {line.line.line:<6}  {line.energy_keV:7.4f}"
+            f"   {line.sigma_barn:9.4g}   {line.efficiency:10.4f}  {line.counts:10.4g}"
+        )
+    totals: dict[str, float] = {}
+    for line in result.lines:
+        key = f"{line.symbol} {line.family}"
+        totals[key] = totals.get(key, 0.0) + line.counts
+    print("  totals:  " + ", ".join(f"{k} {v:.4g}" for k, v in totals.items()))
+
+
 # ---------------------------------------------------------------------------
 # The PIXE window
 # ---------------------------------------------------------------------------
@@ -461,6 +533,9 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("FANO", 2, cmd_fano, "Fano factor"),
     ("FILTER", 3, cmd_filter, "add an absorber (element, µm, hole %), or FILTER CLEAR"),
     ("CALIB", 3, cmd_calib, "energy calibration: keV/channel and offset in keV"),
+    ("H", 1, cmd_h, "instrumental constant for K, L, M lines (H K L M, or H K|L|M v)"),
+    ("ESCAPE", 2, cmd_escape, "Si escape peaks in the simulation: ON or OFF"),
+    ("LINES", 2, cmd_lines, "table of the simulated lines (ALL: weak ones too)"),
     # The PIXE window
     ("PLOT", 2, cmd_plot, "draw the active buffer's PIXE spectrum"),
     ("REGION", 3, cmd_region, "energy range shown, keV (ALL for everything)"),
@@ -482,7 +557,9 @@ TABLE.note_synonym("FIGSAVE", "HCOPY")
 _HELP_GROUPS: list[tuple[str, list[str]]] = [
     ("Getting around", ["HELP", "RETURN", "DISABLE", "SHOW"]),
     ("Data", ["GET", "PAIR"]),
-    ("Detector", ["ANGLE", "SOLID", "WINDOW", "CRYSTAL", "FWHM", "FANO", "FILTER", "CALIB"]),
+    ("Detector",
+     ["ANGLE", "SOLID", "WINDOW", "CRYSTAL", "FWHM", "FANO", "FILTER", "CALIB", "ESCAPE"]),
+    ("Simulation", ["H", "LINES"]),
     ("PIXE window",
      ["PLOT", "REGION", "COUNTS", "LINEAR", "SQRT", "LOG", "MARKERS", "FIGSAVE"]),
 ]

@@ -122,6 +122,18 @@ NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVE
 OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
+## `pixe/ecpssr_*.csv.gz` — ionisation cross sections for PIXE
+
+Inner-shell ionisation cross sections for protons (0.1–5 MeV) and ⁴He (0.2–12 MeV), K shell
+for Z = 6–92 and L1–L3 for Z = 18–92, from the ECPSSR theory of W. Brandt and G. Lapicki
+(*Phys. Rev. A* 20 (1979) 465; 23 (1981) 1717). Computed by pyRUMP's own implementation in
+`tools/ecpssr/` — no ISICS or GUPIX code or data — with xraylib 4.3.0 `EdgeEnergy` binding
+energies, the same as the X-ray tables above. The correction terms were checked term by
+term against Geant4's independent ECPSSR code; against ISICS values (Taborda et al.'s fits,
+used for comparison only and not distributed) most cases agree within ±5 %. Theory,
+validation and known deviations: `tools/ecpssr/README.md`. Regenerate with
+`python tools/ecpssr/make_tables.py`. M shells are not tabulated yet.
+
 ## `.adt` / R33 non-Rutherford cross-section files — not bundled
 
 IBANDL (IAEA) third-party evaluations, A. F. Gurbich, Nucl. Instr. Meth. B136-138 (1998) 60.
