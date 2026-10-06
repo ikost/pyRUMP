@@ -229,6 +229,8 @@ def _view_lines(session) -> list[str]:
         "STRUCTLABEL" if plot.structure_labels else "STRUCTLABEL OFF",
         "COMPFRAC" if plot.composition_fraction else "COMPFRAC OFF",
     ]
+    if session.pert is not None and not session.pert.highlight:
+        lines.append("PERT HIGHLIGHT OFF")
     return lines
 
 

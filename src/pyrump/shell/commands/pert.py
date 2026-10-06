@@ -177,11 +177,14 @@ class PertState:
     verbose: bool = False
     autocmp: bool = False
     report: bool = False
+    #: HIGHLIGHT: shade the windows on the plots (on by default).
+    highlight: bool = True
 
     def describe(self, script=None) -> str:
         lines = [f"  mode        {'multiple' if self.multi else 'single'} variable"]
         lines.append(f"  autocmp     {'on' if self.autocmp else 'off'}")
         lines.append(f"  report      {'on' if self.report else 'off'}")
+        lines.append(f"  highlight   {'on' if self.highlight else 'off'}")
         lines.append(f"  error win   {_format_windows(self.windows.error)}")
         norm = self.windows.normalisation
         lines.append(
@@ -491,6 +494,20 @@ def cmd_fuzz(session, args: ArgReader) -> None:
 # ---------------------------------------------------------------------------
 
 
+def _show_windows(session) -> None:
+    """Redraw what is on screen after a window changed, so HIGHLIGHT's
+    shading follows -- only plots already open; none is opened. Not line by
+    line while a .pert file or macro runs: GET redraws once at its end."""
+    from .. import pixe_plotting
+
+    if session.xeq_depth:
+        return
+    if session.traces and plotting.is_open(session):
+        plotting.draw(session)
+    if session.pixe.figure is not None and session.pixe.view:
+        pixe_plotting.draw(session, required=False)
+
+
 def cmd_window(session, args: ArgReader) -> None:
     state = state_for(session)
     if not args:
@@ -503,6 +520,7 @@ def cmd_window(session, args: ArgReader) -> None:
             args.done()
             state.windows.error = []
             print("  error windows cleared")
+            _show_windows(session)
             return
         n = args.integer("a window number")
         args.done()
@@ -513,6 +531,7 @@ def cmd_window(session, args: ArgReader) -> None:
             raise CommandError(f"window {n} is outside 1-{len(windows)}")
         del windows[n - 1]
         print(f"  error windows {_format_windows(windows)}")
+        _show_windows(session)
         return
     low = args.integer("the first channel")
     high = args.integer("the last channel")
@@ -523,6 +542,7 @@ def cmd_window(session, args: ArgReader) -> None:
         raise CommandError(f"at most {MAX_ERROR_WINDOWS} error windows")
     state.windows.error.append(Window(low, high))
     print(f"  error windows {_format_windows(state.windows.error)}")
+    _show_windows(session)
 
 
 def cmd_normalize(session, args: ArgReader) -> None:
@@ -537,6 +557,7 @@ def cmd_normalize(session, args: ArgReader) -> None:
         args.done()
         state.windows.normalisation = None
         print("  normalisation window cleared")
+        _show_windows(session)
         return
     low = args.integer("the first channel")
     high = args.integer("the last channel")
@@ -545,6 +566,7 @@ def cmd_normalize(session, args: ArgReader) -> None:
         raise CommandError(f"empty window: {low} to {high}")
     state.windows.normalisation = Window(low, high)
     print(f"  normalisation window {low}-{high}")
+    _show_windows(session)
 
 
 def cmd_pixwin(session, args: ArgReader) -> None:
@@ -570,6 +592,7 @@ def cmd_pixwin(session, args: ArgReader) -> None:
         if not args:
             state.pixe_windows = []
             print("  PIXE windows cleared")
+            _show_windows(session)
             return
         n = args.integer("a PIXE window number")
         args.done()
@@ -580,6 +603,7 @@ def cmd_pixwin(session, args: ArgReader) -> None:
             raise CommandError(f"PIXE window {n} is outside 1-{len(windows)}")
         del windows[n - 1]
         print(f"  PIXE windows {_format_pixe_windows(windows)}")
+        _show_windows(session)
         return
     low = args.integer("the first PIXE channel")
     high = args.integer("the last PIXE channel")
@@ -590,6 +614,7 @@ def cmd_pixwin(session, args: ArgReader) -> None:
         raise CommandError(f"at most {MAX_ERROR_WINDOWS} PIXE windows")
     state.pixe_windows.append(Window(low, high))
     print(f"  PIXE windows {_format_pixe_windows(state.pixe_windows)}")
+    _show_windows(session)
 
 
 def cmd_pixh(session, args: ArgReader) -> None:
@@ -659,14 +684,15 @@ def cmd_get(session, args: ArgReader) -> None:
     path = session.locate(typed)
     if path is None:
         raise CommandError(f"no such file: {typed}")
-    # autocmp/report are standing preferences (typically set once from
+    # autocmp/report/highlight are standing preferences (typically set once from
     # .pyrumprc), not part of the file-specific selection GET replaces --
     # carry them over so a fresh GET doesn't silently turn them back off.
     state = state_for(session)
-    session.pert = PertState(autocmp=state.autocmp, report=state.report)
+    session.pert = PertState(autocmp=state.autocmp, report=state.report, highlight=state.highlight)
     execute_file(session, path, stack=["rump", "pert"])
     print(f"read {path}")
     print(state_for(session).describe(session.script))
+    _show_windows(session)
     if run_go:
         cmd_go(session, ArgReader([], command="go"))
 
@@ -686,8 +712,9 @@ def cmd_clear(session, args: ArgReader) -> None:
     if not args:
         # Same standing-preference carve-out as GET (see cmd_get).
         state = state_for(session)
-        session.pert = PertState(autocmp=state.autocmp, report=state.report)
+        session.pert = PertState(autocmp=state.autocmp, report=state.report, highlight=state.highlight)
         print("  PERT settings cleared")
+        _show_windows(session)
         return
     n = args.integer("a parameter number")
     args.done()
@@ -761,6 +788,24 @@ def cmd_report(session, args: ArgReader) -> None:
     state = state_for(session)
     state.report = token is None or token.lower() not in ("off", "no", "0")
     print(f"  report {'on' if state.report else 'off'}")
+
+
+def cmd_highlight(session, args: ArgReader) -> None:
+    """``HIGHLIGHT [off]`` -- shade the fit's windows on the plots (default
+    on): the ``WINDOW`` channels light blue and the ``NORMALIZE`` window
+    light orange in the RBS window, the ``PIXWIN`` channels light blue in
+    the PIXE window -- in PLOT and COMPARE alike, so it is plain which
+    channels GO fits. ``HIGHLIGHT OFF`` for clean figures.
+
+    A pyRUMP addition. A standing preference like ``AUTOCMP``: survives
+    ``GET``/``CLEAR``, not saved by ``SAVE``.
+    """
+    token = args.optional()
+    args.done()
+    state = state_for(session)
+    state.highlight = token is None or token.lower() not in ("off", "no", "0")
+    print(f"  highlight {'on' if state.highlight else 'off'}")
+    _show_windows(session)
 
 
 def cmd_help(session, args: ArgReader) -> None:
@@ -1165,6 +1210,7 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("MULTI", 3, cmd_multi, "vary all parameters together (default)"),
     ("VOLUME", 3, cmd_volume, "verbose progress messages"),
     ("AUTOCMP", 4, cmd_autocmp, "run COMPARE automatically at the end of GO"),
+    ("HIGHLIGHT", 2, cmd_highlight, "shade the fit windows on the plots (HIGHLIGHT OFF to stop)"),
     ("REPORT", 3, cmd_report,
      "SNAPSHOT after every GO: <sample>.report, _fit.xeq ... (REPORT OFF to stop)"),
     # Registered here too, not only at the RUMP level, so switching doesn't

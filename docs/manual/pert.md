@@ -151,6 +151,27 @@ PERT Command: report
   report on
 ```
 
+#### `HIGHLIGHT` `[new]`
+
+```
+usage: HIGHLIGHT [off]
+```
+
+Shades the fit's windows on the plots, so it's plain which channels `GO`
+fits. In the RBS window, the [`WINDOW`](#window) channels are light blue and
+the [`NORMALIZE`](#normalize) window light orange. In the PIXE window, the
+[`PIXWIN`](#pixwin-new) channels are light blue. It works in `PLOT` and
+`COMPARE` alike, in both panels of a comparison, and on the channel or the
+energy axis. Adding or clearing a window redraws the plot at once. On by
+default; `HIGHLIGHT OFF` gives clean plots for figures. `GET` and `CLEAR`
+keep the setting, and `SAVE` doesn't write it. A snapshot keeps it off if
+you turned it off.
+
+```
+PERT Command: highlight off
+  highlight off
+```
+
 #### `COMPARE` / `CMP`
 
 Plots the active buffer against the simulation, with residuals, the same as
@@ -216,7 +237,8 @@ usage: WINDOW CLEAR [<n>]
 ```
 
 Adds an error window: only these channels count in the fit. Up to 10
-windows; with none, the whole spectrum counts. `WINDOW CLEAR` removes all
+windows; with none, the whole spectrum counts. The plots shade them in
+light blue ([`HIGHLIGHT`](#highlight-new)). `WINDOW CLEAR` removes all
 windows, `WINDOW CLEAR <n>` only window *n*. With no argument, shows the
 setup like `PARMS`.
 
@@ -235,7 +257,8 @@ usage: NORMALIZE CLEAR
 Scales the data to the simulation over these channels, to absorb a charge or
 dose error. After `GO`, the scale is stored in the buffer's
 [`CORRECTION`](buffers.md#correction). Cannot be combined with varying
-`CORRECTION`.
+`CORRECTION`. The plots shade it in light orange
+([`HIGHLIGHT`](#highlight-new)).
 
 ```
 PERT Command: normalize 300 400
@@ -275,8 +298,8 @@ so snapshots keep them too. The buffer needs a PIXE spectrum (`PIXE GET`, or
 `PAIR ON`).
 
 GO reports the chi-square of each spectrum as well as the combined one. The
-PIXE window's `COMPARE` shades the PIXE windows and scores the chi-square
-over them:
+PIXE window shades the PIXE windows ([`HIGHLIGHT`](#highlight-new)), and its
+`COMPARE` scores the chi-square over them:
 
 ```
 PERT Command: window 380 500

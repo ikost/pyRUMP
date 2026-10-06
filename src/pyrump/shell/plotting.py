@@ -218,6 +218,42 @@ def main_axes(session):
     return figure_for(session)
 
 
+#: HIGHLIGHT's tones for PERT's windows: the channels the fit scores (WINDOW,
+#: and PIXWIN in the PIXE window), and the normalisation window.
+FIT_TONE = {"color": "steelblue", "alpha": 0.10, "lw": 0, "zorder": 0}
+NORM_TONE = {"color": "darkorange", "alpha": 0.14, "lw": 0, "zorder": 0}
+
+
+def shade_windows(axes, spans, x_of, tone) -> None:
+    """Shade channel ranges ``(low, high)``, inclusive, on each of ``axes``.
+    ``x_of`` turns a (fractional) channel into the axis' x value; a channel
+    is drawn centred on its own x, so a span runs from half a channel below
+    ``low`` to half a channel above ``high``. The x range stays as drawn:
+    a window outside REGION is not pulled into view."""
+    for ax in axes:
+        limits = ax.get_xlim()
+        for low, high in spans:
+            ax.axvspan(x_of(low - 0.5), x_of(high + 0.5), **tone)
+        ax.set_xlim(limits)
+
+
+def _shade_rbs(session, axes, calibration) -> None:
+    """PERT's RBS error windows and normalisation window, under HIGHLIGHT."""
+    pert = session.pert
+    if pert is None or not pert.highlight:
+        return
+    if session.plot.energy_axis:
+        def x_of(channel):
+            return calibration.edge_energy(channel)
+    else:
+        def x_of(channel):
+            return channel
+    shade_windows(axes, [(w.low, w.high) for w in pert.windows.error], x_of, FIT_TONE)
+    norm = pert.windows.normalisation
+    if norm is not None:
+        shade_windows(axes, [(norm.low, norm.high)], x_of, NORM_TONE)
+
+
 def draw(session) -> None:
     """Render every trace according to the current :class:`PlotState`."""
     if not session.traces:
@@ -253,6 +289,7 @@ def draw(session) -> None:
         )
 
     ax.set_xlabel(label_axis)
+    _shade_rbs(session, [ax], session.traces[0].buffer.calibration)
     if not state.energy_axis:
         _energy_axis(ax, session.traces[0].buffer.calibration)
     ax.set_ylabel("Yield (counts/msr/uC)" if state.normalized else "Counts")
@@ -441,6 +478,7 @@ def _draw_comparison(session) -> None:
         overlays=overlays,
     )
     top = figure.axes[0]
+    _shade_rbs(session, figure.axes[:2], data.buffer.calibration)
     if not state.energy_axis:
         _energy_axis(top, data.buffer.calibration)
     if state.normalized:

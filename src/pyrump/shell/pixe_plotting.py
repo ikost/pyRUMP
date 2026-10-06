@@ -247,6 +247,7 @@ def draw(session, *, required: bool = True) -> bool:
             shown.append(spectrum.counts[low:stop + 1])
         ax.set_xlabel("Energy (keV)")
         ax.set_ylabel("Counts")
+        _shade_pixe(session, [ax], reference)
         if drawable and state.plot.labels:
             ax.legend(frameon=False, fontsize="small")
 
@@ -322,12 +323,27 @@ def _draw_comparison(session, curves, region):
     figure = figure_for(session, residuals=True)
     for ax in figure.axes:
         ax.clear()
-    return plot_comparison(
+    figure = plot_comparison(
         data.spectrum, theory.spectrum, energy_axis=True, region=region, figure=figure,
         data_label=data.label, simulation_label=theory.label,
-        goodness_of_fit=gof, window=windows,
+        goodness_of_fit=gof,
         overlays=[(c.spectrum, c.label) for c in rest if c.spectrum is not None],
     )
+    _shade_pixe(session, figure.axes[:2], data.spectrum.calibration)
+    return figure
+
+
+def _shade_pixe(session, axes, calibration) -> None:
+    """PERT's PIXE windows, under HIGHLIGHT -- channels as the .PIX file
+    numbers them, on the energy axis."""
+    from .plotting import FIT_TONE, shade_windows
+
+    pert = session.pert
+    if pert is None or not pert.highlight or not pert.pixe_windows:
+        return
+    first = round(calibration.first)
+    spans = [(w.low - first, w.high - first) for w in pert.pixe_windows]
+    shade_windows(axes, spans, calibration.edge_energy, FIT_TONE)
 
 
 def pert_windows(session, calibration, n: int) -> np.ndarray | None:
