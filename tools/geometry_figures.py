@@ -7,9 +7,11 @@ writes, into docs/assets/:
 - geometry-ibm.png: GEOMETRY IBM seen along the tilt axis -- beam, detector
   and normal all lie in the scattering plane, so a flat drawing shows every
   angle true.
-- geometry-cornell.png: GEOMETRY CORNELL, whose normal leaves the scattering
-  plane: a 3D overview, the views in which THETA and PHI are true size, and
-  the RUMP commands.
+- geometry-cornell.png: GEOMETRY CORNELL as in a chamber -- beam horizontal,
+  scattering plane and tilt axis vertical, the sample turning like a door: a
+  3D overview with the beam-normal plane (red) and the beam-detector plane
+  (orange), the top view (THETA true size), the front view (PHI true size)
+  and the RUMP commands.
 
 The exit angles in the command boxes are computed by pyRUMP itself
 (``pyrump.model.geometry.Geometry``), so the figures can't drift from the
@@ -175,21 +177,33 @@ def arrow3d(ax, start, vec, color, lw=2.5, ls="-"):
     ax.quiver(*start, *vec, color=color, lw=lw, arrow_length_ratio=0.12, linestyle=ls)
 
 
-def plate(ax, normal, size=0.75):
-    n = unit(normal)
-    u = unit(np.cross(n, [0, 1, 0]) if abs(n[1]) < 0.9 else np.cross(n, [1, 0, 0]))
-    v = np.cross(n, u)
-    corners = [s * u * size + t * v * size for s, t in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
-    ax.add_collection3d(Poly3DCollection([corners], facecolor="0.55", alpha=0.45, edgecolor="0.3"))
+# -- CORNELL: a 3D overview, the top and front views, the commands ------------
+
+def arrow2d(ax, end, color, lw=2.5, ls="-", start=(0, 0)):
+    ax.annotate("", xy=end, xytext=start,
+                arrowprops={"arrowstyle": "-|>", "color": color, "lw": lw, "ls": ls,
+                            "mutation_scale": 16})
 
 
-# -- CORNELL: a 3D overview and two flat views --------------------------------
+def arc2d(ax, a, b, radius, color, label, at, ha="center"):
+    """The short arc between ``a`` and ``b`` (never the way round)."""
+    t1, t2 = (math.degrees(math.atan2(v[1], v[0])) for v in (a, b))
+    if t2 < t1:
+        t1, t2 = t2, t1
+    if t2 - t1 > 180:
+        t1, t2 = t2, t1 + 360
+    ax.add_patch(Arc((0, 0), 2 * radius, 2 * radius, theta1=t1, theta2=t2, color=color, lw=2))
+    ax.text(*at, label, color=color, fontsize=11, fontweight="bold", ha=ha, va="center")
 
-# x: across the beam, in the scattering plane (the tilt axis); y: out of the
-# scattering plane; z: back towards the beam's source.
-S = np.array([0, 0, 1.0])
-D = unit([-math.sin(math.radians(PHI)), 0, math.cos(math.radians(PHI))])
-N = np.array([0, -math.sin(math.radians(THETA)), math.cos(math.radians(THETA))])
+
+# x: the beam's direction of travel (left to right); y: into the page;
+# z: up. The scattering plane is the vertical x-z plane (the page); the
+# tilt axis is z, vertical, in that plane and across the beam.
+t, f = math.radians(THETA), math.radians(PHI)
+S = np.array([-1.0, 0.0, 0.0])                     # back towards the source
+D = np.array([-math.cos(f), 0.0, -math.sin(f)])    # the RBS detector: back and down
+N = np.array([-math.cos(t), -math.sin(t), 0.0])    # turned about z, towards the viewer
+AXIS = np.array([0.0, 0.0, 1.0])
 PSI = angle(N, D)
 
 BLUE, MAGENTA, RED, ORANGE, PURPLE = "royalblue", "darkmagenta", "crimson", "darkorange", "purple"
@@ -202,111 +216,157 @@ def rump_psi():
     return math.degrees(math.acos(1.0 / g.sec_out))
 
 
-# -- flat views ---------------------------------------------------------------
+# -- the overview --------------------------------------------------------------
 
 
-def arrow2d(ax, end, color, lw=2.5, ls="-", start=(0, 0)):
-    ax.annotate("", xy=end, xytext=start,
-                arrowprops={"arrowstyle": "-|>", "color": color, "lw": lw, "ls": ls,
-                            "mutation_scale": 16})
+def slab(ax, normal, half_width=0.55, half_height=0.85, thickness=0.12):
+    """The sample: a plate whose front face, through the origin, faces
+    ``normal``; the material lies behind it."""
+    across = unit(np.cross(AXIS, normal))         # horizontal, in the face
+    front = [a * half_width * across + b * half_height * AXIS
+             for a, b in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
+    back = [c - thickness * normal for c in front]
+    faces = [front, back] + [[front[i], front[(i + 1) % 4], back[(i + 1) % 4], back[i]]
+                             for i in range(4)]
+    shades = ["0.55", "0.35", "0.25", "0.3", "0.45", "0.3"]
+    ax.add_collection3d(Poly3DCollection(faces, facecolors=shades, edgecolor="0.2",
+                                         linewidths=0.6, alpha=0.5, zorder=1))
 
 
-def arc2d(ax, a, b, radius, color, label, at, ha="center"):
-    p1, p2 = (math.degrees(math.atan2(v[1], v[0])) for v in (a, b))
-    t1, t2 = sorted((p1, p2))
-    ax.add_patch(Arc((0, 0), 2 * radius, 2 * radius, theta1=t1, theta2=t2, color=color, lw=2))
-    ax.text(*at, label, color=color, fontsize=11, fontweight="bold", ha=ha, va="center")
+def rotation_mark(ax, height=1.15, radius=0.22):
+    """An ellipse round the top of the tilt axis, with an arrowhead."""
+    a = np.linspace(0.15 * np.pi, 1.85 * np.pi, 60)
+    ring = np.array([radius * np.cos(a), radius * np.sin(a), np.full_like(a, height)])
+    ax.plot(*ring, color=PURPLE, lw=1.5)
+    end, before = ring[:, -1], ring[:, -4]
+    ax.quiver(*before, *(end - before), color=PURPLE, lw=1.5, arrow_length_ratio=1.0)
+
+
+def overview(ax):
+    # Arrows and arcs are always drawn over the sample: matplotlib's own
+    # depth sorting would hide them behind it.
+    ax.computed_zorder = False
+    # The beam-detector plane (the vertical scattering plane, where PHI
+    # lies) and the beam-normal plane (horizontal here, where THETA lies).
+    xs, zs = np.meshgrid([-2.4, 0.0], [-1.3, 0.6])
+    ax.plot_surface(xs, np.zeros_like(xs), zs, color=ORANGE, alpha=0.16, lw=0, zorder=0)
+    xs, ys = np.meshgrid([-2.4, 0.0], [-1.4, 0.7])
+    ax.plot_surface(xs, ys, np.zeros_like(xs), color=RED, alpha=0.12, lw=0, zorder=0)
+
+    slab(ax, N)
+    ax.plot(*np.array([[0, 0, -1.3], [0, 0, 1.25]]).T, color=PURPLE, ls=":", lw=1.6)
+    rotation_mark(ax)
+    ax.text(0.08, 0, 1.3, "tilt axis", color=PURPLE, fontsize=9)
+
+    arrow3d(ax, [-2.4, 0, 0], [2.33, 0, 0], "black")
+    ax.text(-2.4, 0, 0.1, "beam", fontsize=10)
+    arrow3d(ax, [0, 0, 0], 2.0 * D, MAGENTA)
+    ax.text(*(2.05 * D + [0, 0, -0.15]), "RBS detector", color=MAGENTA, fontsize=10,
+            ha="center")
+    length = 0.8 * 2.9
+    arrow3d(ax, [0, 0, 0], length * N, BLUE)
+    ax.text(*(3.1 * N + [-0.15, -0.15, 0.15]), "normal", color=BLUE, fontsize=10, ha="right")
+
+    arc3d(ax, N, S, 0.85 * 2 * 0.95, RED, "")
+    arc3d(ax, S, D, 1.3 * 1.4, ORANGE, "")
+    arc3d(ax, N, D, 1.15, MAGENTA, "")
+    captions = [
+        (RED, f"THETA {THETA:g}°: beam to normal, in the red plane (beam and normal)"),
+        (ORANGE, f"PHI {PHI:g}°: beam to detector, in the orange plane (beam and detector)"),
+        (MAGENTA, f"PSI {PSI:.1f}°: normal to detector, across the two planes"),
+    ]
+    for i, (color, text) in enumerate(captions):
+        ax.text2D(0.02, 0.13 - 0.05 * i, text, transform=ax.transAxes, color=color,
+                  fontsize=9.5, fontweight="bold")
+
+    ax.set_title(f"(a) Overview: PSI = {PSI:.1f}°, true size in no flat view", fontsize=11)
+    ax.set_xlim(-2.8, 0.6)
+    ax.set_ylim(-1.6, 1.0)
+    ax.set_zlim(-1.3, 1.3)
+    ax.set_box_aspect((3.0, 2.5, 2.6))
+    ax.view_init(elev=20, azim=-125)
+    ax.set_axis_off()
+
+
+# -- the flat views -------------------------------------------------------------
 
 
 def flat(ax, title):
     ax.set_title(title, fontsize=11)
-    ax.set_xlim(-1.9, 1.9)
-    ax.set_ylim(-1.3, 2.3)
+    ax.set_xlim(-2.5, 1.0)
+    ax.set_ylim(-1.7, 1.5)
     ax.set_aspect("equal")
     ax.set_axis_off()
 
 
-def sample_outline(ax, project):
-    """The sample plate, projected."""
-    u = np.array([1.0, 0, 0])               # the tilt axis stays in the plate
-    v = np.cross(N, u)
-    corners = [project(a * 0.95 * u + b * 0.95 * v) for a, b in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
-    ax.add_patch(Polygon(corners, closed=True, facecolor="0.8", edgecolor="0.4", alpha=0.8))
+def beam2d(ax):
+    arrow2d(ax, (-0.04, 0.0), "black", start=(-2.4, 0.0))
+    ax.text(-2.4, 0.08, "beam", fontsize=10)
 
 
-def view_along_tilt_axis(ax):
-    """Looking along x: the plane of beam and normal. THETA is true here."""
+def top_view(ax):
+    """Looking down the vertical tilt axis: THETA is true size."""
+    ax.add_patch(Polygon([(-2.45, -1.65), (0.95, -1.65), (0.95, 1.2), (-2.45, 1.2)],
+                         facecolor=RED, alpha=0.07, edgecolor="none"))
+    ax.text(-2.4, 1.1, "the plane of beam and normal (red)", color=RED, fontsize=9, va="top")
+    ax.text(-0.75, -1.6, "front (where you stand in (a) and (c))", color="0.45", fontsize=8,
+            ha="center")
+
     def p(v):
-        return np.array([-v[1], v[2]])     # right = out of the scattering plane
+        return np.array([v[0], v[1]])      # down the page = towards the front
 
-    sample_outline(ax, p)
-    arrow2d(ax, (0, 0.04), "black", start=(0, 2.1))
-    ax.text(0.06, 2.0, "beam", fontsize=10)
-    arrow2d(ax, 1.4 * p(N), BLUE)
-    ax.text(*(1.48 * p(N)), "normal", color=BLUE, fontsize=10)
-    arrow2d(ax, 1.75 * p(D), MAGENTA, lw=1.5, ls="--")
-    ax.text(-0.08, 1.75 * p(D)[1], "detector\n(behind the beam,\nforeshortened)",
-            color=MAGENTA, fontsize=8, ha="right", va="center")
-    arc2d(ax, p(N), p(S), 0.6, RED, f"THETA {THETA:g}°", at=(0.3, 0.75), ha="left")
+    across = unit(np.cross(AXIS, N))
+    edge = [p(a * 0.55 * across + b * 0.12 * -N) for a, b in ((-1, 0), (1, 0), (1, 1), (-1, 1))]
+    ax.add_patch(Polygon(edge, closed=True, facecolor="0.45", edgecolor="0.2"))
+    ax.text(*(p(0.6 * across) + [0.0, -0.25]), "sample, seen from above:\nturned by THETA",
+            color="0.3", fontsize=9, va="top", ha="center")
+    ax.plot([-2.4, 0.6], [0, 0], color=ORANGE, lw=5, alpha=0.35, solid_capstyle="butt")
+    ax.text(-0.95, 0.06, "orange plane, edge-on", color=ORANGE, fontsize=8, va="bottom")
+    beam2d(ax)
+    arrow2d(ax, 1.5 * p(N), BLUE)
+    ax.text(*(1.58 * p(N) + [0, -0.08]), "normal", color=BLUE, fontsize=10, ha="right",
+            va="top")
+    arrow2d(ax, 1.9 * p(D), MAGENTA, lw=1.5, ls="--")
+    ax.text(1.9 * p(D)[0], 0.3, "detector (below the beam,\nforeshortened)",
+            color=MAGENTA, fontsize=8, va="bottom")
+    arc2d(ax, p(N), p(S), 0.8, RED, f"THETA {THETA:g}°", at=(-1.0, -0.22), ha="right")
     ax.plot(0, 0, marker="o", ms=10, mfc="white", mec=PURPLE, mew=2)
     ax.plot(0, 0, marker=".", ms=5, color=PURPLE)
-    ax.text(0.1, -0.3, "tilt axis (towards you)", color=PURPLE, fontsize=9)
-    edge = 0.95 * np.array([N[2], N[1]])
-    ax.text(*(edge + [0.05, -0.12]), "sample, edge-on", color="0.35", fontsize=9, ha="left")
-    flat(ax, "(b) Seen along the tilt axis:\nTHETA is true size")
+    ax.text(0.2, 0.12, "tilt axis\n(vertical, towards you)", color=PURPLE, fontsize=9,
+            va="bottom")
+    flat(ax, "(b) Top view, down the tilt axis:\nTHETA is true size")
 
 
-def view_across_plane(ax):
-    """Looking along y: the scattering plane. PHI is true here."""
+def front_view(ax):
+    """Looking across the vertical scattering plane: PHI is true size."""
+    ax.add_patch(Polygon([(-2.45, -1.65), (0.95, -1.65), (0.95, 1.45), (-2.45, 1.45)],
+                         facecolor=ORANGE, alpha=0.08, edgecolor="none"))
+    ax.text(-2.4, 1.35, "the plane of beam and detector (orange)", color=ORANGE, fontsize=9,
+            va="top")
+
     def p(v):
         return np.array([v[0], v[2]])
 
-    sample_outline(ax, p)
-    arrow2d(ax, (0, 0.04), "black", start=(0, 2.1))
-    ax.text(0.06, 2.0, "beam", fontsize=10)
-    arrow2d(ax, 1.75 * p(D), MAGENTA)
-    ax.text(*(1.82 * p(D)), "RBS detector", color=MAGENTA, fontsize=10, ha="right")
-    arrow2d(ax, 1.4 * p(N), BLUE, lw=1.5, ls="--")
-    ax.text(0.06, 1.4 * p(N)[1] - 0.12, "normal (leans towards\nyou: foreshortened)",
-            color=BLUE, fontsize=8, ha="left", va="top")
-    arc2d(ax, p(S), p(D), 0.9, ORANGE, f"PHI {PHI:g}°", at=(-0.3, 1.08), ha="center")
-    ax.plot([-1.25, 1.25], [0, 0], color=PURPLE, ls="-.", lw=1.5)
-    ax.text(1.28, 0.0, "tilt axis", color=PURPLE, fontsize=9, va="center")
-    flat(ax, "(c) Seen across the scattering plane:\nPHI is true size")
-
-
-# -- the 3D overview -----------------------------------------------------------
-
-
-def overview(ax):
-    xs, zs = np.meshgrid([-1.6, 1.4], [-0.4, 2.2])
-    ax.plot_surface(xs, np.zeros_like(xs), zs, color="orange", alpha=0.10, lw=0)
-    ax.text(1.0, 0, 2.05, "scattering plane", color=ORANGE, fontsize=8)
-    plate(ax, N)
-    arrow3d(ax, [0, 0, 2.3], [0, 0, -2.1], "black")
-    ax.text(0.08, 0, 2.3, "beam", fontsize=10)
-    arrow3d(ax, [0, 0, 0], 1.95 * D, MAGENTA)
-    ax.text(*(2.0 * D + [-0.1, 0, 0.08]), "RBS detector", color=MAGENTA, fontsize=10, ha="right")
-    arrow3d(ax, [0, 0, 0], 1.4 * N, BLUE)
-    ax.text(*(1.5 * N + [0, -0.2, 0.15]), "normal", color=BLUE, fontsize=10)
-    tip = 1.4 * N
-    ax.plot(*np.array([tip, tip * [1, 0, 1]]).T, color=BLUE, ls=":", lw=1.5)
-    ax.plot(*np.array([[-1.15, 0, 0], [1.15, 0, 0]]).T, color=PURPLE, ls="-.", lw=1.8)
-    ax.text(1.2, 0, 0, "tilt axis", color=PURPLE, fontsize=9)
-    arc3d(ax, N, S, 0.6, RED, f"THETA {THETA:g}°", shift=(0.1, -0.75, 0.05))
-    arc3d(ax, S, D, 1.05, ORANGE, f"PHI {PHI:g}°", shift=(-0.15, 0, 0.3))
-    arc3d(ax, N, D, 0.85, MAGENTA, f"PSI {PSI:.1f}°", shift=(-0.55, 0.3, -0.35))
-    ax.set_title(f"(a) Overview: PSI = {PSI:.1f}°, true size in no flat view", fontsize=11)
-    ax.set_xlim(-1.6, 1.4)
-    ax.set_ylim(-1.3, 1.3)
-    ax.set_zlim(-0.6, 2.3)
-    ax.set_box_aspect((3.0, 2.6, 2.9))
-    ax.view_init(elev=22, azim=-110)
-    ax.set_axis_off()
+    across = unit(np.cross(AXIS, N))
+    face = [p(a * 0.55 * across + b * 0.85 * AXIS) for a, b in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
+    ax.add_patch(Polygon(face, closed=True, facecolor="0.8", edgecolor="0.4", alpha=0.85))
+    right = max(c[0] for c in face)
+    ax.text(right + 0.25, 0.8, "sample,\nturned towards\nyou", color="0.35", fontsize=8,
+            va="top")
+    beam2d(ax)
+    arrow2d(ax, 1.9 * p(D), MAGENTA)
+    ax.text(*(1.95 * p(D) + [0, -0.12]), "RBS detector", color=MAGENTA, fontsize=10,
+            ha="center", va="top")
+    arrow2d(ax, 1.5 * p(N), BLUE, lw=1.5, ls="--")
+    ax.text(1.5 * p(N)[0], 0.12, "normal (turned towards you:\nforeshortened)",
+            color=BLUE, fontsize=8, va="bottom")
+    arc2d(ax, p(D), p(S), 1.15, ORANGE, f"PHI {PHI:g}°", at=(-1.45, -0.42), ha="right")
+    ax.plot([0, 0], [-1.3, 1.25], color=PURPLE, ls=":", lw=1.6)
+    ax.text(0.06, 1.2, "tilt axis", color=PURPLE, fontsize=9)
+    flat(ax, "(c) Front view, across the scattering plane:\nPHI is true size")
 
 
 def commands(ax):
-    """The RUMP commands for this geometry, where a fourth view would go."""
     lines = [
         "RUMP:",
         "  GEOMETRY CORNELL",
@@ -326,15 +386,17 @@ def commands(ax):
 def cornell_figure(out):
     fig = plt.figure(figsize=(14, 12.5))
     overview(fig.add_subplot(2, 2, 1, projection="3d"))
-    view_along_tilt_axis(fig.add_subplot(2, 2, 2))
-    view_across_plane(fig.add_subplot(2, 2, 3))
+    top_view(fig.add_subplot(2, 2, 2))
+    front_view(fig.add_subplot(2, 2, 3))
     commands(fig.add_subplot(2, 2, 4))
-    lines = [
-        "GEOMETRY CORNELL: the tilt axis lies in the scattering plane, across the beam, so the normal tilts out "
-        "of the plane.\nTHETA -25 tilts it to the other side: "
-        "the mirror image, and the same PSI. A typed PSI is ignored.",
-    ]
-    fig.text(0.5, 0.02, "\n".join(lines), ha="center", fontsize=10.5)
+    fig.text(
+        0.5, 0.02,
+        "GEOMETRY CORNELL: the tilt axis lies in the scattering plane, across the beam -- here "
+        "both vertical -- so the sample turns like a door\nand its normal swings out of the "
+        "scattering plane. THETA -25 turns it the other way: the mirror image, the same PSI. "
+        "A typed PSI is ignored.",
+        ha="center", fontsize=10.5,
+    )
     fig.subplots_adjust(left=0.01, right=0.99, top=0.96, bottom=0.07, wspace=0.05, hspace=0.12)
     fig.savefig(out, dpi=130)
 

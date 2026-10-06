@@ -50,18 +50,28 @@ needs `GENERAL`.
 
 ### Cornell geometry
 
-The tilt axis lies in the scattering plane, across the beam, so tilting the
-sample moves its normal *out of* that plane. No single flat drawing then
-shows all three angles at their true size: the overview shows them together,
-`THETA` is true seen along the tilt axis, and `PHI` is true seen across the
-scattering plane, where the tilted normal leans towards you:
+The tilt axis lies in the scattering plane, across the beam. In the figure
+both are vertical: the beam comes in horizontally, the detector looks back
+and down, and the sample turns about the vertical axis like a door. Its
+normal therefore swings *out of* the scattering plane, and the three angles
+lie in different planes:
 
-![GEOMETRY CORNELL at THETA 25, PHI 35: (a) a 3D overview with PSI = 42.1 degrees; (b) seen along the tilt axis, THETA 25 degrees true size; (c) seen across the scattering plane, PHI 35 degrees true size; and the RUMP commands](../assets/geometry-cornell.png)
+* `THETA` in the plane of the beam and the normal (red, horizontal here);
+* `PHI` in the plane of the beam and the detector, the scattering plane
+  (orange, vertical);
+* `PSI` across the two, between the normal and the detector.
 
-cos PSI = cos THETA × cos PHI. The sign of `THETA` only says to which side
-of the plane the normal leaves, so `THETA -25` gives the same `PSI` as
-`THETA 25`. `PSI` always lies between the two IBM values for the same
-`THETA` and `PHI` — here 42.1°, between 10° and 60°.
+No single flat drawing shows all three at their true size. The overview (a)
+shows them together; the top view (b), looking down the tilt axis onto the
+red plane, shows `THETA` true; the front view (c), looking onto the orange
+plane, shows `PHI` true:
+
+![GEOMETRY CORNELL at THETA 25, PHI 35, the sample turning about a vertical tilt axis: (a) a 3D overview with the beam-normal plane in red, the beam-detector plane in orange and PSI = 42.1 degrees; (b) the top view, THETA 25 degrees true size; (c) the front view, PHI 35 degrees true size; and the RUMP commands](../assets/geometry-cornell.png)
+
+cos PSI = cos THETA × cos PHI. The sign of `THETA` only says which way the
+sample turns, so `THETA -25` gives the same `PSI` as `THETA 25`. `PSI`
+always lies between the two IBM values for the same `THETA` and `PHI` —
+here 42.1°, between 10° and 60°.
 
 ### Fitting the tilt
 
