@@ -20,7 +20,7 @@ iteration cap is low because each evaluation is a full simulation.
 from __future__ import annotations
 
 import warnings
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Callable
 
 import numpy as np
@@ -36,6 +36,25 @@ DEFAULT_EPS = 1e-3
 DEFAULT_DERIVATIVE_STEP = 0.01
 #: scipy's step-size stop, effectively off: see :func:`fit`.
 XTOL = 1e-12
+
+
+@dataclass(slots=True)
+class ExtraSpectrum:
+    """A second spectrum fitted at the same time, sharing the parameters --
+    the PIXE spectrum measured with the RBS one.
+
+    Its residuals are appended to the RBS ones, scored by the same Poisson
+    objective over its own channels, so each spectrum weighs in by its own
+    statistics. A normalisation window's data scale applies to it too: it
+    stands for the dose, which the two spectra share.
+    """
+
+    simulate: Callable[[FitInputs], np.ndarray]
+    data: np.ndarray
+    mask: np.ndarray
+    """The channels scored, as a boolean array over ``data``."""
+
+    label: str = "PIXE"
 
 
 @dataclass(slots=True)
@@ -56,6 +75,11 @@ class FitResult:
     covariance: np.ndarray | None = None
     uncertainties: dict[str, float] = field(default_factory=dict)
     correlation: np.ndarray | None = None
+
+    parts: dict[str, object] = field(default_factory=dict)
+    """With an :class:`ExtraSpectrum`, each spectrum's own chi-square
+    (:class:`~pyrump.fit.objective.ChiSquare`, no parameters subtracted),
+    keyed ``"RBS"`` and by the extra's label. Empty otherwise."""
 
     n_invalid: int = 0
     """Windowed channels where the model predicted zero counts.
@@ -99,6 +123,7 @@ def fit(
     derivative_step: float = DEFAULT_DERIVATIVE_STEP,
     eps: float = DEFAULT_EPS,
     progress: Callable[[int, float], None] | None = None,
+    extra: list[ExtraSpectrum] | None = None,
 ) -> FitResult:
     """Fit ``parameters`` so the simulation matches ``data``.
 
@@ -112,9 +137,13 @@ def fit(
     varying parameters can run for several seconds with nothing else printed
     in between; this is PERT's ``VOLUME`` hook into that.
 
+    ``extra`` spectra (PIXE) are fitted at the same time; see
+    :class:`ExtraSpectrum`. Without them the fit is RUMP's own.
+
     Raises if a normalisation window is combined with a free ``correction``
     parameter, which is degenerate — RUMP rejects it too.
     """
+    extra = extra or []
     windows = windows or WindowSet()
     data = np.asarray(data, dtype=np.float64)
 
@@ -147,9 +176,20 @@ def fit(
             valid=window,
             n_parameters=len(parameters),
         )
+        if not extra:
+            if progress is not None:
+                progress(evaluations, result.reduced)
+            return result.residuals[window]
+        pieces = [result.residuals[window]]
+        total, used = result.total, result.n_used
+        for spectrum in extra:
+            part = _extra_chi_square(spectrum, inputs, last_normalisation)
+            pieces.append(part.residuals[spectrum.mask[: part.residuals.size]])
+            total += part.total
+            used += part.n_used
         if progress is not None:
-            progress(evaluations, result.reduced)
-        return result.residuals[window]
+            progress(evaluations, total / max(used - len(parameters), 1))
+        return np.concatenate(pieces)
 
     start = pack(parameters, inputs)
     lower, upper = bounds(parameters)
@@ -179,6 +219,21 @@ def fit(
     summary = chi_square(
         data[:n] * scale, final[:n], valid=mask[:n], n_parameters=len(parameters)
     )
+
+    parts: dict[str, object] = {}
+    if extra:
+        parts["RBS"] = chi_square(data[:n] * scale, final[:n], valid=mask[:n])
+        total, used, invalid = summary.total, summary.n_used, summary.n_invalid
+        for spectrum in extra:
+            part = _extra_chi_square(spectrum, inputs, scale)
+            parts[spectrum.label] = part
+            total += part.total
+            used += part.n_used
+            invalid += part.n_invalid
+        dof = max(used - len(parameters), 1)
+        summary = replace(
+            summary, total=total, reduced=total / dof, dof=dof, n_used=used, n_invalid=invalid
+        )
 
     covariance = _covariance(outcome.jac, summary.reduced)
     uncertainties: dict[str, float] = {}
@@ -213,5 +268,15 @@ def fit(
         covariance=covariance,
         uncertainties=uncertainties,
         correlation=correlation,
+        parts=parts,
         n_invalid=summary.n_invalid,
     )
+
+
+def _extra_chi_square(spectrum: ExtraSpectrum, inputs: FitInputs, scale: float):
+    """One extra spectrum's chi-square at ``inputs``, its data scaled as the
+    RBS data are."""
+    theory = np.asarray(spectrum.simulate(inputs), dtype=np.float64)
+    data = np.asarray(spectrum.data, dtype=np.float64)
+    n = min(theory.size, data.size)
+    return chi_square(data[:n] * scale, theory[:n], valid=spectrum.mask[:n])

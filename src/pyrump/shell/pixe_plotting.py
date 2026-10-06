@@ -307,18 +307,42 @@ def _draw_comparison(session, curves, region):
     observed = np.asarray(data.spectrum.counts, dtype=float)
     expected = np.asarray(theory.spectrum.counts, dtype=float)
     n = min(observed.size, expected.size)
-    mask = np.zeros(n, dtype=bool)
-    mask[region[0]:region[1] + 1] = True
+    # Scored, and shaded, over PERT's PIXE windows when there are any -- what
+    # GO fits -- otherwise over the REGION shown.
+    windows = pert_windows(session, data.spectrum.calibration, n)
+    if windows is None:
+        mask = np.zeros(n, dtype=bool)
+        mask[region[0]:region[1] + 1] = True
+    else:
+        mask = windows
     summary = chi_square(observed[:n], expected[:n], valid=mask, n_parameters=0)
+    gof = f"reduced chi-square {summary.reduced:.4f} ({summary.dof} dof)"
+    if windows is not None:
+        gof += ", PERT PIXE windows"
     figure = figure_for(session, residuals=True)
     for ax in figure.axes:
         ax.clear()
     return plot_comparison(
         data.spectrum, theory.spectrum, energy_axis=True, region=region, figure=figure,
         data_label=data.label, simulation_label=theory.label,
-        goodness_of_fit=f"reduced chi-square {summary.reduced:.4f} ({summary.dof} dof)",
+        goodness_of_fit=gof, window=windows,
         overlays=[(c.spectrum, c.label) for c in rest if c.spectrum is not None],
     )
+
+
+def pert_windows(session, calibration, n: int) -> np.ndarray | None:
+    """PERT's PIXE windows as a channel mask over a spectrum of ``n``
+    channels with ``calibration``, or ``None`` with no windows set."""
+    pert = session.pert
+    if pert is None or not pert.pixe_windows:
+        return None
+    first = round(calibration.first)
+    mask = np.zeros(n, dtype=bool)
+    for window in pert.pixe_windows:
+        low, high = max(window.low - first, 0), min(window.high - first, n - 1)
+        if low <= high:
+            mask[low:high + 1] = True
+    return mask
 
 
 def sample_elements(session) -> list[tuple[int, str]]:

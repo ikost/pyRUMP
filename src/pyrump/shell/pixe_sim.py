@@ -31,19 +31,28 @@ def simulate(session) -> PixeSpectrum | None:
     if not session.script.layers:
         return None
     buffer = reference_buffer(session)
-    data = getattr(buffer, "pixe", None)
-    state = session.pixe
-    m = buffer.measurement
-    exposure = Exposure(
-        charge_uC=m.charge_uC,
-        charge_state=m.charge_state,
-        correction=m.correction,
-        live_fraction=data.live_fraction if data is not None else 1.0,
-        h=state.h,
-    )
     sample = to_sample(session.script, session.table, session.densities)
+    return simulate_with(
+        session, sample, buffer.beam, buffer.geometry, buffer.measurement,
+        session.pixe.h, getattr(buffer, "pixe", None),
+    )
+
+
+def simulate_with(session, sample, beam, geometry, measurement, h, data) -> PixeSpectrum:
+    """The PIXE simulation for these inputs -- what :func:`simulate` runs
+    for the ACTIVE buffer, and PERT's GO for each trial of a fit. ``data``,
+    the measured PIXE spectrum (or ``None``), gives the live fraction and
+    the channels; the detector and escape setting are the PIXE prompt's."""
+    state = session.pixe
+    exposure = Exposure(
+        charge_uC=measurement.charge_uC,
+        charge_state=measurement.charge_state,
+        correction=measurement.correction,
+        live_fraction=data.live_fraction if data is not None else 1.0,
+        h=tuple(h),
+    )
     lines = simulate_lines(
-        sample, buffer.beam, buffer.geometry.theta, state.detector, exposure,
+        sample, beam, geometry.theta, state.detector, exposure,
         session.registry, session.table, include_substrate=True,
         faithful=session.settings.faithful,
     )

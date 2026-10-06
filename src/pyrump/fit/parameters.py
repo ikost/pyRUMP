@@ -29,6 +29,9 @@ class FitInputs:
     geometry: object
     calibration: object
     measurement: object
+    #: PIXE's instrumental constants H for K, L and M lines, when a fit
+    #: includes the PIXE spectrum (:func:`pixe_h`).
+    pixe_h: tuple[float, float, float] = (1.0, 1.0, 1.0)
 
 
 @dataclass(slots=True)
@@ -151,6 +154,24 @@ def equation_parameter(layer: int, index: int) -> Parameter:
         inp.sample.profiles = profiles
 
     return Parameter(f"equation[{layer},{index}]", get, set_)
+
+
+def pixe_h(family: str) -> Parameter:
+    """PIXE's instrumental constant H for the K, L or M lines -- the PIXE
+    spectrum's absolute scale for that shell. Varied alongside a ratio of
+    elements with lines in the same shell, it leaves the PIXE spectrum to
+    decide the ratio and RBS the amount."""
+    index = "KLM".index(family.upper())
+
+    def get(inp: FitInputs) -> float:
+        return inp.pixe_h[index]
+
+    def set_(inp: FitInputs, value: float) -> None:
+        h = list(inp.pixe_h)
+        h[index] = value
+        inp.pixe_h = tuple(h)
+
+    return Parameter(f"pixe_h[{family.upper()}]", get, set_, lower=0.0, upper=np.inf)
 
 
 #: Parameters that need no arguments, by RUMP's own names.

@@ -242,6 +242,74 @@ PERT Command: normalize 300 400
   normalisation window 300-400
 ```
 
+The scale stands for the dose, so with [`PIXE`](#pixe-new) windows it is
+applied to the PIXE spectrum too.
+
+#### `PIXE` `[new]`
+
+```
+usage: PIXE <first> <last>
+usage: PIXE CLEAR [<n>]
+usage: PIXE H K|L|M [<min> <max>]
+```
+
+Fits the buffer's PIXE spectrum together with the RBS one, over these PIXE
+channels. Channels are numbered as the `.PIX` file numbers them, as PIXE
+`REGION` takes them. It's meant for alloys whose elements overlap in RBS
+but not in their X-ray lines: Ta–W, Fe–Ni (permalloy), Ni–Co.
+
+* **The same sample drives both spectra.** A `COMPOSITION` or `THICKNESS`
+  selection moves the RBS and the PIXE simulation together, and each
+  spectrum weighs in by its own counting statistics. RBS pins the amount;
+  the X-ray lines tell the elements apart.
+* **Put the windows on clear peaks.** The PIXE continuum isn't simulated, so
+  a window over background would be fitted to nothing. One window may span a
+  whole group of lines. Overlaps such as Fe Kβ on Ni Kα, or Ta Lβ near W Lα,
+  are fine, because the simulation has every line.
+* **Use lines of the same shell** (both K, or both L). The instrumental
+  constant H then cancels in the ratio. `PIXE H K|L|M` varies that shell's
+  H as well, so an uncalibrated H can't pull the amount away from what RBS
+  says. It's written back to the PIXE setup after `GO`, like any fitted
+  value.
+
+Up to 10 windows. `PIXE CLEAR` removes all of them, `PIXE CLEAR <n>` only
+window *n*, and `PIXE` alone lists them. They're saved with `SAVE`, so
+snapshots keep them too. The buffer needs a PIXE spectrum (`PIXE GET`, or
+`PAIR ON`).
+
+GO reports the chi-square of each spectrum as well as the combined one. The
+PIXE window's `COMPARE` shades the PIXE windows and scores the chi-square
+over them:
+
+```
+PERT Command: window 380 500
+PERT Command: pixe 786 994          /* Ta L and W L lines, 7.9-10 keV */
+PERT Command: composition 1 Ta
+PERT Command: thickness 1
+PERT Command: pixe h l
+PERT Command: go
+  Fitting film: Si [20000/cm2] - WTa2 [1000/cm2]
+  with the PIXE spectrum over channels 786-994
+
+  fit took 0.44 s
+
+  reduced chi-square 1.0872 on 327 dof   (was 7.6828)
+  RBS chi-square 182.7 over 121 channels,   PIXE chi-square 172.8 over 209 channels
+  27 evaluations, converged
+  layer 1 composition Ta            1.01124  +/- 0.01927   (was 2)
+  layer 1 thickness               1000 /cm2  +/- 0.2022 /cm2   (was 1000 /cm2)
+  PIXE H L                         0.991168  +/- 0.00882   (was 1.25)
+
+  film: Si [20000/cm2] - WTa1.01 [1000/cm2]
+```
+
+That is a simulated W–Ta film (truth: Ta 1, H 1) started at Ta 2 with H
+25% off. From RBS alone the same fit gives Ta to ±0.057; the PIXE lines
+narrow it to ±0.019.
+
+In PERT, `PIXE` means this command. `RETURN` to the RUMP level first for the
+PIXE prompt.
+
 ### Parameters
 
 Each command below adds one parameter to vary; selecting the same one again

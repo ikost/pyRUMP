@@ -36,6 +36,7 @@ from ...fit.parameters import (
     composition,
     equation_parameter,
     parameter,
+    pixe_h,
     thickness,
 )
 from ...fit.windows import MAX_ERROR_WINDOWS, Window, WindowSet
@@ -55,11 +56,15 @@ from .sim import describe as _describe_sample
 from .sim import editor_for
 
 
-def _format_windows(windows: list[Window]) -> str:
+def _format_windows(windows: list[Window], empty: str = "(none -- the whole spectrum)") -> str:
     """One-line, 1-based ``[n] lo-hi`` rendering of the error windows."""
     if not windows:
-        return "(none -- the whole spectrum)"
+        return empty
     return "  ".join(f"[{i}] {w.low}-{w.high}" for i, w in enumerate(windows, start=1))
+
+
+def _format_pixe_windows(windows: list[Window]) -> str:
+    return _format_windows(windows, "(none -- RBS only)")
 
 
 #: RUMP's areal-density unit, 1e15 at/cm^2, spelt the way SIM SHOW's brackets
@@ -106,6 +111,8 @@ def _vary_command(entry: Vary) -> str:
         base = f"species {entry.layer + 1} {entry.symbol}"
     elif entry.kind == "equation":
         base = f"equation {entry.layer + 1} {entry.index + 1}"
+    elif entry.kind == "pixe_h":
+        base = f"pixe h {entry.symbol}"
     else:
         base = entry.name
     if entry.bounds is not None:
@@ -116,6 +123,7 @@ def _vary_command(entry: Vary) -> str:
 def _to_lines(state: PertState) -> list[str]:
     """Command lines that recreate ``state``, for PERT SAVE/GET."""
     lines = [f"window {w.low} {w.high}" for w in state.windows.error]
+    lines += [f"pixe {w.low} {w.high}" for w in state.pixe_windows]
     norm = state.windows.normalisation
     if norm is not None:
         lines.append(f"normalize {norm.low} {norm.high}")
@@ -148,7 +156,7 @@ class Vary:
     """
 
     parameter: object
-    kind: str                 # thickness | composition | atoms | equation | simple | sample
+    kind: str                 # thickness | composition | atoms | equation | simple | sample | pixe_h
     layer: int = -1
     index: int = -1
     symbol: str = ""
@@ -162,6 +170,9 @@ class PertState:
 
     varying: list[Vary] = field(default_factory=list)
     windows: WindowSet = field(default_factory=WindowSet)
+    #: PIXE channels (numbered as the .PIX file numbers them) fitted
+    #: together with the RBS spectrum -- ``PIXE <lo> <hi>``.
+    pixe_windows: list[Window] = field(default_factory=list)
     multi: bool = True
     verbose: bool = False
     autocmp: bool = False
@@ -176,6 +187,7 @@ class PertState:
         lines.append(
             f"  norm win    {f'{norm.low}-{norm.high}' if norm else '(none)'}"
         )
+        lines.append(f"  PIXE win    {_format_pixe_windows(self.pixe_windows)}")
         lines.extend(_format_varying(self.varying, script))
         return "\n".join(lines)
 
@@ -535,6 +547,68 @@ def cmd_normalize(session, args: ArgReader) -> None:
     print(f"  normalisation window {low}-{high}")
 
 
+def cmd_pixe(session, args: ArgReader) -> None:
+    """``PIXE <lo> <hi>`` -- fit the PIXE spectrum over these channels too,
+    together with the RBS one: the same sample drives both, and each
+    spectrum weighs in by its own counting statistics. Channels are
+    numbered as the ``.PIX`` file numbers them, as PIXE ``REGION`` takes
+    them. Put the windows on clear peaks: the PIXE continuum is not
+    simulated. Meant for elements whose RBS signals overlap but whose X-ray
+    lines don't (Ta-W, Fe-Ni, Ni-Co) -- best with lines of the same shell,
+    so H cancels in their ratio.
+
+    ``PIXE CLEAR [<n>]`` removes window *n*, or all of them.
+    ``PIXE H K|L|M [<min> <max>]`` varies that shell's instrumental
+    constant H, so the PIXE spectrum decides the ratio and RBS the amount.
+    ``PIXE`` alone lists the windows. A pyRUMP addition. (In PERT, ``PIXE``
+    means this: RETURN first for the PIXE prompt.)
+    """
+    state = state_for(session)
+    if not args:
+        print(f"  PIXE windows {_format_pixe_windows(state.pixe_windows)}")
+        return
+    token = args.peek().lower()
+    if token in ("clear", "none", "reset"):
+        args.token()
+        if not args:
+            state.pixe_windows = []
+            print("  PIXE windows cleared")
+            return
+        n = args.integer("a PIXE window number")
+        args.done()
+        windows = state.pixe_windows
+        if not windows:
+            raise CommandError("no PIXE windows are set")
+        if not 1 <= n <= len(windows):
+            raise CommandError(f"PIXE window {n} is outside 1-{len(windows)}")
+        del windows[n - 1]
+        print(f"  PIXE windows {_format_pixe_windows(windows)}")
+        return
+    if token == "h":
+        args.token()
+        family = args.token("K, L or M").upper()
+        if family not in ("K", "L", "M"):
+            raise CommandError(f"PIXE H: expected K, L or M, not {family!r}")
+        bound = _optional_bounds(args)
+        args.done()
+        param = pixe_h(family)
+        if bound is not None:
+            param = replace(param, lower=bound[0], upper=bound[1])
+        _add(session, Vary(
+            parameter=param, kind="pixe_h", symbol=family, name=f"PIXE H {family}", bounds=bound,
+        ))
+        return
+    low = args.integer("the first PIXE channel")
+    high = args.integer("the last PIXE channel")
+    args.done()
+    if high <= low:
+        raise CommandError(f"empty window: {low} to {high}")
+    if len(state.pixe_windows) >= MAX_ERROR_WINDOWS:
+        raise CommandError(f"at most {MAX_ERROR_WINDOWS} PIXE windows")
+    state.pixe_windows.append(Window(low, high))
+    print(f"  PIXE windows {_format_pixe_windows(state.pixe_windows)}")
+
+
 def cmd_single(session, args: ArgReader) -> None:
     args.done()
     state_for(session).multi = False
@@ -764,6 +838,8 @@ def _write_back(session, entry: Vary, inputs: FitInputs, before: float) -> None:
         layers[entry.layer].profile = replace(profile, parameters=tuple(params))
     elif entry.kind == "sample":
         setattr(session.script, entry.name, value)
+    elif entry.kind == "pixe_h":
+        session.pixe.h = tuple(inputs.pixe_h)
     else:
         # A buffer parameter. fit() mutates ``inputs`` in place and leaves it
         # holding the best-fit objects, so the buffer just adopts them.
@@ -836,6 +912,46 @@ def _display(session, entry: Vary, per_areal: float | None):
     return 1.0, _g6, ""
 
 
+def _pixe_extra(session, state: PertState, data_buffer) -> list:
+    """The PIXE spectrum as GO's second spectrum, over the PIXE windows --
+    or nothing, without windows. Checked here, before the fit starts."""
+    from ...fit.lm import ExtraSpectrum
+    from ..pixe_sim import simulate_with
+
+    if not state.pixe_windows:
+        if any(v.kind == "pixe_h" for v in state.varying):
+            raise CommandError(
+                "go: PIXE H sets the PIXE spectrum's scale, but no PIXE windows "
+                "are set -- PIXE <lo> <hi>"
+            )
+        return []
+    pixe = data_buffer.pixe
+    if pixe is None:
+        raise CommandError(
+            "go: PIXE windows are set, but the active buffer has no PIXE spectrum "
+            "-- PIXE GET <file>, or PIXE PAIR ON and read the .RBS again"
+        )
+    counts = np.asarray(pixe.spectrum.counts, dtype=float)
+    first = round(pixe.calibration.first)
+    mask = np.zeros(counts.size, dtype=bool)
+    for window in state.pixe_windows:
+        low, high = window.low - first, window.high - first
+        if high < 0 or low >= counts.size:
+            raise CommandError(
+                f"go: PIXE window {window.low}-{window.high} is outside the PIXE "
+                f"spectrum's channels {first}-{first + counts.size - 1}"
+            )
+        mask[max(low, 0):min(high, counts.size - 1) + 1] = True
+
+    def run_pixe(current: FitInputs) -> np.ndarray:
+        return simulate_with(
+            session, current.sample, current.beam, current.geometry,
+            current.measurement, current.pixe_h, pixe,
+        ).counts
+
+    return [ExtraSpectrum(simulate=run_pixe, data=counts, mask=mask)]
+
+
 def cmd_go(session, args: ArgReader) -> None:
     args.done()
     from ...fit.lm import fit
@@ -856,12 +972,18 @@ def cmd_go(session, args: ArgReader) -> None:
 
     data_buffer = session.buffers.require_active()
     observed = np.asarray(data_buffer.spectrum.counts, dtype=float)
+    extra = _pixe_extra(session, state, data_buffer)
 
     sample_id = _report_stem(data_buffer)
     initial_structure = structure_label(
         session.script, normalize=session.plot.composition_fraction
     )
     header_lines = [f"  Fitting {sample_id}: {initial_structure}"]
+    if extra:
+        header_lines.append(
+            f"  with the PIXE spectrum over channels "
+            f"{', '.join(f'{w.low}-{w.high}' for w in state.pixe_windows)}"
+        )
     for line in header_lines:
         print(line)
     report_lines = list(header_lines)
@@ -873,6 +995,7 @@ def cmd_go(session, args: ArgReader) -> None:
         geometry=data_buffer.geometry,
         calibration=data_buffer.calibration,
         measurement=data_buffer.measurement,
+        pixe_h=tuple(session.pixe.h),
     )
 
     def run(current: FitInputs) -> np.ndarray:
@@ -926,6 +1049,7 @@ def cmd_go(session, args: ArgReader) -> None:
                     [fit_parameters[v.name] for v in group],
                     windows=state.windows,
                     progress=_progress,
+                    extra=extra,
                 )
                 if not state.multi:
                     entry = group[0]
@@ -949,6 +1073,11 @@ def cmd_go(session, args: ArgReader) -> None:
     if initial_reduced is not None:
         chi_line += f"   (was {initial_reduced:.4f})"
     report_lines.append(chi_line)
+    if result.parts:
+        report_lines.append("  " + ",   ".join(
+            f"{label} chi-square {part.total:.1f} over {part.n_used} channels"
+            for label, part in result.parts.items()
+        ))
     status = "converged" if result.success else "did not converge"
     report_lines.append(f"  {result.n_evaluations} evaluations, {status}")
     if result.normalisation != 1.0:
@@ -1028,6 +1157,8 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     # Windows and mode
     ("WINDOW", 2, cmd_window, "set an error window in channels, or WINDOW CLEAR [<n>]"),
     ("NORMALIZE", 2, cmd_normalize, "set the normalisation window, or NORMALIZE CLEAR"),
+    ("PIXE", 2, cmd_pixe,
+     "fit PIXE too: PIXE <lo> <hi> adds a window, PIXE CLEAR [<n>], PIXE H K|L|M [<min> <max>]"),
     ("SINGLE", 2, cmd_single, "vary one parameter at a time"),
     ("MULTI", 3, cmd_multi, "vary all parameters together (default)"),
     ("VOLUME", 3, cmd_volume, "verbose progress messages"),
