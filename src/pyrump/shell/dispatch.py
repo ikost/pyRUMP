@@ -260,6 +260,12 @@ class CommandTable:
         usage = _usage(command.handler)
         if usage:
             lines.append(f"  usage: {usage}")
+        # A short explanation for the user, when the one-line help can't say
+        # enough (the docstring is written for developers).
+        details = getattr(command.handler, "details", None)
+        if details:
+            lines.append("")
+            lines.extend(f"  {line}" if line else "" for line in details.splitlines())
         return "\n".join(lines)
 
 

@@ -224,7 +224,7 @@ pixe
  window Be 12.5            ! window material and thickness, µm
  crystal Si 500            ! crystal thickness, µm
  fwhm 122                  ! resolution at Mn Kα, eV
- fano 0.104
+ fano 0.104                ! how the peak width grows with energy
  filter clear
  filter 1 mylar 62         ! absorber against bremsstrahlung, µm (effective)
  pair on
@@ -248,6 +248,20 @@ sample tilted towards the PIXE detector by a negative THETA, as on the
 RC43 endstation: THETA −9° gives 9° in and 36° out. `TILTSIGN -1` is the
 opposite sense, and `TILTSIGN 0` a tilt axis that leaves the detector
 direction alone.
+
+**Resolution: `FWHM` and `FANO`.** A line's width has two parts:
+electronic noise, the same for every line, and the statistics of the
+charge the X-ray frees in the crystal, which grow with its energy E:
+
+  FWHM(E)² = noise² + 2.355² × 3.64 eV × F × E
+
+`FWHM` is the total width at Mn Kα (5.9 keV), in eV: the number a
+detector's specification quotes. `FANO` is F, which splits that width
+between the two parts. So a larger F makes the lines below 5.9 keV (Si K)
+narrower and those above it (Pt L) wider. Si detectors have F ≈ 0.1. The
+RC43 values, 122 eV and 0.104, come from the Si Kα (78.5 eV) and Mn Kα
+(122 eV) widths of real spectra; F rarely needs changing. `HELP FWHM` and
+`HELP FANO` in the PIXE prompt say the same.
 
 **Solid angle.** `SOLID <msr>` sets it directly. `SOLID <area mm²>
 <distance> [MM|IN]` computes it for a round detector seen on axis: 25 mm²
@@ -437,9 +451,9 @@ leave the substrate out by itself.
 #### Detector
 
 * **Resolution:** σ² = σ²_noise + ε_Si F E with ε_Si = 3.64 eV, set by the
-  FWHM at Mn Kα and the Fano factor F. In the MnPt example, Si Kα is 79 eV
-  wide and the 5.9 keV line 131 eV, which this model reproduces with F ≈
-  0.13.
+  FWHM at Mn Kα and the Fano factor F (see Resolution under Detector setup).
+  In the MnPt example, Si Kα is 78.5 eV wide and Mn Kα 122 eV, which this
+  model reproduces with F = 0.104.
 * **Line shape:** a Gaussian per line, with an optional low-energy tail.
 * **Si escape peaks** 1.740 keV below each line above the Si K edge.
 * **Efficiency:** window, contact and dead layer transmission times the

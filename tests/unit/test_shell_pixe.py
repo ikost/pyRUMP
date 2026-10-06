@@ -565,3 +565,10 @@ def test_show_reports_the_dose_shared_with_rbs(empty_session, capsys):
     output = capsys.readouterr().out
     assert "dose, shared with RBS: CHARGE 10 uC / CORRECTION 0.8 = 12.5 uC" in output
     assert "7.802e+13 ions" in output  # 12.5 uC / 1.602e-13 uC, charge state 1
+
+
+def test_help_explains_fwhm_and_fano(empty_session, capsys):
+    run(empty_session, "pixe help fwhm", "pixe help fano")
+    output = capsys.readouterr().out
+    assert "full width at half maximum of a line at" in output
+    assert "FWHM(E)^2 = noise^2 + 2.355^2 x 3.64 eV x F x E" in output

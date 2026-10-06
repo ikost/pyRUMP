@@ -336,7 +336,22 @@ def cmd_solid(session, args: ArgReader) -> None:
         return
     print(f"  solid {detector.solid_angle_msr:.6g}  ! msr")
 cmd_fwhm = _detector_number("fwhm_eV", "fwhm", "  ! eV at Mn Ka")
+cmd_fwhm.details = """\
+The detector's resolution: the full width at half maximum of a line at
+Mn Ka (5.9 keV), in eV -- what a detector's specification quotes. Lines
+at other energies get their width from it and FANO.
+RC43: 122 eV, fitted on the Mn Ka doublet of examples/MnPt."""
+
 cmd_fano = _detector_number("fano", "fano", "")
+cmd_fano.details = """\
+How the peak width grows with X-ray energy. The width has two parts,
+electronic noise (the same for every line) and charge statistics
+(growing with energy E):
+    FWHM(E)^2 = noise^2 + 2.355^2 x 3.64 eV x F x E
+FWHM fixes the total at Mn Ka; F splits it between the two parts, so a
+larger F makes lines below 5.9 keV (Si K) narrower and lines above it
+(Pt L) wider. Si detectors: about 0.1. RC43: 0.104, from the Si Ka
+(78.5 eV) and Mn Ka (122 eV) widths. Rarely needs changing."""
 
 
 def _absorber(session, args: ArgReader, what: str, *, hole: bool = False,
@@ -852,8 +867,8 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("SOLID", 2, cmd_solid, "solid angle: msr, or area mm^2 and distance [MM|IN]"),
     ("WINDOW", 2, cmd_window, "detector window: element and thickness in µm"),
     ("CRYSTAL", 2, cmd_crystal, "detector crystal: element and thickness in µm"),
-    ("FWHM", 2, cmd_fwhm, "resolution at Mn Ka, eV"),
-    ("FANO", 2, cmd_fano, "Fano factor"),
+    ("FWHM", 2, cmd_fwhm, "resolution: peak width (FWHM) at Mn Ka, eV"),
+    ("FANO", 2, cmd_fano, "Fano factor: how the peak width grows with energy"),
     ("FILTER", 3, cmd_filter, "list filters; FILTER n material µm [hole %]; FILTER CLEAR [n]"),
     ("CALIB", 3, cmd_calib, "energy calibration: keV/channel and offset in keV"),
     ("H", 1, cmd_h, "instrumental constant for K, L, M lines (H K L M, or H K|L|M v)"),
