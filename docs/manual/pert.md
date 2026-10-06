@@ -138,7 +138,8 @@ keep the setting.
 * `<sample>.report` — the fit result, appended, so refits keep a history
 * `<sample>.pert` — the PERT setup, as `SAVE` writes it
 * `<sample>.lcm` — the fitted sample, as `SIM SAVE` writes it
-* `<sample>.png` — the `COMPARE` plot
+* `<sample>_rbs.png` — the `COMPARE` plot, as `FIGSAVE` writes it (with
+  `<sample>_pixe.png` when it saves the PIXE window too)
 * `<sample>_fit.xeq` — the restore macro: `pyrump <sample>_fit.xeq` is this
   session again, with the fitted spectrum parameters too (`CORRECTION`,
   calibration …)

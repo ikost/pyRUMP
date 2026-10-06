@@ -13,7 +13,8 @@ under the sample's name:
   unlike ``.cmd`` not one Windows runs as a batch file on a double-click.
 - ``<sample>.lcm``, ``<sample>.pert`` -- the sample and the PERT selection,
   which the restore macro reads back
-- ``<sample>.png`` -- the ``COMPARE`` plot (and ``<sample>_pixe.png``)
+- ``<sample>_rbs.png`` -- the ``COMPARE`` plot, as FIGSAVE saves it (and
+  ``<sample>_pixe.png``)
 - ``<sample>.report`` -- one block appended per snapshot: the fit with its
   uncertainties if nothing has changed since ``GO``, otherwise the current
   values and chi-square, marked as set by hand
@@ -376,7 +377,7 @@ def _target(session, name: str | None, buffer: Buffer) -> tuple[Path, str | None
     if name is None:
         return Path("."), None
     path = Path(name).expanduser()
-    for suffix in (RESTORE_EXTENSION, ".cmd", ".report", ".lcm", ".pert", ".png"):
+    for suffix in (RESTORE_EXTENSION, ".cmd", ".report", ".lcm", ".pert", "_rbs.png", ".png"):
         if path.name.lower().endswith(suffix):
             path = path.with_name(path.name[: -len(suffix)])
     if path.name.endswith(RESTORE_SUFFIX) and len(path.name) > len(RESTORE_SUFFIX):
@@ -602,24 +603,18 @@ def _restore_macro(
     return lines
 
 
-def _save_plots(session, folder: Path, base: str, buffer: Buffer) -> None:
-    """``<base>.png`` from a fresh COMPARE, and ``<base>_pixe.png`` when the
-    PIXE window shows this snapshot's PIXE too."""
-    from .commands.rump import FIGSAVE_DPI, cmd_compare
+def _save_plots(session, folder: Path, base: str) -> None:
+    """A fresh COMPARE, saved as FIGSAVE saves it: ``<base>_rbs.png``, and
+    ``<base>_pixe.png`` with ``PAIR ON`` and the PIXE window open."""
+    from .commands.rump import cmd_compare, save_figures
 
     try:
         cmd_compare(session, ArgReader([], command="compare"))
     except CommandError as error:
-        print(f"  no {base}.png: {error}")
+        print(f"  no {base}_rbs.png: {error}")
         return
-    png = folder / f"{base}.png"
-    session.figure.savefig(png, dpi=FIGSAVE_DPI)
-    print(f"  wrote {png}")
-    figure = session.pixe.figure
-    if _wants_pixe(session, buffer) and session.pixe.enabled and figure is not None:
-        png = folder / f"{base}_pixe.png"
-        figure.savefig(png, dpi=FIGSAVE_DPI)
-        print(f"  wrote {png}")
+    for written in save_figures(session, folder / base):
+        print(f"  wrote {written}")
 
 
 def take(session, name: str | None = None, *, after_go: bool = False) -> None:
@@ -681,7 +676,7 @@ def take(session, name: str | None = None, *, after_go: bool = False) -> None:
     lcm.write_text(write_lcm(session.script))
     print(f"  wrote {lcm}")
 
-    _save_plots(session, folder, base, buffer)
+    _save_plots(session, folder, base)
 
     if no_source is None:
         lines = _restore_macro(
@@ -699,8 +694,8 @@ def cmd_snapshot(session, args: ArgReader) -> None:
     pick it up later with ``pyrump <name>_fit.xeq`` or ``XEQ <name>_fit``.
 
     Writes ``<name>_fit.xeq`` (the restore macro), ``<name>.lcm``,
-    ``<name>.pert``, ``<name>.png`` and appends to ``<name>.report``. The name
-    defaults to the sample's, as REPORT names it, and may carry a folder
+    ``<name>.pert``, ``<name>_rbs.png`` (as FIGSAVE writes it) and appends to
+    ``<name>.report``. The name defaults to the sample's, as REPORT names it, and may carry a folder
     (``SNAP results/MA8410``). Needs the measured spectrum, read from a file,
     and a SIM sample. Works the same after a GO or after tuning by hand: the
     report says which, with uncertainties only for an unchanged fit. A

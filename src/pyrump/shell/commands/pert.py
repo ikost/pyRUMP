@@ -773,8 +773,9 @@ def cmd_report(session, args: ArgReader) -> None:
       history)
     - ``<sample>.pert`` -- the PERT selection, as ``PERT SAVE`` would write
     - ``<sample>.lcm`` -- the sample description, as ``SIM SAVE`` would write
-    - ``<sample>.png`` -- the ``COMPARE`` plot, as ``FIGSAVE``/``HCOPY``
-      would write (drawn fresh for this, even if ``AUTOCMP`` is off)
+    - ``<sample>_rbs.png`` -- the ``COMPARE`` plot, as ``FIGSAVE``/``HCOPY``
+      writes it (drawn fresh for this, even if ``AUTOCMP`` is off), with
+      ``<sample>_pixe.png`` when FIGSAVE would save the PIXE window too
     - ``<sample>_fit.xeq`` -- the restore macro: ``pyrump <sample>_fit.xeq``
       is this session again (see :mod:`pyrump.shell.snapshot`)
 

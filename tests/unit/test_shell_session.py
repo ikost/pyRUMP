@@ -1403,10 +1403,11 @@ def test_figsave_writes_an_image_file(session, tmp_path):
     sample.write_text(
         "Sim Reset\nLayer 1\n Thick 500 /cm2\n Composition Si 1 /\nMaxpth 200\n"
     )
-    out = tmp_path / "out.png"
-    run(session, f"sim get {sample}", "compare", f"figsave {out}")
+    run(session, f"sim get {sample}", "compare", f"figsave {tmp_path / 'out.png'}")
+    out = tmp_path / "out_rbs.png"
     assert out.exists()
     assert out.stat().st_size > 0
+    assert not (tmp_path / "out.png").exists()
 
 
 @needs_data
@@ -1416,8 +1417,8 @@ def test_figsave_writes_png_at_300_dpi(session, tmp_path):
     sample.write_text(
         "Sim Reset\nLayer 1\n Thick 500 /cm2\n Composition Si 1 /\nMaxpth 200\n"
     )
-    out = tmp_path / "dpi.png"
-    run(session, f"sim get {sample}", "compare", f"figsave {out}")
+    out = tmp_path / "dpi_rbs.png"
+    run(session, f"sim get {sample}", "compare", f"figsave {tmp_path / 'dpi.png'}")
     width_in, height_in = session.figure.get_size_inches()
     height_px, width_px = imread(out).shape[:2]
     assert (width_px, height_px) == (round(width_in * 300), round(height_in * 300))
@@ -1429,9 +1430,19 @@ def test_figsave_defaults_to_png_with_no_extension(session, tmp_path):
     sample.write_text(
         "Sim Reset\nLayer 1\n Thick 500 /cm2\n Composition Si 1 /\nMaxpth 200\n"
     )
-    out = tmp_path / "out"
-    run(session, f"sim get {sample}", "compare", f"figsave {out}")
-    assert out.with_suffix(".png").exists()
+    run(session, f"sim get {sample}", "compare", f"figsave {tmp_path / 'out'}")
+    assert (tmp_path / "out_rbs.png").exists()
+
+
+@needs_data
+def test_figsave_does_not_double_an_rbs_suffix(session, tmp_path):
+    sample = tmp_path / "figsave_rbs.lcm"
+    sample.write_text(
+        "Sim Reset\nLayer 1\n Thick 500 /cm2\n Composition Si 1 /\nMaxpth 200\n"
+    )
+    run(session, f"sim get {sample}", "compare", f"figsave {tmp_path / 'fit_rbs.pdf'}")
+    assert (tmp_path / "fit_rbs.pdf").exists()
+    assert not (tmp_path / "fit_rbs_rbs.pdf").exists()
 
 
 @needs_data
@@ -1440,9 +1451,8 @@ def test_hcopy_is_a_synonym_for_figsave(session, tmp_path):
     sample.write_text(
         "Sim Reset\nLayer 1\n Thick 500 /cm2\n Composition Si 1 /\nMaxpth 200\n"
     )
-    out = tmp_path / "hc.png"
-    run(session, f"sim get {sample}", "compare", f"hcopy {out}")
-    assert out.exists()
+    run(session, f"sim get {sample}", "compare", f"hcopy {tmp_path / 'hc.png'}")
+    assert (tmp_path / "hc_rbs.png").exists()
 
 
 @needs_data

@@ -166,7 +166,7 @@ def test_hand_tuned_session_restores_exactly_from_another_folder(
         session, "correction 0.93", "conversion 5.01 1.5", "sim thick 250",
         "pert window 355 375", "pert thick 1", "region 100 450", "log", "snap",
     )
-    for name in ("au_fit.xeq", "au.lcm", "au.pert", "au.png", "au.report"):
+    for name in ("au_fit.xeq", "au.lcm", "au.pert", "au_rbs.png", "au.report"):
         assert (work / name).exists(), name
     saved = snapshot.fingerprint(session)
     assert session.saved_state == saved and not snapshot.unsaved(session)
@@ -448,7 +448,7 @@ def test_snapshot_without_any_fit(session, work):
 def test_report_on_writes_the_restore_macro_too(session, work, capsys):
     run(session, "pert window 355 375", "pert thick 1", "pert report", "pert go")
     output = capsys.readouterr().out
-    for line in ("updated au.report", "wrote au.pert", "wrote au.lcm", "wrote au.png",
+    for line in ("updated au.report", "wrote au.pert", "wrote au.lcm", "wrote au_rbs.png",
                  "wrote au_fit.xeq"):
         assert line in output
     assert "fit (GO)" in (work / "au.report").read_text()
@@ -575,3 +575,18 @@ def test_pyrump_with_a_macro_means_the_shell(argv, expected, tmp_path, monkeypat
 def test_binary_write_keeps_the_identifier_the_stem_comes_from(au_spectrum):
     assert read_rbs(au_spectrum).identifier == "au"
     assert os.path.basename(au_spectrum) == "au.rbs"
+
+
+@needs_data
+def test_snapshot_saves_its_plots_as_figsave_does(tmp_path, work):
+    """SNAP runs FIGSAVE: <sample>_rbs.png, and with PAIR ON and the PIXE
+    window open <sample>_pixe.png."""
+    data = tmp_path / "data"
+    data.mkdir()
+    for name in ("MnPt.RBS", "MnPt.PIX"):
+        shutil.copy(EXAMPLES / name, data / name)
+    loaded = Session.create(str(DATA))
+    run(loaded, f"xeq {data / 'MnPt.RBS'}", f"sim get {EXAMPLES / 'MnPt.lcm'}", "snap")
+    assert (work / "MA8408_rbs.png").exists() and not (work / "MA8408_pixe.png").exists()
+    run(loaded, "pixe pair on", "pixe", "return", "snap")
+    assert (work / "MA8408_pixe.png").exists()

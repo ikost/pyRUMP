@@ -77,6 +77,16 @@ the extension). Raster formats such as `.png` are written at 300 dpi;
 original's own name for the command (a literal hard-copy to a plotter, in
 RUMP's day).
 
+`[new]` The RBS plot is saved as `<file>_rbs`: `FIGSAVE fit` writes
+`fit_rbs.png`. A name that already ends in `_rbs` isn't doubled. With
+`PAIR ON` and the PIXE window open, the PIXE plot is saved next to it as
+`fit_pixe.png` (see [PIXE](pixe.md)).
+
+```
+Your wish? figsave fit
+wrote fit_rbs.png
+```
+
 #### `REGION`
 
 ```

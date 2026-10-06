@@ -53,7 +53,7 @@ Your wish? sim get MnPt.lcm
 Your wish? pixe                        /* PIXE on                    */
 PIXE Command: return
 Your wish? compare                     /* RBS and PIXE comparisons   */
-Your wish? figsave fit                 /* fit.png and fit_pixe.png   */
+Your wish? figsave fit                 /* fit_rbs.png, fit_pixe.png  */
 ...
 Your wish? pixe disable                /* back to RBS only           */
 ```
@@ -108,9 +108,9 @@ window, as before. `REGION` is in **channels**, as the spectrum file
 numbers them, like the RBS window's: `REGION 220 1190`.
 
 **FIGSAVE.** At the RUMP level, `FIGSAVE fit` saves the RBS window as
-`fit.png` — and with `PAIR ON` and the PIXE window open, the PIXE window
+`fit_rbs.png` — and with `PAIR ON` and the PIXE window open, the PIXE window
 next to it as `fit_pixe.png`. Inside the PIXE prompt, `FIGSAVE` saves the
-PIXE window alone.
+PIXE window alone, under the name given.
 
 ### PIXE data and buffers
 

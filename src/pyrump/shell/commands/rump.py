@@ -1217,25 +1217,46 @@ def cmd_figsave(session, args: ArgReader) -> None:
     matplotlib infers from the extension (``.png`` default, also ``.pdf``,
     ``.svg``, ...); raster formats are written at ``FIGSAVE_DPI``.
 
-    With PIXE's ``PAIR ON`` and the PIXE window open, the PIXE window is saved
-    too, next to it as ``<name>_pixe.<ext>`` -- the two spectra of one run
-    belong together. The PIXE prompt's own FIGSAVE saves the PIXE window
-    alone.
+    The RBS window is saved as ``<name>_rbs.<ext>``; with PIXE's ``PAIR ON``
+    and the PIXE window open, the PIXE window too, next to it as
+    ``<name>_pixe.<ext>`` -- the two spectra of one run belong together.
+    The PIXE prompt's own FIGSAVE saves the PIXE window alone.
     """
-    from .. import pixe_plotting
-
     path = Path(args.token("an output image file"))
     args.done()
+    for written in save_figures(session, path):
+        print(f"wrote {written}")
+
+
+def figure_paths(target: Path) -> tuple[Path, Path]:
+    """FIGSAVE's files for ``target``: ``fit`` -> ``fit_rbs.png`` and
+    ``fit_pixe.png``. A name already ending in ``_rbs`` keeps it once."""
+    if not target.suffix:
+        target = target.with_suffix(".png")
+    stem = target.stem
+    if stem.lower().endswith("_rbs"):
+        stem = stem[: -len("_rbs")]
+    return (
+        target.with_name(f"{stem}_rbs{target.suffix}"),
+        target.with_name(f"{stem}_pixe{target.suffix}"),
+    )
+
+
+def save_figures(session, target: Path) -> list[Path]:
+    """What FIGSAVE writes -- the RBS window, and the PIXE window with
+    ``PAIR ON`` when it is open -- returning the files written. SNAPSHOT
+    saves its plots through this too."""
+    from .. import pixe_plotting
+
     if session.figure is None:
         raise CommandError("nothing plotted yet -- PLOT or COMPARE first")
-    if not path.suffix:
-        path = path.with_suffix(".png")
-    session.figure.savefig(path, dpi=FIGSAVE_DPI)
-    print(f"wrote {path}")
+    rbs, pixe = figure_paths(Path(target))
+    session.figure.savefig(rbs, dpi=FIGSAVE_DPI)
+    written = [rbs]
     if session.pixe.pair and pixe_plotting.is_open(session):
-        pixe_path = path.with_name(f"{path.stem}_pixe{path.suffix}")
-        session.pixe.figure.savefig(pixe_path, dpi=FIGSAVE_DPI)
-        print(f"wrote {pixe_path}")
+        session.pixe.figure.savefig(pixe, dpi=FIGSAVE_DPI)
+        written.append(pixe)
+    return written
 
 
 def cmd_display(session, args: ArgReader) -> None:

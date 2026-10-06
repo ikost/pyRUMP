@@ -937,7 +937,7 @@ def test_report_off_by_default_writes_no_file(session, tmp_path, monkeypatch):
     run(session, "pert", "window 355 375", "norm 140 200", "thick 1", "go")
     assert not (tmp_path / "au.report").exists()
     assert not (tmp_path / "au.pert").exists()
-    assert not (tmp_path / "au.png").exists()
+    assert not (tmp_path / "au_rbs.png").exists()
 
 
 @pytest.mark.parametrize(
@@ -986,7 +986,7 @@ def test_report_on_appends_each_go_to_a_sample_named_file(session, tmp_path, mon
 
 @needs_data
 def test_report_on_writes_the_full_bundle(session, tmp_path, monkeypatch):
-    """REPORT ON writes all four files -- .report, .pert, .lcm, .png --
+    """REPORT ON writes all four files -- .report, .pert, .lcm, _rbs.png --
     named after the sample, not just the text report."""
     monkeypatch.chdir(tmp_path)
     run(session, "pert", "window 355 375", "norm 140 200", "thick 1", "report", "go")
@@ -994,7 +994,7 @@ def test_report_on_writes_the_full_bundle(session, tmp_path, monkeypatch):
     assert (tmp_path / "au.report").exists()
     assert (tmp_path / "au.pert").exists()
     assert (tmp_path / "au.lcm").exists()
-    png = tmp_path / "au.png"
+    png = tmp_path / "au_rbs.png"
     assert png.exists()
     assert png.stat().st_size > 0
 
@@ -1012,7 +1012,7 @@ def test_report_on_prints_a_confirmation_line(session, tmp_path, monkeypatch, ca
     assert "updated au.report" in output
     assert "wrote au.pert" in output
     assert "wrote au.lcm" in output
-    assert "wrote au.png" in output
+    assert "wrote au_rbs.png" in output
 
 
 @needs_data

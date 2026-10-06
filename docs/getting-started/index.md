@@ -189,7 +189,7 @@ reflects them), and `COMPARE` shows how the result actually matches the data:
 ```
 Your wish? region 300 1130      /* zoom to the fitted window            */
 Your wish? compare              /* data vs. simulation, with residuals  */
-Your wish? figsave fit.png
+Your wish? figsave fit         /* fit_rbs.png                         */
 ```
 
 ![MnPt data vs. the fitted simulation, with residuals](../assets/mnpt-fit.png)
@@ -210,7 +210,7 @@ Your wish? snap
   updated MA8408.report
   wrote MA8408.pert
   wrote MA8408.lcm
-  wrote MA8408.png
+  wrote MA8408_rbs.png
   wrote MA8408_fit.xeq
 ```
 

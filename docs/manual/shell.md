@@ -186,7 +186,9 @@ dataset already has), into the working directory:
   detector settings and the `.PIX` spectrum. It ends on `COMPARE`.
 * `<sample>.lcm`, `<sample>.pert` — the sample and the PERT selection, which
   the restore macro reads back
-* `<sample>.png` — the `COMPARE` plot (and `<sample>_pixe.png` when PIXE is on)
+* `<sample>_rbs.png` — the `COMPARE` plot, saved by
+  [`FIGSAVE`](plotting.md#figsave-hcopy): with `PAIR ON` and the PIXE window
+  open, also `<sample>_pixe.png`
 * `<sample>.report` — one block appended per snapshot, so the file keeps a
   history. If nothing has changed since the last `GO`, the block is the fit,
   with its uncertainties. Otherwise it is marked *set by hand*, and gives the

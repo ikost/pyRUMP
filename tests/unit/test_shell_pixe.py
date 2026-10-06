@@ -330,12 +330,13 @@ def test_region_is_in_channels_with_energy_below_and_channels_on_top(session):
 def test_figsave_saves_both_windows_in_pair_mode(session, tmp_path):
     run(session, f"pixe get {EXAMPLES / 'MnPt.PIX'}", "pixe", "return", "plot 1")
     run(session, f"figsave {tmp_path / 'one'}")
-    assert (tmp_path / "one.png").exists() and not (tmp_path / "one_pixe.png").exists()
+    assert (tmp_path / "one_rbs.png").exists() and not (tmp_path / "one_pixe.png").exists()
     run(session, "pixe pair on", f"figsave {tmp_path / 'two'}")
-    assert (tmp_path / "two.png").exists() and (tmp_path / "two_pixe.png").exists()
+    assert (tmp_path / "two_rbs.png").exists() and (tmp_path / "two_pixe.png").exists()
     stack = run(session, "pixe")
     run(session, f"figsave {tmp_path / 'three'}", stack=stack)
     assert (tmp_path / "three.png").exists() and not (tmp_path / "three_pixe.png").exists()
+    assert not (tmp_path / "three_rbs.png").exists()
 
 
 def test_plot_in_the_pixe_prompt_needs_something_to_show(empty_session):
