@@ -339,6 +339,11 @@ def cmd_live(session, args: ArgReader) -> None:
     setting. On by default; a pyRUMP addition. Here rather than at RUMP's
     level so it can be typed at the SIM or PERT prompt without leaving it.
 
+    One switch for both windows: the PIXE window follows even with the RBS
+    window closed. PIXE-only settings (detector, FILTER, CALIB, H, ...)
+    redraw the PIXE window themselves, LIVE or not; they never touch the
+    RBS plot. Neither window is ever opened by LIVE.
+
     Turning it back on brings the plot up to date at once. Like AUTOCMP, a
     standing preference: set it from ``~/.pyrumprc``; SAVE does not write it.
     """
@@ -422,7 +427,8 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("LOGFILE", -4, cmd_script, "record commands to a file"),
     ("RECORD", -3, cmd_script, "record commands to a file"),
     # Plot
-    ("LIVE", 4, cmd_live, "redraw the simulation as the sample changes (LIVE OFF to stop)"),
+    ("LIVE", 4, cmd_live,
+     "redraw the RBS and PIXE simulations as the sample changes (LIVE OFF to stop)"),
 ]
 
 for _name_, _minlen, _handler, _help in _ENTRIES:

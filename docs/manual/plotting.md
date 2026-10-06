@@ -45,7 +45,11 @@ with a note. On by default.
   fitted sample, after the fit.
 * A sample that can't be simulated (all its layers deleted, say) is
   reported once, and the plot is left as it was.
-* With [PIXE](pixe.md) enabled, the PIXE window follows too.
+* With [PIXE](pixe.md) enabled, the PIXE window follows too — it is one
+  switch for both windows, and an open PIXE window follows even with the
+  RBS window closed. PIXE-only settings (detector, `FILTER`, `CALIB`, `H`,
+  ...) redraw the PIXE window themselves, with `LIVE` on or off, and never
+  touch the RBS plot.
 
 Each redraw costs a fresh simulation (one more for each `SPLOT` curve, and
 the PIXE one), so for a slow sample turn it off with `LIVE OFF` and redraw
