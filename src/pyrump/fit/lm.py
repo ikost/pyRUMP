@@ -34,6 +34,8 @@ from .windows import WindowSet
 DEFAULT_MAX_ITERATIONS = 10
 DEFAULT_EPS = 1e-3
 DEFAULT_DERIVATIVE_STEP = 0.01
+#: scipy's step-size stop, effectively off: see :func:`fit`.
+XTOL = 1e-12
 
 
 @dataclass(slots=True)
@@ -160,7 +162,12 @@ def fit(
         bounds=(lower, upper),
         # Relative step, matching RUMP's 1% numerical derivative.
         diff_step=derivative_step,
-        xtol=eps,
+        # RUMP stops when chi-square stops improving (EpsCrit, relative), so
+        # ftol carries eps. scipy's xtol compares a step with the norm of the
+        # whole parameter vector, which a thickness in 1e15 at/cm^2 dominates:
+        # a composition step of 0.2 next to a thickness of 1000 read as "no
+        # change" and stopped the search two steps in. Kept out of the way.
+        xtol=XTOL,
         ftol=eps,
         max_nfev=max_iterations * (len(parameters) + 1) * 4,
     )
