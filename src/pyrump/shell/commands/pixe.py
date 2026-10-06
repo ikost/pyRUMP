@@ -24,6 +24,7 @@ import numpy as np
 from ...model.spectrum import Spectrum
 from ...pixe.data import PixeData
 from ...pixe.detector import COMPOUNDS, Absorber, disc_solid_angle_msr
+from ...pixe.yields import Exposure
 from ..dispatch import ArgReader, CommandError, CommandTable
 from ..session import Buffer
 from .. import pixe_plotting
@@ -140,6 +141,19 @@ def cmd_show(session, args: ArgReader) -> None:
         f"  ! with THETA {theta:g}: beam {abs(theta):g} deg, X-rays "
         f"{state.detector.exit_angle(theta):g} deg to the sample normal"
     )
+    # The dose is the RBS buffer's, CORRECTION included: tuning CORR for
+    # RBS rescales the PIXE simulation too.
+    m = reference.measurement
+    dose = f"  ! dose, shared with RBS: CHARGE {m.charge_uC:g} uC / CORRECTION {m.correction:g}"
+    if m.correction and m.charge_state:
+        exposure = Exposure(
+            charge_uC=m.charge_uC, charge_state=m.charge_state, correction=m.correction
+        )
+        dose += (
+            f" = {m.charge_uC / m.correction:.6g} uC,"
+            f" {exposure.ions:.4g} ions (charge state {m.charge_state})"
+        )
+    print(dose)
     buffer = session.buffers.active_buffer
     if buffer is not None and buffer.pixe is not None:
         print(f"  ! buffer {session.buffers.active}:")

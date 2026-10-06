@@ -556,3 +556,11 @@ def test_pixe_export_needs_pixe_data(session, tmp_path):
     stack = run(session, "pixe")
     with pytest.raises(CommandError, match="no PIXE spectrum"):
         run(session, f"export {tmp_path / 'x'}", stack=stack)
+
+
+def test_show_reports_the_dose_shared_with_rbs(empty_session, capsys):
+    """CORRECTION divides the dose for PIXE as for RBS -- SHOW says so."""
+    run(empty_session, "charge 10", "correction 0.8", "pixe show")
+    output = capsys.readouterr().out
+    assert "dose, shared with RBS: CHARGE 10 uC / CORRECTION 0.8 = 12.5 uC" in output
+    assert "7.802e+13 ions" in output  # 12.5 uC / 1.602e-13 uC, charge state 1

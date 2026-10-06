@@ -126,6 +126,17 @@ A buffer may hold an RBS spectrum, a PIXE spectrum, or both.
   file too. A buffer with no RBS part takes these from the defaults —
   `MEV`, `BEAM`, `THETA`, `CHARGE` as set in `~/.pyrumprc`, or pyRUMP's own
   hard-coded defaults.
+* **`CORRECTION` applies to PIXE too.** It divides the dose for both
+  spectra: N_ion = `CHARGE` / (e × charge state × `CORRECTION`). Changing
+  CORR rescales the PIXE simulation as well as the RBS one. That includes a
+  CORR typed by hand, CORR varied in a PERT fit, and the CORR a PERT
+  normalisation window writes back. This is right when CORR corrects the
+  charge (integrator error, secondary electrons, beam on the frame): the
+  same ions reach both detectors. It is wrong when CORR stands in for
+  something only RBS has, such as RBS dead time (pyRUMP's RBS simulation
+  has no live-time factor of its own), an `OMEGA` error, or a cross-section
+  or stopping-power error. PIXE would then be scaled by it as well. Keep
+  CORR for the dose. PIXE `SHOW` prints the dose in force.
 * The PIXE spectrum keeps its own **live and real time**. The dead-time
   factor LT/RT is applied to the PIXE yield.
 * **`PAIR ON|OFF`** (off by default): with `PAIR ON`, reading `x.RBS` with
@@ -222,7 +233,12 @@ disable
 
 One-shot `PIXE <command>` lines work in `~/.pyrumprc` too, and never turn
 PIXE on. `SHOW` prints the current setup as commands in this form, ready to
-paste into `~/.pyrumprc`, followed by the beam and X-ray angles in force.
+paste into `~/.pyrumprc`, followed by the beam and X-ray angles in force,
+and the dose, shared with RBS:
+
+```
+  ! dose, shared with RBS: CHARGE 10 uC / CORRECTION 0.8 = 12.5 uC, 7.802e+13 ions (charge state 1)
+```
 
 **Geometry.** `ANGLE` is the detector axis's angle to the normal of the
 *untilted* sample. Tilting the sample (the RBS geometry's `THETA`) changes
@@ -402,7 +418,10 @@ summing over sublayers costs nothing and stays right when a cap layer
 absorbs. H is the instrumental constant for the line's shell (K, L or M).
 It absorbs the solid angle, charge calibration and database errors, and is
 best determined from standards — including films whose amounts RBS has
-already measured.
+already measured. Fit the standard's `CORRECTION` on its RBS spectrum
+**first**, then set H from its PIXE spectrum. That way the standard's
+charge error stays in its CORR rather than in H. H then describes the PIXE
+detector alone, and each sample's CORR carries only its own dose.
 
 **The substrate** — the last SIM layer — is part of this sum like any
 other layer, with the thickness SIM gives it, as far as the beam gets: where the beam has slowed below the cross-section tables (0.1 MeV
