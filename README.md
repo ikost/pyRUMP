@@ -24,7 +24,9 @@ new physics has been added (Andersen screening alongside RUMP's own
 L'Ecuyer correction, via [`SCREENING`](https://ikost.github.io/pyRUMP/manual/config/#screening-new)),
 and the workflow is gaining commands RUMP never had, like automatic
 per-fit [`REPORT`](https://ikost.github.io/pyRUMP/manual/pert/#report-new)
-generation. SIMNRA's `.xnra` files can be read and written, spectrum, instrument
+generation, and [`SNAPSHOT`](https://ikost.github.io/pyRUMP/manual/shell/#snapshot-snap-new),
+which saves a session — fitted or tuned by hand — as a macro that brings it
+back. SIMNRA's `.xnra` files can be read and written, spectrum, instrument
 settings and sample together, with
 [`GETNRA`/`WRITENRA`](https://ikost.github.io/pyRUMP/manual/buffers/#getnra-writenra-new);
 NDF support is planned.

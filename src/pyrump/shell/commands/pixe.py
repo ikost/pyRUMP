@@ -27,7 +27,7 @@ from ...pixe.detector import COMPOUNDS, Absorber, disc_solid_angle_msr
 from ..dispatch import ArgReader, CommandError, CommandTable
 from ..session import Buffer
 from .. import pixe_plotting
-from .rump import FIGSAVE_DPI, EnterMode, Return, _input_path, describe_topic
+from .rump import FIGSAVE_DPI, EnterMode, Return, describe_topic
 
 #: Extensions a bare ``GET name`` tries, in order.
 PIXE_SUFFIXES = (".PIX", ".pix")
@@ -159,7 +159,7 @@ def cmd_get(session, args: ArgReader) -> None:
     With no data buffer active, the spectrum gets a buffer of its own, whose
     beam, geometry and charge are the defaults (``MEV``, ``BEAM``, ``CHARGE``
     ... as ``~/.pyrumprc`` sets them)."""
-    path = _pixe_path(Path(args.token("a PIXE spectrum file")))
+    path = _pixe_path(Path(args.token("a PIXE spectrum file")), session)
     args.done()
     index = session.buffers.active
     buffer = session.buffers.get(index) if index else None
@@ -211,14 +211,13 @@ def _companion(rbs_path: Path) -> Path | None:
     return None
 
 
-def _pixe_path(path: Path) -> Path:
-    """The PIXE file, trying ``.PIX`` and ``.pix`` for a bare name."""
-    path = path.expanduser()
-    if not path.exists() and not path.suffix:
-        for suffix in PIXE_SUFFIXES:
-            if path.with_suffix(suffix).exists():
-                return path.with_suffix(suffix).resolve()
-    return _input_path(path, PIXE_SUFFIXES[0])
+def _pixe_path(path: Path, session) -> Path:
+    """The PIXE file, trying ``.PIX`` and ``.pix`` for a bare name (and,
+    inside a macro, the macro's own folder first)."""
+    found = session.locate(path, PIXE_SUFFIXES)
+    if found is None:
+        raise CommandError(f"no such file: {path}")
+    return found.resolve()
 
 
 def _pixe_only_buffer(session, path: Path) -> Buffer:

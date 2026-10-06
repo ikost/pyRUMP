@@ -20,6 +20,11 @@ Your wish? display
 Your wish? quit
 ```
 
+Given a command file, `pyrump` runs it first and then leaves you at the
+prompt, with whatever it set up -- `pyrump MA8410_fit.xeq` is how a
+[`SNAPSHOT`](#snapshot-snap-new) is picked up again. `--batch` exits at the
+end of the file instead, and `--norc` skips `~/.pyrumprc`.
+
 Command names and their **minimum abbreviations** as well as some useful synonyms for backward compatibility with original RUMP follow the original
 (`REGion`, `OVerlay`), so `reg 100 400` and `region 100 400` are the same
 command. `help` or `?` lists everything, with the required characters upper-cased. One
@@ -120,8 +125,11 @@ XEQ <file>
 
 Runs a file of commands through the same interpreter the prompt uses, so an
 analysis can be checked in as a text file and replayed. A bare name with no
-extension is tried as-is, then as `.cmd`, then as `.rbs`/`.RBS` -- the last
-two `[new]` because some RBS acquisition software writes its output as a
+extension is tried as-is, then with RUMP's own macro extensions in RUMP's
+order -- `.mac`, `.xeq`, `.cmd` -- then as `.rbs`/`.RBS`. Prefer `.xeq` for
+your own macros: Windows treats `.cmd` as a batch file, runs it in a console
+on a double-click, and mail filters often block it. The `.rbs`/`.RBS` tries
+are `[new]`, because some RBS acquisition software writes its output as a
 plain `EMPTY`/`SWALLOW` command macro under that extension (see
 [File formats](file-formats.md)), despite the name suggesting real spectrum
 data. `XEQ`ing an actual binary `.rbs` file (that belongs with `GET`) fails
@@ -131,6 +139,11 @@ with a clear message rather than a decode error.
 Your wish? get measured.rbs     /* binary format -- reads records directly */
 Your wish? xeq acquired.rbs     /* text macro -- replayed as commands      */
 ```
+
+`[new]` Inside a command file, a relative path is looked for in that file's
+own folder first, then in the working directory. So a macro and the files it
+reads can sit together and move together, and the macro still finds them
+wherever pyRUMP was started.
 
 #### `ECHO` / `QUIET`
 
@@ -152,6 +165,58 @@ Logs what you type into a file, for later replay with `XEQ`; `SCRIPT OFF`
 (or `LOGFILE OFF`/`RECORD OFF`) stops. Needs at least four characters, which
 is how the original kept it clear of `LOG` — the logarithmic yield axis.
 Typing `log` gets you the axis, `logf` the session log.
+
+#### `SNAPSHOT` / `SNAP` `[new]`
+
+```
+SNAPSHOT [name]
+```
+
+Saves the session as it stands, to pick up later. It doesn't matter how the
+session got there: a `GO`, a thickness nudged in `SIM`, a `CORRECTION` typed
+at the prompt. It writes these files, named after the sample (the first word
+of the data's `IDENTIFIER`, or its file name), into the working directory:
+
+* `<sample>_fit.xeq` — the **restore macro**. It reloads the spectrum from the
+  file it was read from, then sets every one of its parameters, the
+  `FAITHFUL`/`SCREENING`/`MODE` settings, the sample, the PERT setup and the
+  plot. `IDENTIFIER` and `DATE` are set too, so a corrected typo stays
+  corrected. With `PAIR ON` (or a PIXE spectrum loaded) it also restores the PIXE
+  detector settings and the `.PIX` spectrum. It ends on `COMPARE`.
+* `<sample>.lcm`, `<sample>.pert` — the sample and the PERT selection, which
+  the restore macro reads back
+* `<sample>.png` — the `COMPARE` plot (and `<sample>_pixe.png` when PIXE is on)
+* `<sample>.report` — one block appended per snapshot, so the file keeps a
+  history. If nothing has changed since the last `GO`, the block is the fit,
+  with its uncertainties. Otherwise it is marked *set by hand*, and gives the
+  current values and chi-square with no uncertainties, because only a fit
+  has them. The full sample and the data's parameters follow either way.
+
+To pick it up again, from any folder:
+
+```
+$ pyrump MA8410_fit.xeq           # or, inside pyRUMP:  XEQ MA8410_fit
+```
+
+`XEQ MA8410` still reads the raw `MA8410.RBS`: the restore macro's `_fit`
+name keeps the two apart. It's an `.xeq` file, RUMP's own macro extension,
+rather than `.cmd`, which Windows would run as a batch file. The restore macro's paths are relative to its own
+folder, so the folder can be moved, along with the data, as a whole. If
+`BACKGROUND`, `SMOOTH` or the like have changed the counts since they were
+read, reloading the original file would undo that. In that case the spectrum
+is saved as it is now, as `<sample>_fit.rbs`, and the macro reads that file
+instead.
+
+A snapshot needs the measured spectrum, read from a file, and a SIM sample.
+Without them it says what's missing and writes nothing. `name` replaces the
+sample's name and may include a folder (`SNAP results/MA8410`). `SNAP`
+works at the SIM, PERT and PIXE prompts too, without leaving them.
+[`REPORT ON`](pert.md#report-new) takes a snapshot after every `GO`.
+
+`QUIT` warns when the session has changed since its last snapshot, or has
+never had one. A corrected `IDENTIFIER` counts as a change, but a snapshot
+taken after it still records an unchanged fit as the fit. Every restore macro ends with `SNAPSHOT -restored`, which
+writes nothing and only marks the restored session as saved.
 
 Standing per-user defaults (the `FAITHFUL` toggle, default experiment
 settings, plot state) are set once via `~/.pyrumprc` rather than every

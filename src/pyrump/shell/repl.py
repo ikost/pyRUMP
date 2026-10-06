@@ -141,25 +141,25 @@ def _execute_line(session: Session, line: str, stack: list[str]) -> None:
 
 
 #: Extensions tried, in order, for a bare (extension-less) XEQ/CALL/EXECUTE
-#: argument. ``.cmd`` is pyRUMP's own convention; ``.rbs``/``.RBS`` are
-#: included because real RBS acquisition software often writes its output as
-#: a plain ``EMPTY``/``SWALLOW`` command macro under that extension (see the
-#: README's Buffers section) -- meant to be replayed with XEQ, not read with
-#: GET, despite the misleading name.
-MACRO_EXTENSIONS = (".cmd", ".rbs", ".RBS")
+#: argument: RUMP's own list (lexp.c:168, ``LexMacroExtList``) -- ``.xeq``
+#: is what SNAPSHOT writes, being no file type Windows would run, as it does
+#: ``.cmd`` -- then ``.rbs``/``.RBS``, because real RBS acquisition software
+#: often writes its output as a plain ``EMPTY``/``SWALLOW`` command macro
+#: under that extension (see the README's Buffers section) -- meant to be
+#: replayed with XEQ, not read with GET, despite the misleading name.
+MACRO_EXTENSIONS = (".mac", ".MAC", ".xeq", ".XEQ", ".cmd", ".CMD", ".rbs", ".RBS")
 
 
-def execute_file(session: Session, path: Path, stack: list[str] | None = None) -> None:
-    """Run a macro file. Aborts at the first failing line, naming it."""
-    path = Path(path)
-    if not path.exists() and not path.suffix:
-        for ext in MACRO_EXTENSIONS:
-            candidate = path.with_suffix(ext)
-            if candidate.exists():
-                path = candidate
-                break
-    if not path.exists():
+def execute_file(session: Session, path: Path, stack: list[str] | None = None) -> Path:
+    """Run a macro file. Aborts at the first failing line, naming it.
+
+    Returns the file actually run (a bare name gains an extension, and one
+    named inside another macro may be found in that macro's folder).
+    """
+    found = session.locate(Path(path), MACRO_EXTENSIONS)
+    if found is None:
         raise CommandError(f"no such command file: {path}")
+    path = found
 
     depth = session.xeq_depth
     if depth >= MAX_XEQ_DEPTH:
@@ -176,7 +176,7 @@ def execute_file(session: Session, path: Path, stack: list[str] | None = None) -
             "binary spectrum data belongs with GET, not XEQ"
         ) from None
 
-    frame = XeqFrame(lines=text.splitlines())
+    frame = XeqFrame(lines=text.splitlines(), directory=path.resolve().parent)
     session.xeq_depth = depth + 1
     session.xeq_stack.append(frame)
     try:
@@ -191,6 +191,7 @@ def execute_file(session: Session, path: Path, stack: list[str] | None = None) -
     finally:
         session.xeq_depth = depth
         session.xeq_stack.pop()
+    return path
 
 
 def _setup_readline(session, stack: list[str]) -> None:

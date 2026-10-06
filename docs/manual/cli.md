@@ -2,7 +2,22 @@
 
 ```
 pyrump [--data DIR] {shell,simulate,fit,convert,plot} ...
+pyrump [--data DIR] [shell] [macro] [--norc] [--batch] [--faithful on|off]
 ```
+
+### `pyrump shell`
+
+The interactive shell, and what a bare `pyrump` starts. `shell` may be left
+out, so `pyrump MA8410_fit.xeq` runs that command file and then leaves you
+at the prompt. That is how a [`SNAPSHOT`](shell.md#snapshot-snap-new) is
+picked up again.
+
+| Option | Meaning |
+|---|---|
+| `macro` | Command file to run at startup, after `~/.pyrumprc` (a bare name tries `.mac`, `.xeq`, `.cmd`, then `.rbs`, as `XEQ` does) |
+| `--norc` | Skip `~/.pyrumprc` |
+| `--batch` | Exit after the macro instead of dropping to the prompt |
+| `--faithful` | `on`/`off`: override `FAITHFUL` for this run |
 
 ### `pyrump simulate`
 

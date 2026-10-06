@@ -315,14 +315,37 @@ def cmd_xeq(session, args: ArgReader) -> None:
     path = resolve(args.token("a command file"))
     args.done()
     before = session.buffers.active_buffer
-    execute_file(session, path)
+    path = execute_file(session, path)
     # An acquisition macro (RC43's EMPTY/SWALLOW .RBS) that read a new
-    # spectrum: with PAIR ON, its .PIX comes along.
+    # spectrum: remember it as the spectrum's source, for SNAPSHOT, and with
+    # PAIR ON, its .PIX comes along. A buffer that already knows its source
+    # was read inside the macro -- by GET, or by an XEQ nested in it, which
+    # has done both already.
     after = session.buffers.active_buffer
-    if after is not None and after is not before:
+    if (
+        after is not None and after is not before
+        and after.path is None and after.macro is None
+    ):
         from .pixe import pair
 
+        after.macro = path.resolve()
+        after.mark_loaded()
         pair(session, after, path)
+
+
+def cmd_snapshot(session, args: ArgReader) -> None:
+    """``SNAPSHOT [name]`` (``SNAP``) -- save the session as it stands, to
+    pick it up later with ``pyrump <name>_fit.xeq`` or ``XEQ <name>_fit``.
+
+    Writes ``<name>_fit.xeq`` (the restore macro), ``<name>.lcm``,
+    ``<name>.pert``, ``<name>.png`` and appends to ``<name>.report``. The
+    name defaults to the sample's, and may carry a folder. Here rather than
+    at RUMP's level so it can be typed at the SIM, PERT or PIXE prompt
+    without leaving it (see :mod:`pyrump.shell.snapshot`).
+    """
+    from ..snapshot import cmd_snapshot as snapshot
+
+    snapshot(session, args)
 
 
 def cmd_echo(session, args: ArgReader) -> None:
@@ -421,6 +444,8 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("XEQ", 2, cmd_xeq, "read RC43 .RBS file or execute a command file"),
     ("CALL", -4, cmd_xeq, "execute a command file"),
     ("EXECUTE", -3, cmd_xeq, "execute a command file"),
+    ("SNAPSHOT", 4, cmd_snapshot,
+     "save the session to pick up later: <sample>_fit.xeq, .lcm, .pert, .png, .report"),
     ("ECHO", 4, cmd_echo, "echo commands as they run"),
     ("QUIET", -5, cmd_quiet, "stop echoing commands"),
     ("SCRIPT", 6, cmd_script, "record commands to a file for replay"),

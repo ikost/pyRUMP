@@ -26,7 +26,6 @@ from __future__ import annotations
 import time
 import warnings
 from dataclasses import dataclass, field, replace
-from datetime import datetime
 from pathlib import Path
 
 import numpy as np
@@ -42,9 +41,8 @@ from ...fit.parameters import (
 from ...fit.windows import MAX_ERROR_WINDOWS, Window, WindowSet
 from ...script.lcm import thickness_label, thickness_mode_views
 from ..dispatch import ArgReader, CommandError, CommandTable
-from .. import plotting
+from .. import plotting, snapshot
 from .rump import (
-    FIGSAVE_DPI,
     Return,
     cmd_compare,
     cmd_export,
@@ -575,17 +573,18 @@ def cmd_get(session, args: ArgReader) -> None:
     """
     from ..repl import execute_file
 
-    path = Path(args.token("a .pert file"))
+    typed = Path(args.token("a .pert file"))
     run_go = False
     token = args.peek()
     if token is not None and token.lower() == "go":
         args.token()
         run_go = True
     args.done()
-    if not path.suffix:
-        path = path.with_suffix(".pert")
-    if not path.exists():
-        raise CommandError(f"no such file: {path}")
+    if not typed.suffix:
+        typed = typed.with_suffix(".pert")
+    path = session.locate(typed)
+    if path is None:
+        raise CommandError(f"no such file: {typed}")
     # autocmp/report are standing preferences (typically set once from
     # .pyrumprc), not part of the file-specific selection GET replaces --
     # carry them over so a fresh GET doesn't silently turn them back off.
@@ -658,11 +657,11 @@ def cmd_autocmp(session, args: ArgReader) -> None:
 
 
 def cmd_report(session, args: ArgReader) -> None:
-    """``REPORT [off]`` -- after every ``GO``, save a full record of the fit
+    """``REPORT [off]`` -- after every ``GO``, take a ``SNAPSHOT`` of the fit
     under the sample's own name (default off).
 
     A pyRUMP-only addition, not part of legacy RUMP. Once on, no further
-    action is needed per sample: each ``GO`` writes four files named after
+    action is needed per sample: each ``GO`` writes the files named after
     ``<sample>``, the active data buffer's own file stem (e.g. data loaded
     from ``MA8410.RBS`` writes files starting ``MA8410``) -- so switching
     samples with ``XEQ``/``GET`` naturally routes later fits to different
@@ -675,10 +674,13 @@ def cmd_report(session, args: ArgReader) -> None:
     - ``<sample>.lcm`` -- the sample description, as ``SIM SAVE`` would write
     - ``<sample>.png`` -- the ``COMPARE`` plot, as ``FIGSAVE``/``HCOPY``
       would write (drawn fresh for this, even if ``AUTOCMP`` is off)
+    - ``<sample>_fit.xeq`` -- the restore macro: ``pyrump <sample>_fit.xeq``
+      is this session again (see :mod:`pyrump.shell.snapshot`)
 
     ``GO`` echoes each one back ("updated .../wrote ...") at the end of its
-    own output, so none of the writes are silent. A standing preference
-    like ``AUTOCMP``: survives ``GET``/``CLEAR``, not saved by ``SAVE``.
+    own output, so none of the writes are silent. Tuning by hand after the
+    fit is saved by a ``SNAPSHOT`` of its own. A standing preference like
+    ``AUTOCMP``: survives ``GET``/``CLEAR``, not saved by ``SAVE``.
     """
     token = args.optional()
     args.done()
@@ -775,27 +777,13 @@ def _write_back(session, entry: Vary, inputs: FitInputs, before: float) -> None:
 def _report_stem(buffer) -> str:
     """A short, filesystem-safe name for this buffer's spectrum, shared by
     every file ``REPORT`` writes and by the plot legend -- see
-    :func:`~pyrump.shell.plotting.buffer_stem`."""
-    return plotting.buffer_stem(buffer) or "buffer"
+    :func:`~pyrump.shell.snapshot.stem`."""
+    return snapshot.stem(buffer)
 
 
 def _report_path(buffer) -> Path:
     """``<sample>.report``, where ``<sample>`` is :func:`_report_stem`."""
     return Path(f"{_report_stem(buffer)}.report")
-
-
-def _append_report(buffer, lines: list[str]) -> Path:
-    """Append one GO's report block to :func:`_report_path`, timestamped.
-
-    Returns the path written, so the caller can echo it back to the user --
-    a silent file write is easy to forget is even happening.
-    """
-    path = _report_path(buffer)
-    timestamp = datetime.now().isoformat(timespec="seconds")
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write(f"--- {timestamp} ---\n")
-        handle.write("\n".join(lines) + "\n\n")
-    return path
 
 
 def _units_per_areal(session, inputs: FitInputs, layer: int) -> float | None:
@@ -851,7 +839,7 @@ def _display(session, entry: Vary, per_areal: float | None):
 def cmd_go(session, args: ArgReader) -> None:
     args.done()
     from ...fit.lm import fit
-    from ...script.lcm import structure_label, to_sample, write_lcm
+    from ...script.lcm import structure_label, to_sample
     from ...sim.engine import simulate
 
     state = state_for(session)
@@ -1012,28 +1000,15 @@ def cmd_go(session, args: ArgReader) -> None:
     for line in report_lines[len(header_lines):]:
         print(line)
 
-    # REPORT's own .png needs a freshly drawn COMPARE -- draw it once,
-    # whether AUTOCMP asked for it, REPORT needs it, or both.
-    if state.autocmp or state.report:
-        cmd_compare(session, ArgReader([], command="compare"))
+    # What this fit left behind, so a SNAPSHOT of exactly this state records
+    # it as fitted, uncertainties and all.
+    session.last_fit = (snapshot.fingerprint(session, labels=False), report_lines)
 
+    # REPORT's snapshot draws its own COMPARE, for its .png.
     if state.report:
-        stem = _report_stem(data_buffer)
-        report_path = _append_report(data_buffer, report_lines)
-        print(f"\n  updated {report_path}")
-
-        pert_path = Path(f"{stem}.pert")
-        pert_lines = _to_lines(state)
-        pert_path.write_text("\n".join(pert_lines) + ("\n" if pert_lines else ""))
-        print(f"  wrote {pert_path}")
-
-        lcm_path = Path(f"{stem}.lcm")
-        lcm_path.write_text(write_lcm(session.script))
-        print(f"  wrote {lcm_path}")
-
-        png_path = Path(f"{stem}.png")
-        session.figure.savefig(png_path, dpi=FIGSAVE_DPI)
-        print(f"  wrote {png_path}")
+        snapshot.take(session, after_go=True)
+    elif state.autocmp:
+        cmd_compare(session, ArgReader([], command="compare"))
 
 
 TABLE = CommandTable("PERT Commands")
@@ -1058,7 +1033,7 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("VOLUME", 3, cmd_volume, "verbose progress messages"),
     ("AUTOCMP", 4, cmd_autocmp, "run COMPARE automatically at the end of GO"),
     ("REPORT", 3, cmd_report,
-     "append every GO's result to <sample>.report (REPORT OFF to stop)"),
+     "SNAPSHOT after every GO: <sample>.report, _fit.xeq ... (REPORT OFF to stop)"),
     # Registered here too, not only at the RUMP level, so switching doesn't
     # fall through and leave PERT (repl.py's execute_line).
     ("MODE", 4, cmd_mode,

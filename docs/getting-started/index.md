@@ -198,6 +198,35 @@ See [PERT](../manual/pert.md) in the manual for the full `PERT`
 command set — bounded fits, `WINDOW`/`NORMALIZE`, `REPORT`, and the
 composition-degeneracy caveat worth reading before your first real fit.
 
+### Picking up later
+
+`SNAP` saves the session as it stands. That can be straight after the fit,
+or after you've nudged a thickness or the `CORRECTION` by hand. The files
+are named after the sample, which here is `MA8408`, the first word of the
+spectrum's `IDENTIFIER`:
+
+```
+Your wish? snap
+  updated MA8408.report
+  wrote MA8408.pert
+  wrote MA8408.lcm
+  wrote MA8408.png
+  wrote MA8408_fit.xeq
+```
+
+`MA8408_fit.xeq` is a restore macro. Run it, from any folder, and you're
+back where you were: the spectrum reloaded with every parameter the fit
+changed, the sample, the PERT setup and the plot:
+
+```bash
+pyrump MA8408_fit.xeq
+```
+
+`MA8408.report` keeps a block per snapshot, with the fit's uncertainties
+when nothing has changed since `GO`. `REPORT ON` in PERT takes a snapshot
+after every `GO` by itself. See
+[`SNAPSHOT`](../manual/shell.md#snapshot-snap-new) in the manual.
+
 ### Command line
 
 You can drive pyRUMP as one-off batch commands, without the interactive shell:

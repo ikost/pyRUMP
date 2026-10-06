@@ -285,12 +285,11 @@ def cmd_status(session, args: ArgReader) -> None:
 
 def cmd_get(session, args: ArgReader) -> None:
     """Read a sample description from a ``.lcm`` file."""
-    path = Path(args.token("a .lcm file"))
+    token = args.token("a .lcm file")
     args.done()
-    if not path.exists() and not path.suffix:
-        path = path.with_suffix(".lcm")
-    if not path.exists():
-        raise CommandError(f"no such file: {path}")
+    path = session.locate(Path(token), (".lcm",))
+    if path is None:
+        raise CommandError(f"no such file: {token}")
     try:
         session.script = read_lcm(path)
     except (ValueError, OSError) as error:

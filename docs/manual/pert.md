@@ -128,14 +128,21 @@ PERT Command: autocmp
 usage: REPORT [off]
 ```
 
-After every `GO`, saves a record of the fit, named after the sample: the
-first word of the data buffer's `IDENTIFIER`, or its file name. Off by
-default; `GET` and `CLEAR` keep the setting.
+After every `GO`, takes a [`SNAPSHOT`](shell.md#snapshot-snap-new) of the
+fit, named after the sample: the first word of the data buffer's
+`IDENTIFIER`, or its file name. Off by default; `GET` and `CLEAR` keep the
+setting.
 
 * `<sample>.report` — the fit result, appended, so refits keep a history
 * `<sample>.pert` — the PERT setup, as `SAVE` writes it
 * `<sample>.lcm` — the fitted sample, as `SIM SAVE` writes it
 * `<sample>.png` — the `COMPARE` plot
+* `<sample>_fit.xeq` — the restore macro: `pyrump <sample>_fit.xeq` is this
+  session again, with the fitted spectrum parameters too (`CORRECTION`,
+  calibration …)
+
+Tuning by hand after the fit isn't covered: type `SNAP` again to save it. Its
+report block is marked *set by hand*.
 
 ```
 PERT Command: report

@@ -65,7 +65,7 @@ def read_into_buffer(session, path: Path) -> int:
     from ...io.rbs import RbsSpectrum
 
     # RUMP defaults the extension to .RBS.
-    path = _input_path(path, ".rbs")
+    path = _input_path(path, ".rbs", session)
 
     existing = session.buffers.find_path(path)
     if existing is not None:
@@ -118,20 +118,27 @@ def read_into_buffer(session, path: Path) -> int:
     return slot
 
 
-def _input_path(path: Path, default_suffix: str) -> Path:
+def _input_path(path: Path, default_suffix: str, session=None) -> Path:
     """An existing input file, trying ``default_suffix`` when none is given.
+
+    With the ``session``, a relative path inside a macro is looked for in the
+    macro's own folder too (:meth:`~pyrump.shell.session.Session.locate`).
 
     Resolved once, here: buffers must hold absolute paths so that a CD between
     two GETs of the same file does not load it into a second buffer.
     """
     path = Path(path).expanduser()
-    if not path.exists() and not path.suffix:
-        candidate = path.with_suffix(default_suffix)
-        if candidate.exists():
-            path = candidate
-    if not path.exists():
+    if session is not None:
+        found = session.locate(path, (default_suffix,))
+    elif path.exists():
+        found = path
+    elif not path.suffix and path.with_suffix(default_suffix).exists():
+        found = path.with_suffix(default_suffix)
+    else:
+        found = None
+    if found is None:
         raise CommandError(f"no such file: {path}")
-    return path.resolve()
+    return found.resolve()
 
 
 def _read_xnra(path: Path):
@@ -260,9 +267,18 @@ def describe_topic(session, topic: str, tables) -> str:
 
 def cmd_quit(session, args: ArgReader) -> None:
     # A macro (XEQ) has no one at the keyboard to answer, so only the
-    # interactive prompt asks for confirmation.
+    # interactive prompt asks for confirmation -- and says so when the
+    # session holds something no SNAPSHOT has saved.
     if _interactive(session):
-        answer = input("Really quit pyRUMP? [y/N] ").strip().lower()
+        from ..snapshot import unsaved
+
+        if not unsaved(session):
+            question = "Really quit pyRUMP? [y/N] "
+        elif session.saved_state is None:
+            question = "This session has no SNAPSHOT -- quit anyway? [y/N] "
+        else:
+            question = "Changes since the last SNAPSHOT are not saved -- quit anyway? [y/N] "
+        answer = input(question).strip().lower()
         if answer not in ("y", "yes"):
             return
     raise Quit()
@@ -445,7 +461,7 @@ def cmd_getnra(session, args: ArgReader) -> None:
         else:
             raise CommandError(f"getnra: unrecognized option {option!r} (-data, -simulation)")
 
-    path = _input_path(Path(token), ".xnra")
+    path = _input_path(Path(token), ".xnra", session)
     xnra = _read_xnra(path)
     _print_notices(xnra.notices)
     if xnra.spectrum is None and not with_simulation:

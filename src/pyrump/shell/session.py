@@ -23,6 +23,7 @@ Two deliberate divergences from the original:
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
@@ -68,10 +69,27 @@ class Buffer:
     #: The PIXE spectrum measured in the same run, if any (``PIXE GET``, or
     #: ``PAIR ON``). It shares this buffer's beam, geometry and charge.
     pixe: PixeData | None = None
+    #: The command file that built this buffer, for a spectrum that came as
+    #: an acquisition macro (an ``EMPTY``/``SWALLOW`` ``.RBS``) run by ``XEQ``
+    #: rather than a file read by ``GET`` -- which records :attr:`path`
+    #: instead. One or the other is how SNAPSHOT reloads the data.
+    macro: Path | None = None
+    #: :func:`counts_digest` of the counts as read, so SNAPSHOT can tell when
+    #: BACKGROUND, SMOOTH and the like have changed them since. ``None`` for
+    #: a buffer not read from a file.
+    loaded_digest: str | None = None
 
     @property
     def calibration(self) -> Calibration:
         return self.spectrum.calibration
+
+    def mark_loaded(self) -> None:
+        """Remember the counts as read from :attr:`path` or :attr:`macro`."""
+        self.loaded_digest = counts_digest(self.spectrum.counts)
+
+    def counts_changed(self) -> bool:
+        """Whether the counts differ from what was read (or none were read)."""
+        return self.loaded_digest != counts_digest(self.spectrum.counts)
 
     @property
     def n_channels(self) -> int:
@@ -80,7 +98,7 @@ class Buffer:
     @classmethod
     def from_rbs(cls, source, path: Path | None = None) -> "Buffer":
         """Build a buffer from :func:`pyrump.io.rbs.read_rbs`."""
-        return cls(
+        buffer = cls(
             spectrum=source.to_spectrum(),
             beam=Beam(
                 e0_MeV=source.e0_MeV,
@@ -97,6 +115,9 @@ class Buffer:
             livetime=source.livetime,
             comments=list(source.comments),
         )
+        if path is not None:
+            buffer.mark_loaded()
+        return buffer
 
     @classmethod
     def from_ascii(cls, source, path: Path | None = None) -> "Buffer":
@@ -109,12 +130,15 @@ class Buffer:
         calibration = getattr(source, "calibration", None) or Calibration(
             npt=counts.size
         )
-        return cls(
+        buffer = cls(
             spectrum=Spectrum(counts=counts, calibration=calibration),
             name=path.name if path else "",
             path=path,
             identifier=getattr(source, "identifier", ""),
         )
+        if path is not None:
+            buffer.mark_loaded()
+        return buffer
 
     def to_rbs(self):
         """Convert back for :func:`pyrump.io.rbs.write_rbs`."""
@@ -162,14 +186,17 @@ class Buffer:
         """Path for listings: relative to the working directory when under it.
 
         Buffers store absolute paths so that lookups survive a ``CD``; this
-        keeps the printed form short anyway.
+        keeps the printed form short anyway. A spectrum an acquisition macro
+        built (XEQ) shows that file, marked as such.
         """
-        if self.path is None:
+        path = self.path or self.macro
+        if path is None:
             return "(none)"
         try:
-            return str(self.path.relative_to(Path.cwd()))
+            text = str(path.relative_to(Path.cwd()))
         except ValueError:
-            return str(self.path)
+            text = str(path)
+        return text if self.path is not None else f"{text} (XEQ)"
 
     def describe(self) -> str:
         """The ``ACTIVE`` listing: everything RUMP shows for one buffer."""
@@ -193,6 +220,12 @@ class Buffer:
         if self.pixe is not None:
             lines.append(self.pixe.describe())
         return "\n".join(lines)
+
+
+def counts_digest(counts) -> str:
+    """A fingerprint of a spectrum's counts, exact to the last bit."""
+    data = np.ascontiguousarray(counts, dtype=np.float64)
+    return hashlib.sha1(data.tobytes()).hexdigest()
 
 
 @dataclass(slots=True)
@@ -305,7 +338,10 @@ class BufferSet:
             if buffer is None:
                 lines.append(f"{index:3d}   {mark}   (empty simulation)")
                 continue
-            label = buffer.display_path() if buffer.path else (buffer.identifier or "-")
+            label = (
+                buffer.display_path() if buffer.path or buffer.macro
+                else (buffer.identifier or "-")
+            )
             if buffer.pixe is not None:
                 label += "  + PIXE"
             lines.append(
@@ -328,6 +364,9 @@ class XeqFrame:
 
     lines: list[str]
     index: int = 0
+    #: The folder the file is in: a relative path inside it is looked up
+    #: there first (:meth:`Session.locate`).
+    directory: Path | None = None
 
 
 @dataclass(slots=True)
@@ -517,9 +556,40 @@ class Session:
     integration_interp: bool = False
     integration_qmode: int = 0
 
+    #: The state the last SNAPSHOT saved (or its restore macro reloaded), as
+    #: :func:`pyrump.shell.snapshot.fingerprint` -- QUIT warns when the
+    #: session has moved on from it.
+    saved_state: str | None = None
+    #: The last GO's result: the state it left, and its report lines. A
+    #: SNAPSHOT of that same state records the fit, uncertainties included.
+    last_fit: tuple[str, list[str]] | None = None
+
     def xeq_frame(self) -> XeqFrame | None:
         """The innermost running macro's line frame, or ``None`` outside XEQ."""
         return self.xeq_stack[-1] if self.xeq_stack else None
+
+    def locate(self, path: Path, suffixes: tuple[str, ...] = ()) -> Path | None:
+        """An existing file for ``path``, or ``None``.
+
+        A bare name (no extension) also tries each of ``suffixes``. Inside a
+        macro, a relative path is looked for in that macro's own folder
+        first, then in the working directory -- so a SNAPSHOT's restore
+        macro finds the files saved next to it wherever pyRUMP is started.
+        At the prompt, only the working directory.
+        """
+        path = Path(path).expanduser()
+        bases = [path]
+        frame = self.xeq_frame()
+        if frame is not None and frame.directory is not None and not path.is_absolute():
+            bases.insert(0, frame.directory / path)
+        for base in bases:
+            if base.exists():
+                return base
+            if not base.suffix:
+                for suffix in suffixes:
+                    if base.with_suffix(suffix).exists():
+                        return base.with_suffix(suffix)
+        return None
 
     @classmethod
     def create(cls, data: str | None = None) -> "Session":

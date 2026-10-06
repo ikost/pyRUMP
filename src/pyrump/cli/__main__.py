@@ -301,6 +301,42 @@ class _VersionAction(argparse.Action):
         parser.exit()
 
 
+_SUBCOMMANDS = ("shell", "simulate", "fit", "convert", "plot")
+
+
+def _implicit_shell(argv: list[str]) -> list[str]:
+    """``pyrump MA8410_fit.xeq`` (or ``pyrump --batch x.xeq``) means
+    ``pyrump shell ...``: the shell is the default, so its own arguments
+    work without naming it. Only pyRUMP's top-level options may come first.
+
+    A word is taken for a macro only if it names one that exists (a bare
+    name tries the extensions XEQ does), so a mistyped subcommand is still
+    reported as one."""
+    from pyrump.shell.repl import MACRO_EXTENSIONS
+
+    def is_macro(token: str) -> bool:
+        path = Path(token).expanduser()
+        return path.is_file() or (
+            not path.suffix and any(path.with_suffix(e).is_file() for e in MACRO_EXTENSIONS)
+        )
+
+    argv = list(argv)
+    index = 0
+    while index < len(argv):
+        token = argv[index]
+        if token == "--data":
+            index += 2
+        elif token.startswith("--data="):
+            index += 1
+        elif token in ("-h", "--help", "-v", "--version") or token in _SUBCOMMANDS:
+            break
+        else:
+            if token.startswith("-") or is_macro(token):
+                argv.insert(index, "shell")
+            break
+    return argv
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="pyrump",
@@ -345,7 +381,7 @@ def main(argv: list[str] | None = None) -> int:
     plot_parser.add_argument("-o", "--output", type=Path, help="save instead of showing")
     plot_parser.set_defaults(func=command_plot)
 
-    args = parser.parse_args(argv)
+    args = parser.parse_args(_implicit_shell(sys.argv[1:] if argv is None else argv))
     if args.command is None:
         # Bare "pyrump" is the interactive shell -- the way the original was used.
         _shell_defaults(args)
