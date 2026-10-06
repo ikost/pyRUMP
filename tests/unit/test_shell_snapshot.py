@@ -290,6 +290,130 @@ def test_correcting_the_identifier_is_unsaved_but_keeps_the_fit_a_fit(session, w
     assert "fit (GO)" in (work / "au.report").read_text().split("---")[-2]
 
 
+# -- a name another dataset already has -----------------------------------------
+
+
+def acquisition(folder: Path, name: str, identifier: str, pix: bool = True) -> Path:
+    """The MnPt example as ``<name>.RBS`` (and ``.PIX``), identified as given."""
+    folder.mkdir(parents=True, exist_ok=True)
+    lines = (EXAMPLES / "MnPt.RBS").read_text().splitlines()
+    lines = [f"Identifier '{identifier}" if l.startswith("Identifier") else l for l in lines]
+    (folder / f"{name}.RBS").write_text("\n".join(lines) + "\n")
+    if pix:
+        shutil.copy(EXAMPLES / "MnPt.PIX", folder / f"{name}.PIX")
+    return folder / f"{name}.RBS"
+
+
+def load(path: Path, *lines: str) -> Session:
+    loaded = Session.create(str(DATA))
+    run(loaded, "pixe pair on", f"xeq {path}", f"sim get {EXAMPLES / 'MnPt.lcm'}", *lines)
+    return loaded
+
+
+@needs_data
+def test_an_identifier_another_dataset_has_falls_back_to_the_file_name(
+    tmp_path, monkeypatch, capsys
+):
+    """A123 is the bad spot; the fresh spot A123b, renamed A123 by IDENTIFIER,
+    is snapshotted in the same folder."""
+    data = tmp_path / "data"
+    acquisition(data, "A123", "A123  bad spot")
+    good = acquisition(data, "A123b", "A123b  fresh spot")
+    monkeypatch.chdir(data)
+    session = load(good, "identifier 'A123  good spot'", "snap")
+    output = capsys.readouterr().out
+    assert "A123 is taken by another dataset (A123.RBS)" in output
+    assert "named after the data file instead: A123b" in output
+    assert (data / "A123b_fit.xeq").exists() and (data / "A123b.report").exists()
+    assert not (data / "A123_fit.xeq").exists() and not (data / "A123.report").exists()
+
+    elsewhere(tmp_path, monkeypatch)
+    again = restored(data / "A123b_fit.xeq")
+    assert snapshot.fingerprint(again) == snapshot.fingerprint(session)
+    assert again.buffers.active_buffer.identifier == "A123  good spot"
+    assert again.buffers.active_buffer.macro == good.resolve()
+
+
+@needs_data
+def test_a_namesake_next_to_the_data_counts_with_snapshots_elsewhere(tmp_path, work, capsys):
+    data = tmp_path / "data"
+    acquisition(data, "A123", "A123  bad spot")
+    good = acquisition(data, "A123b", "A123b  fresh spot")
+    load(good, "identifier 'A123'", "snap")
+    assert "named after the data file instead: A123b" in capsys.readouterr().out
+    assert (work / "A123b_fit.xeq").exists()
+
+
+@needs_data
+def test_an_earlier_snapshot_of_another_file_takes_the_name(tmp_path, work, capsys):
+    """The two spots in folders of their own: only the bad spot's snapshot
+    in the work folder holds the name A123."""
+    bad = acquisition(tmp_path / "bad", "A123", "A123  bad spot")
+    good = acquisition(tmp_path / "good", "A123b", "A123b  fresh spot")
+    load(bad, "snap")
+    assert (work / "A123_fit.xeq").exists()
+    before = (work / "A123_fit.xeq").read_text()
+    load(good, "identifier 'A123'", "snap")
+    output = capsys.readouterr().out
+    assert "A123_fit.xeq, the snapshot of A123.RBS" in output
+    assert (work / "A123b_fit.xeq").exists()
+    assert (work / "A123_fit.xeq").read_text() == before
+
+
+@needs_data
+def test_snapshotting_the_same_dataset_again_updates_it(tmp_path, work, capsys):
+    """Its own earlier snapshot is no clash -- after SMOOTH (saved as
+    _fit.rbs) and after restoring from that, too."""
+    good = acquisition(tmp_path / "data", "A123", "A123")
+    session = load(good, "snap", "correction 0.9", "snap", "smooth", "snap")
+    assert "taken" not in capsys.readouterr().out
+    assert (work / "A123_fit.rbs").exists()
+    again = restored(work / "A123_fit.xeq")
+    run(again, "correction 0.8", "snap")
+    assert "taken" not in capsys.readouterr().out
+    assert snapshot.fingerprint(restored(work / "A123_fit.xeq")) == snapshot.fingerprint(again)
+    assert snapshot.stem(session.buffers.active_buffer) == "A123"
+
+
+@needs_data
+def test_when_both_names_are_taken_it_asks_for_one(tmp_path, monkeypatch):
+    data = tmp_path / "data"
+    acquisition(data, "A123", "A123  bad spot")
+    good = acquisition(data, "A123b", "A123b")
+    acquisition(tmp_path / "other", "A123b", "A123b  elsewhere")
+    # an A123b snapshot here, of another A123b.RBS
+    (data / "A123b_fit.xeq").write_text('! source: "../other/A123b.RBS"\n')
+    monkeypatch.chdir(data)
+    with pytest.raises(CommandError, match="choose one: SNAPSHOT <name>"):
+        load(good, "identifier 'A123'", "snap")
+
+
+@needs_data
+def test_an_explicit_name_is_the_users_choice_but_not_over_another_snapshot(
+    tmp_path, work
+):
+    data = tmp_path / "data"
+    acquisition(data, "A123", "A123  bad spot")
+    good = acquisition(data, "A123b", "A123b")
+    load(good, "snap A123")  # a raw A123.RBS elsewhere: allowed, as asked
+    assert (work / "A123_fit.xeq").exists()
+    bad = acquisition(tmp_path / "bad", "B7", "B7")
+    with pytest.raises(CommandError, match="A123 is taken by another dataset"):
+        load(bad, "snap A123")
+
+
+@needs_data
+def test_a_users_own_lcm_of_that_name_is_kept(session, work, capsys):
+    (work / "au.lcm").write_text(SAMPLE)
+    (work / "au.pert").write_text("window 355 375\n")
+    run(session, "pert thick 1", "snap")
+    assert "kept your au.lcm as au.lcm.bak" in capsys.readouterr().out
+    assert (work / "au.lcm.bak").read_text() == SAMPLE
+    assert (work / "au.pert.bak").exists()
+    run(session, "snap")  # now its own snapshot's files: replaced, no more backups
+    assert not (work / "au.lcm.2.bak").exists()
+
+
 # -- what the report says -----------------------------------------------------
 
 

@@ -130,8 +130,10 @@ usage: REPORT [off]
 
 After every `GO`, takes a [`SNAPSHOT`](shell.md#snapshot-snap-new) of the
 fit, named after the sample: the first word of the data buffer's
-`IDENTIFIER`, or its file name. Off by default; `GET` and `CLEAR` keep the
-setting.
+`IDENTIFIER`, or its file name. If another dataset already has that name,
+the data file's own name is used instead, with a warning (see
+[`SNAPSHOT`](shell.md#snapshot-snap-new)). Off by default; `GET` and `CLEAR`
+keep the setting.
 
 * `<sample>.report` — the fit result, appended, so refits keep a history
 * `<sample>.pert` — the PERT setup, as `SAVE` writes it

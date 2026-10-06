@@ -20,6 +20,12 @@ under the sample's name:
 
 ``REPORT ON`` is ``GO`` followed by this.
 
+The sample's name is the IDENTIFIER's first word -- unless another dataset
+already has it (a measured-data file of that name, or a restore macro for
+another spectrum), when the data file's own name is used, with a warning:
+a fresh spot ``A123b.RBS`` identified as ``A123`` next to the bad spot's
+``A123.RBS`` snapshots as ``A123b`` (:func:`_choose_name`).
+
 The restore macro is plain commands, so it can be read and edited. Paths in
 it are relative to its own folder (:meth:`Session.locate`), so the folder can
 be moved, along with the data, as a whole.
@@ -362,10 +368,11 @@ def _context_lines(session, buffer: Buffer) -> list[str]:
 # ---------------------------------------------------------------------------
 
 
-def _target(session, name: str | None, buffer: Buffer) -> tuple[Path, str]:
-    """The folder to write in and the sample name, from ``SNAPSHOT [name]``."""
+def _target(session, name: str | None, buffer: Buffer) -> tuple[Path, str | None]:
+    """The folder to write in, and the name ``SNAPSHOT [name]`` gave (or
+    ``None``, for :func:`_choose_name` to pick)."""
     if name is None:
-        return Path("."), stem(buffer)
+        return Path("."), None
     path = Path(name).expanduser()
     for suffix in (RESTORE_EXTENSION, ".cmd", ".report", ".lcm", ".pert", ".png"):
         if path.name.lower().endswith(suffix):
@@ -376,6 +383,145 @@ def _target(session, name: str | None, buffer: Buffer) -> tuple[Path, str]:
     if not folder.is_dir():
         raise CommandError(f"SNAPSHOT: no such folder: {folder}")
     return folder, path.name
+
+
+#: Measured-data files: one named like the snapshot, other than this
+#: spectrum's own, means the name already belongs to another dataset.
+_DATA_SUFFIXES = (".rbs", ".pix", ".xnra")
+
+
+def _source(buffer: Buffer) -> Path | None:
+    """The file the spectrum was read from (GET) or built by (XEQ)."""
+    source = buffer.path or buffer.macro
+    return source.resolve() if source is not None else None
+
+
+def _file_stem(buffer: Buffer) -> str | None:
+    """The data file's own name -- a snapshot's ``_fit`` dropped -- the
+    fallback when the IDENTIFIER's name is taken."""
+    source = _source(buffer)
+    if source is None:
+        return None
+    name = source.stem
+    if name.endswith(RESTORE_SUFFIX) and len(name) > len(RESTORE_SUFFIX):
+        name = name[: -len(RESTORE_SUFFIX)]
+    return name
+
+
+def _is_own(entry: Path, buffer: Buffer) -> bool:
+    """``entry`` is this spectrum's own data: its file, or one of the same
+    name next to it (its ``.PIX``, loaded or not)."""
+    source = _source(buffer)
+    if (
+        source is not None and entry.parent == source.parent
+        and entry.stem.lower() == source.stem.lower()
+    ):
+        return True
+    pixe = buffer.pixe
+    return pixe is not None and pixe.path is not None and entry == pixe.path.resolve()
+
+
+def _restored_files(macro: Path) -> set[Path]:
+    """The data files a restore macro reloads: its ``! source:`` line and
+    its ``XEQ``/``GET`` line, resolved against its folder."""
+    from .dispatch import tokenize
+
+    files = set()
+    try:
+        lines = macro.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return files
+    for line in lines:
+        text = line.strip()
+        if text.lower().startswith("! source:"):
+            target = text.split(":", 1)[1].strip().strip("'\"")
+        else:
+            tokens = tokenize(text)
+            if len(tokens) != 2 or tokens[0].upper() not in ("XEQ", "GET"):
+                continue
+            target = tokens[1]
+        files.add((macro.parent / target).resolve())
+    return files
+
+
+def _clash(name: str, folder: Path, buffer: Buffer) -> tuple[str, str] | None:
+    """What makes ``name`` another dataset's, as ``(kind, what)``, or
+    ``None`` if it's free: ``"data"``, a measured-data file of that name
+    (next to the snapshot, or next to this spectrum's own file), or
+    ``"snapshot"``, a restore macro of that name for a different
+    spectrum."""
+    folders = [folder.resolve()]
+    source = _source(buffer)
+    if source is not None and source.parent not in folders:
+        folders.append(source.parent)
+    for where in folders:
+        try:
+            entries = sorted(where.iterdir())
+        except OSError:
+            continue
+        # The spectrum itself (.RBS, .xnra) is the clearer one to name.
+        namesakes = sorted(
+            (
+                entry for entry in entries
+                if entry.is_file() and entry.stem.lower() == name.lower()
+                and entry.suffix.lower() in _DATA_SUFFIXES
+                and not _is_own(entry.resolve(), buffer)
+            ),
+            key=lambda entry: entry.suffix.lower() == ".pix",
+        )
+        if namesakes:
+            return "data", namesakes[0].name
+    macro = folder / f"{name}{RESTORE_SUFFIX}{RESTORE_EXTENSION}"
+    if macro.is_file():
+        restores = _restored_files(macro)
+        ours = {p.resolve() for p in (buffer.path, buffer.macro) if p is not None}
+        if not restores & ours:
+            others = ", ".join(sorted(p.name for p in restores)) or "another spectrum"
+            return "snapshot", f"{macro.name}, the snapshot of {others}"
+    return None
+
+
+def _choose_name(folder: Path, given: str | None, buffer: Buffer) -> str:
+    """The snapshot's name: the one given, else the sample's (IDENTIFIER
+    first) -- unless another dataset already has that name, in which case
+    the data file's own name, with a warning. A name given explicitly is
+    the user's choice, data files of that name or not -- but it never
+    replaces another spectrum's restore macro."""
+    if given is not None:
+        clash = _clash(given, folder, buffer)
+        if clash is not None and clash[0] == "snapshot":
+            raise CommandError(f"SNAPSHOT: {given} is taken by another dataset ({clash[1]})")
+        return given
+    preferred = stem(buffer)
+    found = _clash(preferred, folder, buffer)
+    if found is None:
+        return preferred
+    clash = found[1]
+    fallback = _file_stem(buffer)
+    if (
+        fallback is not None and fallback.lower() != preferred.lower()
+        and _clash(fallback, folder, buffer) is None
+    ):
+        print(
+            f"  {preferred} is taken by another dataset ({clash})\n"
+            f"  -- named after the data file instead: {fallback}"
+        )
+        return fallback
+    raise CommandError(
+        f"SNAPSHOT: {preferred} is taken by another dataset ({clash}), and so is "
+        f"the data file's own name -- choose one: SNAPSHOT <name>"
+    )
+
+
+def _keep_own(path: Path) -> None:
+    """Move a file the user wrote out of a snapshot's way, as ``.bak``."""
+    backup = path.with_name(path.name + ".bak")
+    number = 1
+    while backup.exists():
+        number += 1
+        backup = path.with_name(f"{path.name}.{number}.bak")
+    path.rename(backup)
+    print(f"  kept your {path.name} as {backup.name}")
 
 
 def _restore_macro(
@@ -390,9 +536,9 @@ def _restore_macro(
     how = "as GO fitted it" if fitted else "set by hand"
     lines = [
         f"! pyRUMP SNAPSHOT of {base}, {timestamp} -- {how}",
-        f"! Restore with:  pyrump {restore}{RESTORE_EXTENSION}"
-        f"    (in pyRUMP:  XEQ {restore})",
+        f"! Restore with:  pyrump {restore}{RESTORE_EXTENSION}    (in pyRUMP:  XEQ {restore})",
         f"! The next SNAPSHOT of {base} here replaces this file.",
+        f"! source: {_quoted(_source(buffer), folder.resolve())}",
         "",
         "! Simulation settings",
         *_settings_lines(session),
@@ -494,7 +640,8 @@ def take(session, name: str | None = None, *, after_go: bool = False) -> None:
     if no_source is not None and not after_go:
         raise CommandError(f"SNAPSHOT not possible:\n  - {no_source}")
 
-    folder, base = _target(session, name, buffer)
+    folder, given = _target(session, name, buffer)
+    base = _choose_name(folder, given, buffer)
     state = fingerprint(session)
     fitted = session.last_fit is not None and (
         session.last_fit[0] == fingerprint(session, labels=False)
@@ -514,6 +661,13 @@ def take(session, name: str | None = None, *, after_go: bool = False) -> None:
         handle.write(f"--- {timestamp}  {'fit (GO)' if fitted else 'set by hand'} ---\n")
         handle.write("\n".join(block) + "\n\n")
     print(f"\n  updated {report}")
+
+    # A .lcm/.pert of this name with no restore macro beside it is the
+    # user's own (a starting model, a saved setup), not an earlier snapshot.
+    if not restore.exists():
+        for own in (folder / f"{base}.lcm", folder / f"{base}.pert"):
+            if own.exists():
+                _keep_own(own)
 
     pert_lines = _pert_lines(session)
     if pert_lines:

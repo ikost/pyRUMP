@@ -175,7 +175,8 @@ SNAPSHOT [name]
 Saves the session as it stands, to pick up later. It doesn't matter how the
 session got there: a `GO`, a thickness nudged in `SIM`, a `CORRECTION` typed
 at the prompt. It writes these files, named after the sample (the first word
-of the data's `IDENTIFIER`, or its file name), into the working directory:
+of the data's `IDENTIFIER`, or its file name; see below for a name another
+dataset already has), into the working directory:
 
 * `<sample>_fit.xeq` — the **restore macro**. It reloads the spectrum from the
   file it was read from, then sets every one of its parameters, the
@@ -200,8 +201,8 @@ $ pyrump MA8410_fit.xeq           # or, inside pyRUMP:  XEQ MA8410_fit
 
 `XEQ MA8410` still reads the raw `MA8410.RBS`: the restore macro's `_fit`
 name keeps the two apart. It's an `.xeq` file, RUMP's own macro extension,
-rather than `.cmd`, which Windows would run as a batch file. The restore macro's paths are relative to its own
-folder, so the folder can be moved, along with the data, as a whole. If
+rather than `.cmd`, which Windows would run as a batch file. The restore
+macro's paths are relative to its own folder, so the folder can be moved, along with the data, as a whole. If
 `BACKGROUND`, `SMOOTH` or the like have changed the counts since they were
 read, reloading the original file would undo that. In that case the spectrum
 is saved as it is now, as `<sample>_fit.rbs`, and the macro reads that file
@@ -213,10 +214,43 @@ sample's name and may include a folder (`SNAP results/MA8410`). `SNAP`
 works at the SIM, PERT and PIXE prompts too, without leaving them.
 [`REPORT ON`](pert.md#report-new) takes a snapshot after every `GO`.
 
+**A name another dataset already has.** Say `A123` was measured on a bad
+spot, and a fresh spot was measured as `A123b`. You fit the fresh spot and
+set its `IDENTIFIER` to `A123`, keeping the bad spot's files. A snapshot
+named `A123` would then be mistaken for the bad spot's. So SNAP checks
+whether the sample's name already belongs to another dataset:
+
+* a measured-data file of that name (`A123.RBS`, `.PIX`, `.xnra`) that isn't
+  this spectrum's own, next to the snapshot or next to the data, or
+* an `A123_fit.xeq` that restores a different spectrum (every restore macro
+  records its data file on a `! source:` line).
+
+If it does, the snapshot is named after the data file instead, and SNAP
+says so:
+
+```
+Your wish? snap
+  A123 is taken by another dataset (A123.RBS)
+  -- named after the data file instead: A123b
+  updated A123b.report
+  ...
+```
+
+The identifier stays `A123`: in the plot, the report and the restore macro.
+If the file's name is taken too, SNAP writes nothing and asks for one
+(`SNAPSHOT <name>`). A name you give yourself is your choice even if a data
+file has it, but it never replaces another spectrum's restore macro.
+Snapshotting the same dataset again simply updates its files.
+
+A `<sample>.lcm` or `.pert` with no `<sample>_fit.xeq` beside it is your
+own file (a starting model, a saved setup), not an earlier snapshot. SNAP
+keeps it as `<sample>.lcm.bak` and says so, rather than writing over it.
+
 `QUIT` warns when the session has changed since its last snapshot, or has
 never had one. A corrected `IDENTIFIER` counts as a change, but a snapshot
-taken after it still records an unchanged fit as the fit. Every restore macro ends with `SNAPSHOT -restored`, which
-writes nothing and only marks the restored session as saved.
+taken after it still records an unchanged fit as the fit. Every restore
+macro ends with `SNAPSHOT -restored`, which writes nothing and only marks
+the restored session as saved.
 
 Standing per-user defaults (the `FAITHFUL` toggle, default experiment
 settings, plot state) are set once via `~/.pyrumprc` rather than every
