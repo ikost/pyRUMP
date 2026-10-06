@@ -1,7 +1,8 @@
 ## Things that will catch you out
 
 **`phi` is not the scattering angle.** It is 180° minus it. A detector at 170°
-means `phi = 10`. Use `geometry.scattering_angle` for the physical value.
+means `phi = 10`. Use `geometry.scattering_angle` for the physical value. See
+[Experimental geometry](geometry.md).
 
 **Fitting windows must cover channels where the model has counts.** Poisson
 likelihood is undefined where the model predicts zero, so those channels

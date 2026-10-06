@@ -167,7 +167,8 @@ Sets the beam energy, MeV.
 usage: THETA <deg>
 ```
 
-Sets the sample tilt.
+Sets the sample tilt: the angle between the beam and the sample normal. See
+[Experimental geometry](geometry.md).
 
 #### `PHI`
 
@@ -175,7 +176,9 @@ Sets the sample tilt.
 usage: PHI <deg>
 ```
 
-Sets 180° minus the scattering angle.
+Sets 180° minus the scattering angle: the angle between the beam (looking
+back at the source) and the detector. A detector at 170° is `PHI 10`. See
+[Experimental geometry](geometry.md).
 
 #### `PSI`
 
@@ -183,7 +186,9 @@ Sets 180° minus the scattering angle.
 usage: PSI <deg>
 ```
 
-Sets the exit angle (GENERAL geometry only).
+Sets the exit angle, between the detector and the sample normal. Used with
+`GEOMETRY GENERAL` only: `IBM` and `CORNELL` compute it from `THETA` and
+`PHI`. See [Experimental geometry](geometry.md).
 
 #### `GEOMETRY`
 
@@ -191,7 +196,10 @@ Sets the exit angle (GENERAL geometry only).
 usage: GEOMETRY cornell|ibm|general
 ```
 
-Sets the detector geometry convention.
+Sets how the exit angle `PSI` is obtained: `IBM` (the sample normal stays in
+the plane of beam and detector), `CORNELL` (the tilt axis lies in that plane)
+or `GENERAL` (`PSI` as typed). See [Experimental geometry](geometry.md), with
+a figure of the IBM geometry.
 
 #### `CONVERSION`
 

@@ -50,6 +50,7 @@ nav:
       - Physics and simulation: manual/physics.md
       - pyRUMP shell: manual/shell.md
       - Buffers & instrument parameters: manual/buffers.md
+      - Experimental geometry: manual/geometry.md
       - Plotting & display: manual/plotting.md
       - Analysis tools: manual/analysis.md
       - File formats: manual/file-formats.md

@@ -456,7 +456,9 @@ PERT Command: fwhm 18 25
 usage: THETA [<min> <max>]
 ```
 
-Varies the sample tilt, in degrees.
+Varies the sample tilt, in degrees. With `GEOMETRY IBM` or `CORNELL` the exit
+angle follows it; with `GENERAL` it stays at `PSI` (see [Experimental
+geometry](geometry.md)).
 
 ```
 PERT Command: theta -12 -6
