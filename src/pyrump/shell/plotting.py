@@ -98,6 +98,26 @@ def _x_axis(buffer, state, low: int, high: int):
     return np.arange(low, high + 1, dtype=float), "Channel"
 
 
+def _energy_axis(ax, calibration) -> None:
+    """RUMP's upper axis: energy in MeV above the channel axis (RbsAxdraw,
+    tplot.c:469-483), scaled from ``calibration`` -- the first trace's, as
+    RUMP scales it from its reference buffer. A channel's energy is its lower
+    edge, RBSENERGY's convention (rumpproto.h:7), so a tick reads what the
+    ENERGY axis would put at the same place. Skipped for a buffer with no
+    usable calibration."""
+    if not calibration.kevch:
+        return
+    top = ax.secondary_xaxis(
+        "top",
+        functions=(
+            lambda c: calibration.edge_energy(c) / 1000.0,
+            lambda e: calibration.channel_of(np.asarray(e) * 1000.0),
+        ),
+    )
+    top.set_xlabel("Energy (MeV)", fontsize="small")
+    top.tick_params(labelsize="small")
+
+
 def _apply_scale(ax, state) -> None:
     if state.yscale == "log":
         ax.set_yscale("log")
@@ -233,6 +253,8 @@ def draw(session) -> None:
         )
 
     ax.set_xlabel(label_axis)
+    if not state.energy_axis:
+        _energy_axis(ax, session.traces[0].buffer.calibration)
     ax.set_ylabel("Yield (counts/msr/uC)" if state.normalized else "Counts")
     _apply_scale(ax, state)
     _apply_limits(ax, state)
@@ -419,6 +441,8 @@ def _draw_comparison(session) -> None:
         overlays=overlays,
     )
     top = figure.axes[0]
+    if not state.energy_axis:
+        _energy_axis(top, data.buffer.calibration)
     if state.normalized:
         top.set_ylabel("Yield (counts/msr/uC)")
     _apply_scale(top, state)

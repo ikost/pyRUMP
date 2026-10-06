@@ -223,3 +223,90 @@ def test_pump_ignores_a_figure_the_user_closed(session, monkeypatch):
 
     plotting._last_pump = 0.0
     plotting.pump(session)  # no exception
+
+
+# -- RUMP's two-scale frame: channel below, energy (MeV) above ----------------
+#
+# RbsAxdraw (tplot.c:442-483) always labels the bottom axis in channels and
+# the top one in MeV, scaled from the reference buffer. ENERGY is pyRUMP's
+# own switch to a single keV axis, which has no top axis.
+
+
+def _buffer(kevch: float = 2.0, kev0: float = 100.0, first: float = 0.0):
+    import numpy as np
+
+    from pyrump.model.spectrum import Calibration, Spectrum
+    from pyrump.shell.session import Buffer
+
+    calibration = Calibration(kevch=kevch, kev0=kev0, first=first, npt=200)
+    counts = np.linspace(10.0, 100.0, 200)
+    return Buffer(spectrum=Spectrum(counts=counts, calibration=calibration), name="data")
+
+
+def _top_limits(ax):
+    """The top axis' limits as drawn -- a secondary axis sets them at draw."""
+    (top,) = ax.child_axes
+    ax.figure.canvas.draw()
+    return top.get_xlim(), top.get_xlabel()
+
+
+def test_default_plot_has_energy_in_mev_on_top(session):
+    plotting.add_trace(session, 1, _buffer(first=5.0), clear=True)
+    plotting.draw(session)
+
+    ax = session.figure.axes[0]
+    assert ax.get_xlabel() == "Channel"
+    (low, high), label = _top_limits(ax)
+    assert label == "Energy (MeV)"
+    # RBSENERGY: 0.001 * (channel * kevch + kev0), with the stored first channel.
+    left, right = ax.get_xlim()
+    assert low == pytest.approx(0.001 * ((left + 5.0) * 2.0 + 100.0))
+    assert high == pytest.approx(0.001 * ((right + 5.0) * 2.0 + 100.0))
+
+
+def test_energy_on_leaves_one_kev_axis_and_off_restores_the_top_one(session):
+    plotting.add_trace(session, 1, _buffer(), clear=True)
+
+    session.plot.energy_axis = True
+    plotting.draw(session)
+    ax = session.figure.axes[0]
+    assert ax.get_xlabel() == "Energy (keV)"
+    assert not ax.child_axes
+
+    session.plot.energy_axis = False
+    plotting.draw(session)
+    assert len(ax.child_axes) == 1
+
+
+def test_top_axis_follows_the_first_trace(session):
+    """Overlays with another calibration don't rescale it -- RUMP scales the
+    frame from its reference buffer."""
+    plotting.add_trace(session, 1, _buffer(kevch=2.0, kev0=100.0), clear=True)
+    plotting.add_trace(session, 2, _buffer(kevch=5.0, kev0=0.0), clear=False)
+    plotting.draw(session)
+
+    ax = session.figure.axes[0]
+    (low, _), _ = _top_limits(ax)
+    assert low == pytest.approx(0.001 * (ax.get_xlim()[0] * 2.0 + 100.0))
+
+
+def test_uncalibrated_buffer_plots_without_a_top_axis(session):
+    plotting.add_trace(session, 1, _buffer(kevch=0.0), clear=True)
+    plotting.draw(session)
+    assert not session.figure.axes[0].child_axes
+
+
+def test_compare_puts_the_energy_axis_on_its_upper_panel(session):
+    plotting.add_trace(session, 1, _buffer(), clear=True, key=plotting.COMPARE_DATA)
+    plotting.add_trace(session, 0, _buffer(), clear=False)
+    plotting.draw(session)
+
+    upper, residuals = session.figure.axes
+    assert len(upper.child_axes) == 1
+    assert not residuals.child_axes
+    assert residuals.get_xlabel() == "Channel"
+
+    session.plot.energy_axis = True
+    plotting.draw(session)
+    upper, _ = session.figure.axes
+    assert not upper.child_axes

@@ -163,13 +163,19 @@ stoichiometry, in both `STRUCTLABEL` and SIM/PERT `SHOW`. `SHOW` in MODE
 ATOMS is the exception: it keeps each element's 10¹⁵ at/cm², with the
 fractions in brackets.
 
-#### `ENERGY`
+#### `ENERGY` `[new]`
 
 ```
 usage: ENERGY [off]
 ```
 
-Puts the x axis in energy (keV) rather than channel.
+Puts the x axis in energy (keV) rather than channel, as a single axis along
+the bottom.
+
+By default (and after `ENERGY OFF`) the plot uses RUMP's frame: channels along
+the bottom and energy in MeV along the top, both on the scale of the first
+buffer plotted. `COMPARE` shows the energy axis above its upper panel. RUMP
+itself has no `ENERGY` command; it always draws both axes.
 
 #### `AXIS`
 
