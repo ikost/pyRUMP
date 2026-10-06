@@ -199,7 +199,7 @@ usage: GEOMETRY cornell|ibm|general
 Sets how the exit angle `PSI` is obtained: `IBM` (the sample normal stays in
 the plane of beam and detector), `CORNELL` (the tilt axis lies in that plane)
 or `GENERAL` (`PSI` as typed). See [Experimental geometry](geometry.md), with
-a figure of the IBM geometry.
+figures of the IBM and Cornell geometries.
 
 #### `CONVERSION`
 

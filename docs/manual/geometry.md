@@ -22,7 +22,7 @@ directions, so `PSI` can only lie between |THETA − PHI| and THETA + PHI.
   detector; `PSI` is computed from `THETA` and `PHI` (below).
 * **`CORNELL`** — the sample's tilt axis lies in that plane, across the beam,
   so tilting moves the normal out of it; `PSI` is computed as
-  cos PSI = cos THETA × cos PHI, whatever the sign of `THETA`.
+  cos PSI = cos THETA × cos PHI, whatever the sign of `THETA` (below).
 * **`GENERAL`** — `PSI` is used as typed. Acquisition files often use it:
   `examples/MnPt.RBS` has `GEOMETRY GENERAL`, `THETA -9`, `PHI 11`, `PSI 20`.
 
@@ -47,6 +47,23 @@ Its PSI 20 = 9 + 11 is the IBM value for a sample turned 9° away from the
 detector, which RUMP's IBM convention would write as `THETA 9`. The
 acquisition software writes `THETA -9` and spells `PSI` out, so the file
 needs `GENERAL`.
+
+### Cornell geometry
+
+The tilt axis lies in the scattering plane, across the beam, so tilting the
+sample moves its normal *out of* that plane. No single flat drawing then
+shows all three angles at their true size: the overview shows them together,
+`THETA` is true seen along the tilt axis, and `PHI` is true seen across the
+scattering plane, where the tilted normal leans towards you:
+
+![GEOMETRY CORNELL at THETA 25, PHI 35: (a) a 3D overview with PSI = 42.1 degrees; (b) seen along the tilt axis, THETA 25 degrees true size; (c) seen across the scattering plane, PHI 35 degrees true size; and the RUMP commands](../assets/geometry-cornell.png)
+
+cos PSI = cos THETA × cos PHI. The sign of `THETA` only says to which side
+of the plane the normal leaves, so `THETA -25` gives the same `PSI` as
+`THETA 25`. `PSI` always lies between the two IBM values for the same
+`THETA` and `PHI` — here 42.1°, between 10° and 60°.
+
+### Fitting the tilt
 
 When fitting, [`PERT THETA`](pert.md#theta) varies `THETA`; with `IBM` or
 `CORNELL` the exit angle follows it, with `GENERAL` it stays at `PSI`.
