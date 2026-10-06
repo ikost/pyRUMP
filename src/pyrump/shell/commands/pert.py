@@ -112,7 +112,7 @@ def _vary_command(entry: Vary) -> str:
     elif entry.kind == "equation":
         base = f"equation {entry.layer + 1} {entry.index + 1}"
     elif entry.kind == "pixe_h":
-        base = f"pixe h {entry.symbol}"
+        base = f"pixh {entry.symbol}"
     else:
         base = entry.name
     if entry.bounds is not None:
@@ -123,7 +123,7 @@ def _vary_command(entry: Vary) -> str:
 def _to_lines(state: PertState) -> list[str]:
     """Command lines that recreate ``state``, for PERT SAVE/GET."""
     lines = [f"window {w.low} {w.high}" for w in state.windows.error]
-    lines += [f"pixe {w.low} {w.high}" for w in state.pixe_windows]
+    lines += [f"pixwin {w.low} {w.high}" for w in state.pixe_windows]
     norm = state.windows.normalisation
     if norm is not None:
         lines.append(f"normalize {norm.low} {norm.high}")
@@ -171,7 +171,7 @@ class PertState:
     varying: list[Vary] = field(default_factory=list)
     windows: WindowSet = field(default_factory=WindowSet)
     #: PIXE channels (numbered as the .PIX file numbers them) fitted
-    #: together with the RBS spectrum -- ``PIXE <lo> <hi>``.
+    #: together with the RBS spectrum -- ``PIXWIN <lo> <hi>``.
     pixe_windows: list[Window] = field(default_factory=list)
     multi: bool = True
     verbose: bool = False
@@ -547,21 +547,18 @@ def cmd_normalize(session, args: ArgReader) -> None:
     print(f"  normalisation window {low}-{high}")
 
 
-def cmd_pixe(session, args: ArgReader) -> None:
-    """``PIXE <lo> <hi>`` -- fit the PIXE spectrum over these channels too,
-    together with the RBS one: the same sample drives both, and each
+def cmd_pixwin(session, args: ArgReader) -> None:
+    """``PIXWIN <lo> <hi>`` -- fit the PIXE spectrum over these channels
+    too, together with the RBS one: the same sample drives both, and each
     spectrum weighs in by its own counting statistics. Channels are
     numbered as the ``.PIX`` file numbers them, as PIXE ``REGION`` takes
     them. Put the windows on clear peaks: the PIXE continuum is not
     simulated. Meant for elements whose RBS signals overlap but whose X-ray
     lines don't (Ta-W, Fe-Ni, Ni-Co) -- best with lines of the same shell,
-    so H cancels in their ratio.
+    so H cancels in their ratio (see ``PIXH``).
 
-    ``PIXE CLEAR [<n>]`` removes window *n*, or all of them.
-    ``PIXE H K|L|M [<min> <max>]`` varies that shell's instrumental
-    constant H, so the PIXE spectrum decides the ratio and RBS the amount.
-    ``PIXE`` alone lists the windows. A pyRUMP addition. (In PERT, ``PIXE``
-    means this: RETURN first for the PIXE prompt.)
+    ``PIXWIN CLEAR [<n>]`` removes window *n*, or all of them; ``PIXWIN``
+    alone lists them. A pyRUMP addition.
     """
     state = state_for(session)
     if not args:
@@ -584,20 +581,6 @@ def cmd_pixe(session, args: ArgReader) -> None:
         del windows[n - 1]
         print(f"  PIXE windows {_format_pixe_windows(windows)}")
         return
-    if token == "h":
-        args.token()
-        family = args.token("K, L or M").upper()
-        if family not in ("K", "L", "M"):
-            raise CommandError(f"PIXE H: expected K, L or M, not {family!r}")
-        bound = _optional_bounds(args)
-        args.done()
-        param = pixe_h(family)
-        if bound is not None:
-            param = replace(param, lower=bound[0], upper=bound[1])
-        _add(session, Vary(
-            parameter=param, kind="pixe_h", symbol=family, name=f"PIXE H {family}", bounds=bound,
-        ))
-        return
     low = args.integer("the first PIXE channel")
     high = args.integer("the last PIXE channel")
     args.done()
@@ -607,6 +590,23 @@ def cmd_pixe(session, args: ArgReader) -> None:
         raise CommandError(f"at most {MAX_ERROR_WINDOWS} PIXE windows")
     state.pixe_windows.append(Window(low, high))
     print(f"  PIXE windows {_format_pixe_windows(state.pixe_windows)}")
+
+
+def cmd_pixh(session, args: ArgReader) -> None:
+    """``PIXH K|L|M [<min> <max>]`` -- vary the PIXE instrumental constant
+    H of that shell, so the PIXE spectrum decides the ratio and RBS the
+    amount. Needs ``PIXWIN`` windows. A pyRUMP addition."""
+    family = args.token("K, L or M").upper()
+    if family not in ("K", "L", "M"):
+        raise CommandError(f"PIXH: expected K, L or M, not {family!r}")
+    bound = _optional_bounds(args)
+    args.done()
+    param = pixe_h(family)
+    if bound is not None:
+        param = replace(param, lower=bound[0], upper=bound[1])
+    _add(session, Vary(
+        parameter=param, kind="pixe_h", symbol=family, name=f"PIXH {family}", bounds=bound,
+    ))
 
 
 def cmd_single(session, args: ArgReader) -> None:
@@ -921,8 +921,8 @@ def _pixe_extra(session, state: PertState, data_buffer) -> list:
     if not state.pixe_windows:
         if any(v.kind == "pixe_h" for v in state.varying):
             raise CommandError(
-                "go: PIXE H sets the PIXE spectrum's scale, but no PIXE windows "
-                "are set -- PIXE <lo> <hi>"
+                "go: PIXH sets the PIXE spectrum's scale, but no PIXE windows "
+                "are set -- PIXWIN <lo> <hi>"
             )
         return []
     pixe = data_buffer.pixe
@@ -1157,8 +1157,10 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     # Windows and mode
     ("WINDOW", 2, cmd_window, "set an error window in channels, or WINDOW CLEAR [<n>]"),
     ("NORMALIZE", 2, cmd_normalize, "set the normalisation window, or NORMALIZE CLEAR"),
-    ("PIXE", 2, cmd_pixe,
-     "fit PIXE too: PIXE <lo> <hi> adds a window, PIXE CLEAR [<n>], PIXE H K|L|M [<min> <max>]"),
+    # Not PIXE, which opens the PIXE prompt here as everywhere: four
+    # letters each, so PIX and PIXE fall through to it.
+    ("PIXWIN", 4, cmd_pixwin,
+     "fit the PIXE spectrum too, over these channels, or PIXWIN CLEAR [<n>]"),
     ("SINGLE", 2, cmd_single, "vary one parameter at a time"),
     ("MULTI", 3, cmd_multi, "vary all parameters together (default)"),
     ("VOLUME", 3, cmd_volume, "verbose progress messages"),
@@ -1191,6 +1193,7 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("OFFSET", 3, _simple("kev(0)"),
      "vary the calibration energy offset (e.g. a sample-charging shift) [<min> <max>]"),
     ("KEV(0)", -6, _simple("kev(0)"), "synonym for OFFSET"),
+    ("PIXH", 4, cmd_pixh, "vary the PIXE instrumental constant H of K, L or M lines [<min> <max>]"),
     ("COMPARE", 0, cmd_compare, "plot the active buffer against the simulation"),
     ("CMP", -3, cmd_compare, "synonym for COMPARE"),
     ("EXPORTCMP", 7, cmd_exportcmp,

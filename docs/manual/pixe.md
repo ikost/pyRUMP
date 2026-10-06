@@ -459,9 +459,9 @@ must be measured with the same beam, geometry, detector and filters.
 ### Fitting
 
 PERT fits the PIXE spectrum together with the RBS one, over the PIXE
-windows set with [`PIXE <first> <last>`](pert.md#pixe-new). The element
+windows set with [`PIXWIN <first> <last>`](pert.md#pixwin-new). The element
 amounts move both simulations, through the shared sample, and H can be varied
-with them (`PIXE H K|L|M`). That's how alloys that overlap in RBS (Ta–W,
+with them ([`PIXH K|L|M`](pert.md#pixh-new)). That's how alloys that overlap in RBS (Ta–W,
 Fe–Ni, Ni–Co) get their ratio from their X-ray lines.
 
 Still to come: the PIXE energy calibration and resolution as fit

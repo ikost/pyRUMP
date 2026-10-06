@@ -115,10 +115,10 @@ def test_w_ta_ratio_from_rbs_and_pixe(tmp_path):
     both.pixe.h = (1.0, 1.25, 1.0)  # H_L off by 25%: the fit must find it
     output = run(
         both, "pert window 380 500", "pert composition 1 Ta", "pert thick 1",
-        f"pert pixe {channel(7.9)} {channel(10.0)}", "pert pixe h l", "pert go",
+        f"pert pixwin {channel(7.9)} {channel(10.0)}", "pert pixh l", "pert go",
     )
     ta, sigma = fitted(output, "layer 1 composition Ta")
-    h, sigma_h = fitted(output, "PIXE H L")
+    h, sigma_h = fitted(output, "PIXH L")
     assert abs(ta - 1.0) < 3 * sigma, (ta, sigma)
     assert abs(h - 1.0) < 3 * sigma_h, (h, sigma_h)
     assert sigma < sigma_rbs / 2, (sigma, sigma_rbs)
@@ -132,7 +132,7 @@ def test_permalloy_ni_fe_ratio_from_rbs_and_pixe(tmp_path):
     session.pixe.h = (1.3, 1.0, 1.0)
     output = run(
         session, "pert window 300 420", "pert composition 1 Fe", "pert thick 1",
-        f"pert pixe {channel(6.2)} {channel(8.5)}", "pert pixe h k", "pert go",
+        f"pert pixwin {channel(6.2)} {channel(8.5)}", "pert pixh k", "pert go",
     )
     fe, sigma = fitted(output, "layer 1 composition Fe")
     assert abs(fe - 0.25) < 3 * sigma, (fe, sigma)
@@ -147,9 +147,9 @@ def test_a_normalisation_window_sets_the_pixe_dose_too(tmp_path):
     output = run(
         session, "pert window 380 500", "pert normalize 100 300",
         "pert composition 1 Ta", "pert thick 1",
-        f"pert pixe {channel(7.9)} {channel(10.0)}", "pert pixe h l", "pert go",
+        f"pert pixwin {channel(7.9)} {channel(10.0)}", "pert pixh l", "pert go",
     )
-    h, sigma_h = fitted(output, "PIXE H L")
+    h, sigma_h = fitted(output, "PIXH L")
     assert abs(h - 1.0) < 3 * sigma_h + 0.02, (h, sigma_h)
 
 
@@ -159,34 +159,34 @@ def test_a_normalisation_window_sets_the_pixe_dose_too(tmp_path):
 @needs_data
 def test_pixe_windows_are_added_listed_and_cleared(tmp_path):
     session = film(tmp_path, "W", "Ta")
-    run(session, "pert pixe 786 900", "pert pixe 920 994")
+    run(session, "pert pixwin 786 900", "pert pixwin 920 994")
     assert [(w.low, w.high) for w in session.pert.pixe_windows] == [(786, 900), (920, 994)]
     assert "PIXE win    [1] 786-900  [2] 920-994" in run(session, "pert parms")
-    run(session, "pert pixe clear 1")
+    run(session, "pert pixwin clear 1")
     assert [(w.low, w.high) for w in session.pert.pixe_windows] == [(920, 994)]
-    run(session, "pert pixe clear")
+    run(session, "pert pixwin clear")
     assert session.pert.pixe_windows == []
-    assert "(none -- RBS only)" in run(session, "pert pixe")
+    assert "(none -- RBS only)" in run(session, "pert pixwin")
 
 
 @needs_data
 def test_pixe_windows_and_h_round_trip_through_a_pert_file(tmp_path):
     session = film(tmp_path, "W", "Ta")
-    run(session, "pert window 380 500", "pert pixe 786 994", "pert pixe h l 0.5 2",
+    run(session, "pert window 380 500", "pert pixwin 786 994", "pert pixh l 0.5 2",
         f"pert save {tmp_path / 'setup'}")
     text = (tmp_path / "setup.pert").read_text()
-    assert "pixe 786 994" in text and "pixe h L 0.5 2" in text
+    assert "pixwin 786 994" in text and "pixh L 0.5 2" in text
     again = film(tmp_path, "W", "Ta")
     run(again, f"pert get {tmp_path / 'setup'}")
     assert [(w.low, w.high) for w in again.pert.pixe_windows] == [(786, 994)]
-    assert [(v.name, v.bounds) for v in again.pert.varying] == [("PIXE H L", (0.5, 2.0))]
+    assert [(v.name, v.bounds) for v in again.pert.varying] == [("PIXH L", (0.5, 2.0))]
 
 
 @needs_data
 def test_pixe_h_takes_k_l_or_m(tmp_path):
     session = film(tmp_path, "W", "Ta")
     with pytest.raises(CommandError, match="K, L or M"):
-        run(session, "pert pixe h x")
+        run(session, "pert pixh x")
 
 
 @needs_data
@@ -194,27 +194,40 @@ def test_go_needs_a_pixe_spectrum_for_pixe_windows(tmp_path):
     session = film(tmp_path, "W", "Ta")
     session.buffers.active_buffer.pixe = None
     with pytest.raises(CommandError, match="no PIXE spectrum"):
-        run(session, "pert pixe 786 994", "pert composition 1 Ta", "pert go")
+        run(session, "pert pixwin 786 994", "pert composition 1 Ta", "pert go")
 
 
 @needs_data
 def test_go_needs_pixe_windows_to_vary_h(tmp_path):
     session = film(tmp_path, "W", "Ta")
     with pytest.raises(CommandError, match="no PIXE windows"):
-        run(session, "pert composition 1 Ta", "pert pixe h l", "pert go")
+        run(session, "pert composition 1 Ta", "pert pixh l", "pert go")
 
 
 @needs_data
 def test_go_rejects_a_pixe_window_outside_the_spectrum(tmp_path):
     session = film(tmp_path, "W", "Ta")
     with pytest.raises(CommandError, match="outside the PIXE spectrum"):
-        run(session, "pert pixe 5000 6000", "pert composition 1 Ta", "pert go")
+        run(session, "pert pixwin 5000 6000", "pert composition 1 Ta", "pert go")
 
 
 @needs_data
 def test_pixe_compare_scores_the_pert_windows(tmp_path):
     session = film(tmp_path, "W", "Ta")
-    run(session, "pert pixe 786 900")
+    run(session, "pert pixwin 786 900")
     mask = pixe_plotting.pert_windows(session, DEFAULT_CALIBRATION, DEFAULT_CALIBRATION.npt)
     first = round(DEFAULT_CALIBRATION.first)
     assert mask.sum() == 115 and mask[786 - first] and not mask[785 - first]
+
+
+@needs_data
+def test_pixe_in_pert_opens_the_pixe_prompt(tmp_path):
+    """PIXWIN and PIXH need four letters, so PIX and PIXE reach the RUMP
+    level's PIXE, as at every other prompt; the PERT setup stays."""
+    session = film(tmp_path, "W", "Ta")
+    stack = ["rump"]
+    with contextlib.redirect_stdout(io.StringIO()):
+        for line in ("pert", "pixw 786 994", "pixh l", "pixe"):
+            execute_line(session, line, stack)
+    assert stack == ["rump", "pixe"]
+    assert [(w.low, w.high) for w in session.pert.pixe_windows] == [(786, 994)]

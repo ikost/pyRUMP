@@ -242,15 +242,14 @@ PERT Command: normalize 300 400
   normalisation window 300-400
 ```
 
-The scale stands for the dose, so with [`PIXE`](#pixe-new) windows it is
+The scale stands for the dose, so with [`PIXWIN`](#pixwin-new) windows it is
 applied to the PIXE spectrum too.
 
-#### `PIXE` `[new]`
+#### `PIXWIN` `[new]`
 
 ```
-usage: PIXE <first> <last>
-usage: PIXE CLEAR [<n>]
-usage: PIXE H K|L|M [<min> <max>]
+usage: PIXWIN <first> <last>
+usage: PIXWIN CLEAR [<n>]
 ```
 
 Fits the buffer's PIXE spectrum together with the RBS one, over these PIXE
@@ -267,14 +266,12 @@ but not in their X-ray lines: Ta–W, Fe–Ni (permalloy), Ni–Co.
   whole group of lines. Overlaps such as Fe Kβ on Ni Kα, or Ta Lβ near W Lα,
   are fine, because the simulation has every line.
 * **Use lines of the same shell** (both K, or both L). The instrumental
-  constant H then cancels in the ratio. `PIXE H K|L|M` varies that shell's
-  H as well, so an uncalibrated H can't pull the amount away from what RBS
-  says. It's written back to the PIXE setup after `GO`, like any fitted
-  value.
+  constant H then cancels in the ratio. Vary it with [`PIXH`](#pixh-new), so
+  an uncalibrated H can't pull the amount away from what RBS says.
 
-Up to 10 windows. `PIXE CLEAR` removes all of them, `PIXE CLEAR <n>` only
-window *n*, and `PIXE` alone lists them. They're saved with `SAVE`, so
-snapshots keep them too. The buffer needs a PIXE spectrum (`PIXE GET`, or
+Up to 10 windows. `PIXWIN CLEAR` removes all of them, `PIXWIN CLEAR <n>`
+only window *n*, and `PIXWIN` alone lists them. They're saved with `SAVE`,
+so snapshots keep them too. The buffer needs a PIXE spectrum (`PIXE GET`, or
 `PAIR ON`).
 
 GO reports the chi-square of each spectrum as well as the combined one. The
@@ -283,22 +280,22 @@ over them:
 
 ```
 PERT Command: window 380 500
-PERT Command: pixe 786 994          /* Ta L and W L lines, 7.9-10 keV */
+PERT Command: pixwin 786 994        /* Ta L and W L lines, 7.9-10 keV */
 PERT Command: composition 1 Ta
 PERT Command: thickness 1
-PERT Command: pixe h l
+PERT Command: pixh l
 PERT Command: go
   Fitting film: Si [20000/cm2] - WTa2 [1000/cm2]
   with the PIXE spectrum over channels 786-994
 
-  fit took 0.44 s
+  fit took 0.46 s
 
   reduced chi-square 1.0872 on 327 dof   (was 7.6828)
   RBS chi-square 182.7 over 121 channels,   PIXE chi-square 172.8 over 209 channels
   27 evaluations, converged
   layer 1 composition Ta            1.01124  +/- 0.01927   (was 2)
   layer 1 thickness               1000 /cm2  +/- 0.2022 /cm2   (was 1000 /cm2)
-  PIXE H L                         0.991168  +/- 0.00882   (was 1.25)
+  PIXH L                           0.991168  +/- 0.00882   (was 1.25)
 
   film: Si [20000/cm2] - WTa1.01 [1000/cm2]
 ```
@@ -307,8 +304,8 @@ That is a simulated W–Ta film (truth: Ta 1, H 1) started at Ta 2 with H
 25% off. From RBS alone the same fit gives Ta to ±0.057; the PIXE lines
 narrow it to ±0.019.
 
-In PERT, `PIXE` means this command. `RETURN` to the RUMP level first for the
-PIXE prompt.
+`PIXWIN` and `PIXH` need all four letters, so that `PIXE` (or `PIX`) still
+opens the PIXE prompt from PERT, as it does at every other prompt.
 
 ### Parameters
 
@@ -477,6 +474,23 @@ sample-charging shift.
 
 ```
 PERT Command: offset
+```
+
+#### `PIXH` `[new]`
+
+```
+usage: PIXH K|L|M [<min> <max>]
+```
+
+Varies the PIXE instrumental constant H of the K, L or M lines, in a fit
+with [`PIXWIN`](#pixwin-new) windows: the PIXE spectrum then sets the ratio
+of elements with lines in that shell, and RBS their amount. The fitted H is
+written back to the PIXE setup (PIXE `H`). GO refuses it without PIXE
+windows.
+
+```
+PERT Command: pixh l
+  varying PIXH L
 ```
 
 ### Reading the fit report
