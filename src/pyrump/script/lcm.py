@@ -682,6 +682,11 @@ def write_lcm(script: Script) -> str:
     lines.append(f"Maxpth {_g(script.maxpth)}")
     if script.absorber_layers:
         lines.append(f"Absorber {script.absorber_layers}")
+    # As SimWriteSample writes them, only when set (sim2.c).
+    if script.straggle:
+        lines.append(f"Straggle {_g(script.straggle)}")
+    if script.multiple:
+        lines.append(f"Multiple_Scatter {_g(script.multiple)}")
     lines.append("Foil disable")
     return "\n".join(lines) + "\n"
 

@@ -488,3 +488,19 @@ def test_cli_rejects_an_unknown_subcommand():
     # so what must still fail is a subcommand that does not exist.
     with pytest.raises(SystemExit):
         main(["nonsense"])
+
+
+def test_straggle_and_multiple_scatter_survive_a_save():
+    """SimWriteSample writes Straggle and Multiple_Scatter when they are
+    set, so SIM SAVE (and every snapshot) keeps them."""
+    text = (
+        "Sim Reset\nLayer 1\n Thick 100 A\n Composition Si 1 /\n"
+        "Straggle 1\nMultiple_Scatter 0.5\n"
+    )
+    written = write_lcm(parse_lcm(text))
+    assert "Straggle 1\n" in written and "Multiple_Scatter 0.5\n" in written
+    again = parse_lcm(written)
+    assert (again.straggle, again.multiple) == (1.0, 0.5)
+    plain = write_lcm(parse_lcm("Sim Reset\nLayer 1\n Thick 100 A\n Composition Si 1 /\n"))
+    assert "Straggle" not in plain and "Multiple" not in plain
+
