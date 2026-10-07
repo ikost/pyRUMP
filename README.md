@@ -31,6 +31,17 @@ settings and sample together, with
 [`GETNRA`/`WRITENRA`](https://ikost.github.io/pyRUMP/manual/buffers/#getnra-writenra-new);
 NDF support is planned.
 
+**New in pyRUMP 2.0: PIXE.** The beam that gives the RBS spectrum also
+makes X-rays, and pyRUMP now simulates them: the K, L and M lines of every
+element in the SIM sample, with ECPSSR ionisation cross sections, absorption
+in the sample and the detector's filters, and the detector's resolution and
+escape peaks, in a [PIXE](https://ikost.github.io/pyRUMP/manual/pixe/) window beside the RBS one. PERT
+fits both spectra from the same sample, each element to the spectrum that
+sees it best, so alloys that overlap in RBS, such as Fe–Ni or W–Ta, take
+their composition from their X-ray lines and their thickness from RBS. The
+[FeNi worked example](https://ikost.github.io/pyRUMP/getting-started/feni-rbs-pixe/) goes through one
+measurement from start to finish.
+
 ## Quick start
 
 ```bash

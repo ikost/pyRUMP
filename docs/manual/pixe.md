@@ -1,18 +1,12 @@
 ## PIXE — particle-induced X-ray emission
 
-!!! warning "In development for pyRUMP 2.0"
-    This page is the working specification for PIXE support. It records the
-    design as agreed so far, and will become the user manual once PIXE
-    ships. Command names and details may still change.
-
-    **Working so far:** the PIXE prompt with `GET`, `PAIR`, `DISABLE` and
-    `SHOW`; the detector and calibration settings with their built-in
-    defaults; reading Oxford `.PIX` files; the PIXE window mirroring the
-    RBS one (PLOT, OVERLAY, SPLOT, COMPARE with residuals), with markers
-    for the sample's lines and the **simulated spectrum** (K, L and M lines
-    of the film and the substrate, with `H`, `ESCAPE` and `LINES`); exports;
-    the X-ray atomic data and the ECPSSR K, L and M cross sections. **Not
-    yet:** a model of the continuum, peak tails and pile-up, and fitting.
+!!! note "New in pyRUMP 2.0"
+    pyRUMP simulates the characteristic K, L and M lines of the SIM sample
+    in a PIXE window beside the RBS one, and [PERT](pert.md#pixwin-new) fits
+    compositions to the PIXE spectrum while the rest is fitted to RBS (see
+    [Fitting](#fitting)). Not modelled yet: the continuum background, peak
+    tails and pile-up, so fit windows go on clear peaks. Commands marked †
+    in the [command summary](#commands) are planned for a later version.
 
 PIXE adds a second measurement to the one pyRUMP already models. The beam
 that produces the RBS spectrum also ionises inner shells in the sample, and
@@ -365,9 +359,9 @@ Its spectrum has nothing at 2.05 keV (0.6 % of Si K, from Si K's own tail),
 so the 2.05 keV peak in MnPt (16.6 % of its Si K) comes from the sample —
 the Pt Mα/Mβ pair.
 
-### Commands (draft)
+### Commands
 
-Commands marked † are not implemented yet.
+Commands marked † are planned for a later version.
 
 | Group | Commands |
 |---|---|

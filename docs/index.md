@@ -54,6 +54,17 @@ by hand — as a macro that brings it back. SIMNRA's
 `.xnra` files can be read and written, spectrum, instrument settings and sample together,
 with [`GETNRA`/`WRITENRA`](manual/buffers.md#getnra-writenra-new); NDF support is planned.
 
+**New in pyRUMP 2.0: PIXE.** The beam that gives the RBS spectrum also
+makes X-rays, and pyRUMP now simulates them: the K, L and M lines of every
+element in the SIM sample, with ECPSSR ionisation cross sections, absorption
+in the sample and the detector's filters, and the detector's resolution and
+escape peaks, in a [PIXE](manual/pixe.md) window beside the RBS one. PERT
+fits both spectra from the same sample, each element to the spectrum that
+sees it best, so alloys that overlap in RBS, such as Fe–Ni or W–Ta, take
+their composition from their X-ray lines and their thickness from RBS. The
+[FeNi worked example](getting-started/feni-rbs-pixe.md) goes through one
+measurement from start to finish.
+
 The original RUMP ecosystem included **RUMPX**, an X-Window GUI popular among Windows
 users two decades ago. pyRUMP doesn't have a GUI counterpart yet — the author prefers
 CLI tools — but a Python equivalent could be added later if there's real demand for it.
