@@ -214,7 +214,7 @@ A snapshot needs the measured spectrum, read from a file, and a SIM sample.
 Without them it says what's missing and writes nothing. `name` replaces the
 sample's name and may include a folder (`SNAP results/MA8410`). `SNAP`
 works at the SIM, PERT and PIXE prompts too, without leaving them.
-[`REPORT ON`](pert.md#report-new) takes a snapshot after every `GO`.
+[`AUTOSNAP`](pert.md#autosnap-new) in PERT takes a snapshot after every `GO`.
 
 **A name another dataset already has.** Say `A123` was measured on a bad
 spot, and a fresh spot was measured as `A123b`. You fit the fresh spot and

@@ -52,7 +52,7 @@ Shows the current setup: fit mode, windows, and what is varying.
 PERT Command: parms
   mode        multiple variable
   autocmp     off
-  report      off
+  autosnap    off
   error win   [1] 800-1200
   norm win    (none)
   varying:
@@ -122,14 +122,14 @@ PERT Command: autocmp
   autocmp on
 ```
 
-#### `REPORT` `[new]`
+#### `AUTOSNAP` `[new]`
 
 ```
-usage: REPORT [off]
+usage: AUTOSNAP [off]
 ```
 
 After every `GO`, takes a [`SNAPSHOT`](shell.md#snapshot-snap-new) of the
-fit, named after the sample: the first word of the data buffer's
+fit, writing the same files `SNAP` does, named after the sample: the first word of the data buffer's
 `IDENTIFIER`, or its file name. If another dataset already has that name,
 the data file's own name is used instead, with a warning (see
 [`SNAPSHOT`](shell.md#snapshot-snap-new)). Off by default; `GET` and `CLEAR`
@@ -148,9 +148,12 @@ Tuning by hand after the fit isn't covered: type `SNAP` again to save it. Its
 report block is marked *set by hand*.
 
 ```
-PERT Command: report
-  report on
+PERT Command: autosnap
+  autosnap on
 ```
+
+`REPORT`, its old name, still works, so older macros and `~/.pyrumprc`
+files keep working, but it is no longer listed by `HELP`.
 
 #### `HIGHLIGHT` `[new]`
 
@@ -329,7 +332,7 @@ PERT Command: pixh
 PERT Command: parms
   mode        multiple variable
   autocmp     off
-  report      off
+  autosnap    off
   highlight   on
   error win   [1] 380-500
   norm win    (none)

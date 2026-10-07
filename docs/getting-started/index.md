@@ -195,7 +195,7 @@ Your wish? figsave fit         /* fit_rbs.png                         */
 ![MnPt data vs. the fitted simulation, with residuals](../assets/mnpt-fit.png)
 
 See [PERT](../manual/pert.md) in the manual for the full `PERT`
-command set — bounded fits, `WINDOW`/`NORMALIZE`, `REPORT`, and the
+command set — bounded fits, `WINDOW`/`NORMALIZE`, `AUTOSNAP`, and the
 composition-degeneracy caveat worth reading before your first real fit.
 
 For a complete analysis of a measurement with both RBS and PIXE, from
@@ -227,7 +227,7 @@ pyrump MA8408_fit.xeq
 ```
 
 `MA8408.report` keeps a block per snapshot, with the fit's uncertainties
-when nothing has changed since `GO`. `REPORT ON` in PERT takes a snapshot
+when nothing has changed since `GO`. `AUTOSNAP` in PERT takes a snapshot
 after every `GO` by itself. See
 [`SNAPSHOT`](../manual/shell.md#snapshot-snap-new) in the manual.
 

@@ -19,7 +19,7 @@ under the sample's name:
   uncertainties if nothing has changed since ``GO``, otherwise the current
   values and chi-square, marked as set by hand
 
-``REPORT ON`` is ``GO`` followed by this.
+``AUTOSNAP`` (once ``REPORT``) is ``GO`` followed by this.
 
 The sample's name is the IDENTIFIER's first word -- unless another dataset
 already has it (a measured-data file of that name, or a restore macro for
@@ -639,7 +639,7 @@ def take(session, name: str | None = None, *, after_go: bool = False) -> None:
 
     Refuses, naming what is missing, without a data buffer and a SIM
     sample. A data buffer not read from any file can't be reloaded: an
-    explicit SNAPSHOT refuses that too, while REPORT (``after_go``) still
+    explicit SNAPSHOT refuses that too, while AUTOSNAP (``after_go``) still
     records the fit and only says the restore macro is missing.
     """
     from ..script.lcm import write_lcm
@@ -712,7 +712,7 @@ def cmd_snapshot(session, args: ArgReader) -> None:
 
     Writes ``<name>_fit.xeq`` (the restore macro), ``<name>.lcm``,
     ``<name>.pert``, ``<name>_rbs.png`` (as FIGSAVE writes it) and appends to
-    ``<name>.report``. The name defaults to the sample's, as REPORT names it, and may carry a folder
+    ``<name>.report``. The name defaults to the sample's, as AUTOSNAP names it, and may carry a folder
     (``SNAP results/MA8410``). Needs the measured spectrum, read from a file,
     and a SIM sample. Works the same after a GO or after tuning by hand: the
     report says which, with uncertainties only for an unchanged fit. A

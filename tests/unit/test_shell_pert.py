@@ -915,21 +915,39 @@ def test_autocmp_still_plots_after_get_go(session, tmp_path):
 
 
 @needs_data
-def test_report_survives_get(session, tmp_path):
+def test_autosnap_survives_get(session, tmp_path):
     pert_file = tmp_path / "usual.pert"
     run(session, "pert", "thick 1", f"save {pert_file}")
-    run(session, "pert", "report", f"get {pert_file}")
-    assert session.pert.report is True
+    run(session, "pert", "autosnap", f"get {pert_file}")
+    assert session.pert.autosnap is True
 
 
 @needs_data
-def test_report_survives_clear(session):
-    run(session, "pert", "report", "clear")
-    assert session.pert.report is True
+def test_autosnap_survives_clear(session):
+    run(session, "pert", "autosnap", "clear")
+    assert session.pert.autosnap is True
 
 
 @needs_data
-def test_report_off_by_default_writes_no_file(session, tmp_path, monkeypatch):
+def test_report_still_switches_autosnap_but_is_not_listed(session, capsys):
+    """REPORT, AUTOSNAP's old name, still works for old macros and
+    ~/.pyrumprc files, is left out of HELP, and HELP REPORT says why."""
+    run(session, "pert", "report")
+    assert session.pert.autosnap is True
+    run(session, "pert", "report off")
+    assert session.pert.autosnap is False
+    capsys.readouterr()
+    run(session, "pert", "help")
+    listing = capsys.readouterr().out
+    assert "AUTOSnap" in listing and "REPort" not in listing
+    run(session, "pert", "help report")
+    assert "renamed AUTOSNAP" in capsys.readouterr().out
+    run(session, "pert", "parms")
+    assert "autosnap    off" in capsys.readouterr().out
+
+
+@needs_data
+def test_autosnap_off_by_default_writes_no_file(session, tmp_path, monkeypatch):
     # The session fixture itself writes tmp_path/au.lcm (the sample it loads
     # via SIM GET), so that one extension isn't a useful negative check here
     # -- .report/.pert/.png are the ones nothing else in the fixture creates.
@@ -953,11 +971,11 @@ def test_report_off_by_default_writes_no_file(session, tmp_path, monkeypatch):
         ("", "", "buffer"),
     ],
 )
-def test_report_path_sanitizes_a_messy_name_or_identifier(name, identifier, expected):
+def test_autosnap_path_sanitizes_a_messy_name_or_identifier(name, identifier, expected):
     """The spectrum's IDENTIFIER names the sample, over the file it came
     from; either may be a full path (a WRASCII macro's own FILENAME line
     stamps one straight into buffer.name, see cmd_filename) or carry a
-    trailing comment -- REPORT must still land on a bare, safe filename, and
+    trailing comment -- AUTOSNAP must still land on a bare, safe filename, and
     only a spectrum-file extension is dropped."""
     from types import SimpleNamespace
 
@@ -968,12 +986,12 @@ def test_report_path_sanitizes_a_messy_name_or_identifier(name, identifier, expe
 
 
 @needs_data
-def test_report_on_appends_each_go_to_a_sample_named_file(session, tmp_path, monkeypatch):
+def test_autosnap_on_appends_each_go_to_a_sample_named_file(session, tmp_path, monkeypatch):
     """The buffer in the ``session`` fixture is named "au" (see the module's
     own ``session`` fixture), so its report file is au.report -- no filename
     ever typed."""
     monkeypatch.chdir(tmp_path)
-    run(session, "pert", "window 355 375", "norm 140 200", "thick 1", "report", "go")
+    run(session, "pert", "window 355 375", "norm 140 200", "thick 1", "autosnap", "go")
     report = tmp_path / "au.report"
     assert report.exists()
     text = report.read_text()
@@ -985,11 +1003,11 @@ def test_report_on_appends_each_go_to_a_sample_named_file(session, tmp_path, mon
 
 
 @needs_data
-def test_report_on_writes_the_full_bundle(session, tmp_path, monkeypatch):
+def test_autosnap_on_writes_the_full_bundle(session, tmp_path, monkeypatch):
     """REPORT ON writes all four files -- .report, .pert, .lcm, _rbs.png --
     named after the sample, not just the text report."""
     monkeypatch.chdir(tmp_path)
-    run(session, "pert", "window 355 375", "norm 140 200", "thick 1", "report", "go")
+    run(session, "pert", "window 355 375", "norm 140 200", "thick 1", "autosnap", "go")
 
     assert (tmp_path / "au.report").exists()
     assert (tmp_path / "au.pert").exists()
@@ -1003,11 +1021,11 @@ def test_report_on_writes_the_full_bundle(session, tmp_path, monkeypatch):
 
 
 @needs_data
-def test_report_on_prints_a_confirmation_line(session, tmp_path, monkeypatch, capsys):
+def test_autosnap_on_prints_a_confirmation_line(session, tmp_path, monkeypatch, capsys):
     """A silent file write is easy to forget is even happening -- GO's own
     output should say so, not just the report file itself."""
     monkeypatch.chdir(tmp_path)
-    run(session, "pert", "window 355 375", "norm 140 200", "thick 1", "report", "go")
+    run(session, "pert", "window 355 375", "norm 140 200", "thick 1", "autosnap", "go")
     output = capsys.readouterr().out
     assert "updated au.report" in output
     assert "wrote au.pert" in output
@@ -1016,25 +1034,25 @@ def test_report_on_prints_a_confirmation_line(session, tmp_path, monkeypatch, ca
 
 
 @needs_data
-def test_report_off_stops_further_writes(session, tmp_path, monkeypatch):
+def test_autosnap_off_stops_further_writes(session, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     run(
         session, "pert", "window 355 375", "norm 140 200", "thick 1",
-        "report", "go", "report off", "go",
+        "autosnap", "go", "autosnap off", "go",
     )
     report = tmp_path / "au.report"
     assert report.read_text().count("reduced chi-square") == 1
 
 
 @needs_data
-def test_report_sanitizes_a_filename_command_stamping_a_windows_path(session, tmp_path, monkeypatch):
+def test_autosnap_sanitizes_a_filename_command_stamping_a_windows_path(session, tmp_path, monkeypatch):
     """Reproduces a WRASCII macro's own FILENAME line (RC43's convention)
-    stamping a full Windows path into buffer.name -- REPORT must still
+    stamping a full Windows path into buffer.name -- AUTOSNAP must still
     land on a clean MA8410.report, not fail or write somewhere bogus."""
     monkeypatch.chdir(tmp_path)
     run(
         session, r"filename c:\RBS\data\2026\08\MA8410.RBS",
-        "pert", "window 355 375", "norm 140 200", "thick 1", "report", "go",
+        "pert", "window 355 375", "norm 140 200", "thick 1", "autosnap", "go",
     )
     assert (tmp_path / "MA8410.report").exists()
 

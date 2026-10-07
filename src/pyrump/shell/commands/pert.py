@@ -185,14 +185,15 @@ class PertState:
     multi: bool = True
     verbose: bool = False
     autocmp: bool = False
-    report: bool = False
+    #: AUTOSNAP (once REPORT): a SNAPSHOT after every GO.
+    autosnap: bool = False
     #: HIGHLIGHT: shade the windows on the plots (on by default).
     highlight: bool = True
 
     def describe(self, script=None, session=None) -> str:
         lines = [f"  mode        {'multiple' if self.multi else 'single'} variable"]
         lines.append(f"  autocmp     {'on' if self.autocmp else 'off'}")
-        lines.append(f"  report      {'on' if self.report else 'off'}")
+        lines.append(f"  autosnap    {'on' if self.autosnap else 'off'}")
         lines.append(f"  highlight   {'on' if self.highlight else 'off'}")
         lines.append(f"  error win   {_format_windows(self.windows.error)}")
         norm = self.windows.normalisation
@@ -724,7 +725,7 @@ def cmd_get(session, args: ArgReader) -> None:
     # .pyrumprc), not part of the file-specific selection GET replaces --
     # carry them over so a fresh GET doesn't silently turn them back off.
     state = state_for(session)
-    session.pert = PertState(autocmp=state.autocmp, report=state.report, highlight=state.highlight)
+    session.pert = PertState(autocmp=state.autocmp, autosnap=state.autosnap, highlight=state.highlight)
     execute_file(session, path, stack=["rump", "pert"])
     print(f"read {path}")
     print(state_for(session).describe(session.script, session))
@@ -748,7 +749,7 @@ def cmd_clear(session, args: ArgReader) -> None:
     if not args:
         # Same standing-preference carve-out as GET (see cmd_get).
         state = state_for(session)
-        session.pert = PertState(autocmp=state.autocmp, report=state.report, highlight=state.highlight)
+        session.pert = PertState(autocmp=state.autocmp, autosnap=state.autosnap, highlight=state.highlight)
         print("  PERT settings cleared")
         _show_windows(session)
         return
@@ -793,8 +794,8 @@ def cmd_autocmp(session, args: ArgReader) -> None:
     print(f"  autocmp {'on' if state.autocmp else 'off'}")
 
 
-def cmd_report(session, args: ArgReader) -> None:
-    """``REPORT [off]`` -- after every ``GO``, take a ``SNAPSHOT`` of the fit
+def cmd_autosnap(session, args: ArgReader) -> None:
+    """``AUTOSNAP [off]`` -- after every ``GO``, take a ``SNAPSHOT`` of the fit
     under the sample's own name (default off).
 
     A pyRUMP-only addition, not part of legacy RUMP. Once on, no further
@@ -823,8 +824,16 @@ def cmd_report(session, args: ArgReader) -> None:
     token = args.optional()
     args.done()
     state = state_for(session)
-    state.report = token is None or token.lower() not in ("off", "no", "0")
-    print(f"  report {'on' if state.report else 'off'}")
+    state.autosnap = token is None or token.lower() not in ("off", "no", "0")
+    print(f"  autosnap {'on' if state.autosnap else 'off'}")
+
+
+def cmd_report(session, args: ArgReader) -> None:
+    """``REPORT [off]`` -- deprecated: renamed ``AUTOSNAP`` for clarity, since
+    it takes a ``SNAPSHOT`` after every ``GO`` (the same files ``SNAP``
+    writes). ``REPORT`` still works, so older macros and ``~/.pyrumprc``
+    files keep working; use ``AUTOSNAP``."""
+    cmd_autosnap(session, args)
 
 
 def cmd_highlight(session, args: ArgReader) -> None:
@@ -934,7 +943,7 @@ def _write_back(session, entry: Vary, inputs: FitInputs, before: float) -> None:
 
 def _report_stem(buffer) -> str:
     """A short, filesystem-safe name for this buffer's spectrum, shared by
-    every file ``REPORT`` writes and by the plot legend -- see
+    every file ``AUTOSNAP`` writes and by the plot legend -- see
     :func:`~pyrump.shell.snapshot.stem`."""
     return snapshot.stem(buffer)
 
@@ -1443,8 +1452,8 @@ def cmd_go(session, args: ArgReader) -> None:
     # it as fitted, uncertainties and all.
     session.last_fit = (snapshot.fingerprint(session, labels=False), report_lines)
 
-    # REPORT's snapshot draws its own COMPARE, for its .png.
-    if state.report:
+    # AUTOSNAP's snapshot draws its own COMPARE, for its .png.
+    if state.autosnap:
         snapshot.take(session, after_go=True)
     elif state.autocmp:
         cmd_compare(session, ArgReader([], command="compare"))
@@ -1476,8 +1485,11 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("VOLUME", 3, cmd_volume, "verbose progress messages"),
     ("AUTOCMP", 4, cmd_autocmp, "run COMPARE automatically at the end of GO"),
     ("HIGHLIGHT", 2, cmd_highlight, "shade the fit windows on the plots (HIGHLIGHT OFF to stop)"),
-    ("REPORT", 3, cmd_report,
-     "SNAPSHOT after every GO: <sample>.report, _fit.xeq ... (REPORT OFF to stop)"),
+    ("AUTOSNAP", 5, cmd_autosnap,
+     "SNAPSHOT after every GO: <sample>.report, _fit.xeq ... (AUTOSNAP OFF to stop)"),
+    # The old name, kept for macros and ~/.pyrumprc; out of the listing.
+    ("REPORT", -3, cmd_report,
+     "deprecated: renamed AUTOSNAP for clarity -- REPORT still works, use AUTOSNAP"),
     # Registered here too, not only at the RUMP level, so switching doesn't
     # fall through and leave PERT (repl.py's execute_line).
     ("MODE", 4, cmd_mode,

@@ -48,7 +48,7 @@ port. A handful of bugs in the original C are already fixed rather than just rep
 defects](dev/rump-quirks.md)). New physics has been added, like Andersen screening
 alongside RUMP's original L'Ecuyer correction (see the [`SCREENING`](manual/config.md#screening-new)
 command). And the user workflow is gaining new commands beyond what RUMP ever had, like
-automatic per-fit [`REPORT`](manual/pert.md#report-new) generation, and
+automatic per-fit snapshots with [`AUTOSNAP`](manual/pert.md#autosnap-new), and
 [`SNAPSHOT`](manual/shell.md#snapshot-snap-new), which saves a session — fitted or tuned
 by hand — as a macro that brings it back. SIMNRA's
 `.xnra` files can be read and written, spectrum, instrument settings and sample together,

@@ -216,7 +216,7 @@ PERT Command: fwhm
 PERT Command: parms
   mode        multiple variable
   autocmp     off
-  report      off
+  autosnap    off
   highlight   on
   error win   [1] 820-1090
   norm win    420-580
@@ -341,13 +341,13 @@ K-line yield at this dose. H absorbs that, so the ratio doesn't depend on
 it. For absolute amounts from PIXE, calibrate H on a standard measured
 the same way (`PIXE H K <value>`) and leave out `PIXH`.
 
-## 5. Keep the result: REPORT and SNAPSHOT
+## 5. Keep the result: AUTOSNAP and SNAP
 
-**`REPORT ON`** in PERT saves the result after every `GO` by itself:
+**`AUTOSNAP`** in PERT saves the result after every `GO` by itself:
 
 ```
-PERT Command: report on
-  report on
+PERT Command: autosnap
+  autosnap on
 PERT Command: go
   ...
   FeNi: Si [5um] - SiO2 [280SIO2] - FeNi2.10 [190A] - Pt [21A]
@@ -389,7 +389,7 @@ fwhm
 
 **`SNAP`** (`SNAPSHOT`) at the RUMP prompt writes the same files at any
 time, for instance after you've adjusted a thickness by hand to look at
-the residuals. Without `REPORT`, it is the one command to remember before
+the residuals. Without `AUTOSNAP`, it is the one command to remember before
 you stop:
 
 ```

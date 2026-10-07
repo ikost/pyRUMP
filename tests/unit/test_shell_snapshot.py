@@ -495,7 +495,7 @@ def test_snapshot_without_any_fit(session, work):
 
 @needs_data
 def test_report_on_writes_the_restore_macro_too(session, work, capsys):
-    run(session, "pert window 355 375", "pert thick 1", "pert report", "pert go")
+    run(session, "pert window 355 375", "pert thick 1", "pert autosnap", "pert go")
     output = capsys.readouterr().out
     for line in ("updated au.report", "wrote au.pert", "wrote au.lcm", "wrote au_rbs.png",
                  "wrote au_fit.xeq"):
@@ -509,7 +509,7 @@ def test_report_on_for_a_buffer_not_read_from_a_file_still_records_the_fit(
     session, work, capsys
 ):
     session.buffers.active_buffer.path = None
-    run(session, "pert window 355 375", "pert thick 1", "pert report", "pert go")
+    run(session, "pert window 355 375", "pert thick 1", "pert autosnap", "pert go")
     assert (work / "au.report").exists()
     assert not (work / "au_fit.xeq").exists()
     assert "no restore macro: buffer 1 was not read from a file" in capsys.readouterr().out
