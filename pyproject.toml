@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pyrump"
-version = "2.0.0.dev0"
+version = "2.0.0"
 description = "Rutherford backscattering spectrometry (RBS) simulation and analysis, reimplemented from RUMP in Python, with PIXE"
 readme = "README.md"
 requires-python = ">=3.10"
