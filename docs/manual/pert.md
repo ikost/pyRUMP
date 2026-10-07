@@ -367,7 +367,7 @@ PERT Command: thickness 2
 PERT Command: pixh k
 PERT Command: pixfirst
 PERT Command: go
-  Fitting MA3472: Si [20000/cm2] - SiO2 [438/cm2] - FeNi [172/cm2] - Pt [13/cm2]
+  Fitting FeNi: Si [20000/cm2] - SiO2 [438/cm2] - FeNi [172/cm2] - Pt [13/cm2]
   with the PIXE spectrum over channels 500-850, fitted first (PIXFIRST)
   PIXE: layer 2 composition Fe, PIXH K
   RBS: layer 1 thickness, layer 2 thickness
@@ -384,13 +384,15 @@ PERT Command: go
   layer 2 thickness                180 /cm2  +/- 0.3749 /cm2   (was 172 /cm2)
   PIXH K                           0.700328  +/- 0.009894   (was 1)
 
-  MA3472: Si [20000/cm2] - SiO2 [438/cm2] - Fe0.48Ni [180/cm2] - Pt [13/cm2]
+  FeNi: Si [20000/cm2] - SiO2 [438/cm2] - Fe0.48Ni [180/cm2] - Pt [13/cm2]
 ```
 
 Fitted jointly, the same selections stay at Fe ≈ 1.0 and push H down
 instead. The RBS spectrum alone gives Fe 1.25, while the four Fe and Ni K
 peaks all match at Fe 0.48. Run `GO` again after a `PIXFIRST` fit: stage 2's
-thicknesses change the PIXE yields a little.
+thicknesses change the PIXE yields a little. The whole analysis of this
+sample, from loading the data to saving the session, is the
+[FeNi worked example](../getting-started/feni-rbs-pixe.md).
 
 `PIXWIN`, `PIXFIRST` and `PIXH` need all four letters, so that `PIXE` (or
 `PIX`) still opens the PIXE prompt from PERT, as it does at every other

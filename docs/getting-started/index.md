@@ -198,6 +198,10 @@ See [PERT](../manual/pert.md) in the manual for the full `PERT`
 command set — bounded fits, `WINDOW`/`NORMALIZE`, `REPORT`, and the
 composition-degeneracy caveat worth reading before your first real fit.
 
+For a complete analysis of a measurement with both RBS and PIXE, from
+loading the data through SIM, PERT and the saved results, see the
+[FeNi worked example](feni-rbs-pixe.md).
+
 ### Picking up later
 
 `SNAP` saves the session as it stands. That can be straight after the fit,
