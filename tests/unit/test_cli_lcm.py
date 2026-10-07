@@ -28,6 +28,7 @@ from pyrump.plot.spectra import (  # noqa: E402
 from pyrump.profiles.equations import EquationType  # noqa: E402
 from pyrump.script.lcm import (  # noqa: E402
     areal_structure_label,
+    depth_to_areal,
     parse_lcm,
     read_lcm,
     structure_label,
@@ -504,3 +505,27 @@ def test_straggle_and_multiple_scatter_survive_a_save():
     plain = write_lcm(parse_lcm("Sim Reset\nLayer 1\n Thick 100 A\n Composition Si 1 /\n"))
     assert "Straggle" not in plain and "Multiple" not in plain
 
+
+@needs_data
+def test_a_depth_is_walked_down_the_layers_with_their_own_densities():
+    """DISPLAY's depth: a length goes through each layer at the density its
+    thickness was given with -- a compound unit's for SiO2 -- and /CM2 is
+    already an areal density."""
+    table = PeriodicTable.load(DATA / "atom4.dat", DATA / "pscoef.dat")
+    densities = DensityTable.load(DATA / "density.tab")
+    script = parse_lcm(
+        "Sim Reset\nLayer 1\n Thick 20 A\n Composition Pt 1 /\nNext\n"
+        " Thick 280 SIO2\n Composition Si 1 O 2 /\nNext\n Thick 5 um\n Composition Si 1 /\n"
+    )
+    sample = to_sample(script, table, densities)
+    pt, oxide, wafer = sample.thicknesses
+    assert depth_to_areal(script, table, 20, "A", densities) == pytest.approx(pt)
+    assert depth_to_areal(script, table, 30, "nm", densities) == pytest.approx(pt + oxide)
+    # 100 A into the wafer, at silicon's own density (its 5 um = 50000 A).
+    deeper = depth_to_areal(script, table, 400, "A", densities)
+    assert deeper == pytest.approx(pt + oxide + 100 * wafer / 50000)
+    assert oxide == pytest.approx(280 * 0.66, rel=1e-3)  # SiO2's own density
+    assert depth_to_areal(script, table, 123, "/cm2", densities) == 123
+    assert depth_to_areal(script, table, 1e6, "A", densities) == pytest.approx(sum(sample.thicknesses))
+    with pytest.raises(ValueError, match="A, nm, um or /CM2"):
+        depth_to_areal(script, table, 5, "SIO2", densities)

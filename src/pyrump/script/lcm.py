@@ -622,6 +622,53 @@ def thickness_mode_views(
     return views
 
 
+def depth_to_areal(
+    script: Script,
+    periodic_table: PeriodicTable,
+    depth: float,
+    unit: str,
+    densities: DensityTable | None = None,
+) -> float:
+    """A depth below the surface in 1e15 at/cm^2.
+
+    ``/CM2`` is already that. A length (``A``, ``nm``, ``um``) is walked
+    down the layers, each converted with the density its own thickness was
+    (:func:`_to_areal`): a layer given in a compound unit (``SIO2``) at that
+    compound's density, any other at its elements'. Past the bottom of the
+    sample, the whole sample.
+    """
+    from ..atomic.density import layer_atomic_density
+
+    import numpy as np
+
+    densities = densities or DensityTable(compounds={})
+    known = densities.unit(unit)
+    if known is None or known.kind is ThicknessKind.MOLECULAR:
+        raise ValueError(f"a depth is in A, nm, um or /CM2, not {unit!r}")
+    if known.kind is ThicknessKind.ATOMIC:
+        return depth * known.scale
+
+    symbols = script.elements
+    atomic_densities = np.array(
+        [periodic_table.by_symbol(s).atomic_density for s in symbols], dtype=np.float64
+    )
+    remaining = depth * known.scale  # Angstroms
+    areal = 0.0
+    for layer in script.layers:
+        row = [layer.composition.get(s, 0.0) for s in symbols]
+        density = layer_atomic_density(row, atomic_densities)
+        thickness = _to_areal(layer.thickness, layer.unit, density, sum(row), densities)
+        per_angstrom = density if densities.unit(layer.unit) else densities.density(layer.unit)
+        if per_angstrom <= 0:
+            continue
+        span = thickness / per_angstrom
+        if remaining <= span:
+            return areal + remaining * per_angstrom
+        areal += thickness
+        remaining -= span
+    return areal
+
+
 def _to_areal(
     magnitude: float,
     unit: str,

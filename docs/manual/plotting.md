@@ -205,4 +205,26 @@ Prints the current plot settings.
 
 #### `DISPLAY`
 
-Plots the sample composition against depth, from the `SIM` description.
+```
+usage: DISPLAY [<depth> [<unit>]]
+```
+
+Plots the sample composition against depth, from the `SIM` description:
+each element's atomic fraction, layer by layer, in the RBS window. Depth
+is in 10¹⁵ at/cm², the unit RBS measures.
+
+With no depth, the whole sample is shown, substrate included. A thick
+substrate then takes up nearly all the axis, so give a depth to see the
+films: `DISPLAY` stops there. The depth takes `SIM THICKNESS`'s units,
+`A` unless given (`nm`, `um`, `/CM2`). A length is converted layer by
+layer with each layer's own density, the one its thickness was given
+with (a compound unit's, such as `SIO2`, or its elements'), and the
+plot says what it came to:
+
+```
+Your wish? display 600
+  depth 0-600 A = 0-422.2 /CM2 of the sample's 25256.4
+```
+
+RUMP has `DISPLAY` too, but there it does nothing: its `SimDrawSample`
+is an empty stub.

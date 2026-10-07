@@ -1260,14 +1260,34 @@ def save_figures(session, target: Path) -> list[Path]:
 
 
 def cmd_display(session, args: ArgReader) -> None:
-    """Plot the composition of the SIM sample against depth."""
-    args.done()
+    """``DISPLAY [<depth> [<unit>]]`` -- plot the composition of the SIM
+    sample against depth: all of it, or down to ``<depth>``.
+
+    The depth takes SIM THICKNESS's units, ``A`` unless given (``nm``,
+    ``um``, ``/CM2``); a length is converted layer by layer with each
+    layer's own density (:func:`~pyrump.script.lcm.depth_to_areal`). The
+    axis stays in 1e15 at/cm^2. RUMP's own DISPLAY (``SimDrawSample``) was
+    an empty stub.
+    """
     from ...plot.spectra import plot_depth_profile
-    from ...script.lcm import to_sample
+    from ...script.lcm import depth_to_areal, to_sample
     from ...sim.engine import build_sample_grid
 
+    depth = unit = None
+    if args:
+        depth = args.number("a depth")
+        unit = args.optional() or "A"
+        if depth <= 0:
+            raise CommandError("display: the depth must be positive")
+    args.done()
     if not session.script.layers:
         raise CommandError("no sample described: use SIM to build one")
+    cut = None
+    if depth is not None:
+        try:
+            cut = depth_to_areal(session.script, session.table, depth, unit, session.densities)
+        except ValueError as error:
+            raise CommandError(f"display: {error}") from None
 
     plotting.require_matplotlib()
     sample = to_sample(session.script, session.table, session.densities)
@@ -1277,6 +1297,10 @@ def cmd_display(session, args: ArgReader) -> None:
     figure, ax = plotting.figure_for(session)
     ax.clear()
     plot_depth_profile(grid, list(session.script.elements), ax=ax)
+    total = float(grid.depth[-1])
+    if cut is not None and cut < total:
+        ax.set_xlim(0, cut)
+        print(f"  depth 0-{depth:g} {unit} = 0-{cut:.4g} /CM2 of the sample's {total:.6g}")
     ax.set_title(session.script.description or "Sample depth profile")
     session.traces = []
     plotting.show(figure)
@@ -2292,7 +2316,8 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("MODE", 4, cmd_mode,
      "how SIM/PERT enter a layer: COMP or ATOMS"),
     ("CALIBRATE", 3, cmd_calibrate, "energy-calibrate from two known peaks"),
-    ("DISPLAY", 3, cmd_display, "plot the sample composition against depth"),
+    ("DISPLAY", 3, cmd_display,
+     "plot the sample composition against depth [<depth> [A|nm|um|/CM2]]"),
     ("FFT", 3, cmd_fft, "FFT smooth (same as SMOOTH -FFT -RANGE)"),
 ]
 

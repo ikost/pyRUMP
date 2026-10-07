@@ -310,3 +310,31 @@ def test_compare_puts_the_energy_axis_on_its_upper_panel(session):
     plotting.draw(session)
     upper, _ = session.figure.axes
     assert not upper.child_axes
+
+
+def test_display_shows_the_whole_sample_or_down_to_a_depth(capsys):
+    """DISPLAY plots the whole sample; DISPLAY <depth> [unit] stops at that
+    depth, the axis still in 1e15 at/cm^2."""
+    from conftest import data_dir
+    from pyrump.shell.dispatch import CommandError
+    from pyrump.shell.repl import execute_line
+
+    data = data_dir()
+    if data is None:
+        pytest.skip("legacy data tables unavailable")
+    session = Session.create(str(data))
+    lines = ("sim layer 1", "sim thickness 20 A", "sim composition Pt 1 /", "sim next",
+             "sim thickness 5 um", "sim composition Si 1 /")
+    for line in lines:
+        execute_line(session, line, ["rump"])
+    execute_line(session, "display", ["rump"])
+    full = session.figure.axes[0].get_xlim()[1]
+    assert full > 20_000  # the 5 um wafer included
+    capsys.readouterr()
+    execute_line(session, "display 120 A", ["rump"])
+    cut = session.figure.axes[0].get_xlim()[1]
+    assert 13 < cut < 70  # 20 A of Pt (~13) and 100 A of Si (~50)
+    assert "depth 0-120 A" in capsys.readouterr().out
+    with pytest.raises(CommandError, match="A, nm, um or /CM2"):
+        execute_line(session, "display 5 furlongs", ["rump"])
+    plt.close("all")
