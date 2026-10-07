@@ -500,14 +500,17 @@ must be measured with the same beam, geometry, detector and filters.
 
 ### Fitting
 
-PERT fits the PIXE spectrum together with the RBS one, over the PIXE
-windows set with [`PIXWIN <first> <last>`](pert.md#pixwin-new). The element
-amounts move both simulations, through the shared sample, and H can be varied
-with them ([`PIXH K|L|M`](pert.md#pixh-new)). That's how alloys that overlap in RBS (Ta–W,
-Fe–Ni, Ni–Co) get their ratio from their X-ray lines. Where the RBS spectrum
-is sensitive to the same ratio and outweighs the PIXE one,
-[`PIXFIRST`](pert.md#pixfirst-new) fits the compositions to the PIXE spectrum
-alone first, then the rest to RBS.
+In PERT you choose, element by element, which spectrum fits it:
+`COMPOSITION`, `ATOMS` and `SPECIES` take `PIXE` after the element
+([`COMPOSITION 2 Fe PIXE`](pert.md#pixwin-new)) to be fitted to the PIXE
+spectrum over the windows set with [`PIXWIN <first> <last>`](pert.md#pixwin-new),
+while thicknesses and everything else are fitted to RBS. GO alternates the
+two fits until neither moves. H stays as set here unless
+[`PIXH`](pert.md#pixh-new) varies it, for the shells of the PIXE elements'
+lines in the windows. That's how alloys that overlap in RBS (Ta–W, Fe–Ni,
+Ni–Co) get their ratio from their X-ray lines; the
+[FeNi worked example](../getting-started/feni-rbs-pixe.md) goes through
+one.
 
 Still to come: the PIXE energy calibration and resolution as fit
 parameters, the background (with its scale s), and fitting the PIXE spectrum

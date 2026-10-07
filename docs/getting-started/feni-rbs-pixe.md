@@ -251,17 +251,22 @@ the beam 9° and the X-rays 36° from the sample normal.
 
 ## 6. Fit the composition from PIXE
 
-Now give PERT both spectra. `PIXWIN 500 850` adds the PIXE channels with
-the four lines, `COMPOSITION 2 Fe` varies the Fe content against Ni, and
-`PIXH K` varies H_K, the instrumental constant of the K lines. H_K takes
-up whatever the PIXE detector's solid angle, filter and cross sections
-get wrong, so PIXE has to give only the Fe-to-Ni ratio, not absolute
-amounts.
+Now tell PERT which spectrum fits what. `PIXE` after the element in
+`COMPOSITION` fits that element to the PIXE spectrum; everything without
+it, here the three thicknesses, is fitted to RBS as before:
 
-Fitted the default way, both spectra at once, each spectrum weighs in by
-its own counting statistics:
+* **`PIXWIN 500 850`**: the PIXE channels with the four lines.
+* **`COMPOSITION 2 Ni PIXE`**: Ni's content against Fe, which stays at 1
+  as the reference, from the X-ray lines.
+* **`PIXH`**: vary the PIXE instrumental constant H with it. H takes up
+  whatever the PIXE detector's solid angle, filter and cross sections get
+  wrong, so PIXE only has to give the Ni-to-Fe ratio. GO varies H of the
+  shells whose lines of the PIXE elements fall in the windows: here the K
+  shell. Without `PIXH`, H stays at the PIXE prompt's values, as
+  calibrated.
 
 ```
+Your wish? pert
 PERT Command: clear
   PERT settings cleared
 PERT Command: window 360 1090
@@ -270,45 +275,16 @@ PERT Command: normalize 420 580
   normalisation window 420-580
 PERT Command: pixwin 500 850
   PIXE windows [1] 500-850
-PERT Command: composition 2 Fe
-  varying layer 2 composition Fe
+PERT Command: composition 2 Ni pixe
+  varying layer 2 composition Ni
 PERT Command: thickness 1
   varying layer 1 thickness
 PERT Command: thickness 2
   varying layer 2 thickness
 PERT Command: thickness 3
   varying layer 3 thickness
-PERT Command: pixh k
-  varying PIXH K
-PERT Command: go
-  Fitting FeNi: Si [20000/cm2] - SiO2 [401/cm2] - FeNi [182/cm2] - Pt [15/cm2]
-  with the PIXE spectrum over channels 500-850
-
-  fit took 0.36 s
-
-  reduced chi-square 13.1697 on 1077 dof   (was 15.0254)
-  RBS chi-square 12469.2 over 731 channels,   PIXE chi-square 1714.6 over 351 channels
-  24 evaluations, converged
-  data scaled by 0.99980 over the norm window   (correction factor set to 1.1112)
-  layer 2 composition Fe           0.873097  +/- 0.008473   (was 1)
-  layer 1 thickness                 14 /cm2  +/- 0.05039 /cm2   (was 15 /cm2)
-  layer 2 thickness                188 /cm2  +/- 0.4323 /cm2   (was 182 /cm2)
-  layer 3 thickness                357 /cm2  +/- 2.374 /cm2   (was 401 /cm2)
-  PIXH K                           0.652301  +/- 0.008997   (was 1)
-
-  FeNi: Si [20000/cm2] - SiO2 [357/cm2] - Fe0.87Ni [188/cm2] - Pt [14/cm2]
-```
-
-This doesn't settle the composition. Over its window the RBS spectrum
-has about 200 times the PIXE counts (1.07 million against 5500), and its remaining misfit (χ²/dof ≈ 17) pulls Fe its
-way. H_K then drops to make up the difference in the PIXE peaks.
-[`PIXFIRST`](../manual/pert.md#pixfirst-new) splits the fit in two: first
-the composition and H_K are fitted to the PIXE spectrum alone, then the
-thicknesses to the RBS spectrum alone:
-
-```
-PERT Command: pixfirst
-  PIXE fit first: compositions and PIXH from PIXE, the rest from RBS
+PERT Command: pixh
+  varying PIXH
 PERT Command: parms
   mode        multiple variable
   autocmp     off
@@ -317,64 +293,54 @@ PERT Command: parms
   error win   [1] 360-1090
   norm win    420-580
   PIXE win    [1] 500-850
-  PIXE fit    first: compositions and PIXH from PIXE, the rest from RBS
+  PIXE H      K 1   L 1   M 1   K fitted (Ni K lines in the PIXE windows)
   varying:
-    [1] layer 2 composition Fe
-    [2] layer 1 thickness
-    [3] layer 2 thickness
-    [4] layer 3 thickness
-    [5] PIXH K
-PERT Command: go
-  Fitting FeNi: Si [20000/cm2] - SiO2 [357/cm2] - Fe0.87Ni [188/cm2] - Pt [14/cm2]
-  with the PIXE spectrum over channels 500-850, fitted first (PIXFIRST)
-  PIXE: layer 2 composition Fe, PIXH K
-  RBS: layer 1 thickness, layer 2 thickness, layer 3 thickness
-
-  fit took 0.21 s
-
-  PIXE: reduced chi-square 3.4788 on 349 dof   (was 4.9139)
-  12 evaluations, converged
-
-  RBS: reduced chi-square 22.3158 on 728 dof   (was 24.0733)
-  16 evaluations, converged
-  data scaled by 1.00054 over the norm window   (correction factor set to 1.1118)
-  layer 2 composition Fe           0.475531  +/- 0.01298   (was 0.873097)
-  layer 1 thickness                 14 /cm2  +/- 0.05092 /cm2   (was 14 /cm2)
-  layer 2 thickness                202 /cm2  +/- 0.3791 /cm2   (was 188 /cm2)
-  layer 3 thickness                337 /cm2  +/- 2.346 /cm2   (was 357 /cm2)
-  PIXH K                           0.712906  +/- 0.01007   (was 0.652301)
-
-  FeNi: Si [20000/cm2] - SiO2 [337/cm2] - Fe0.48Ni [202/cm2] - Pt [14/cm2]
-PERT Command: go
-  Fitting FeNi: Si [20000/cm2] - SiO2 [337/cm2] - Fe0.48Ni [202/cm2] - Pt [14/cm2]
-  with the PIXE spectrum over channels 500-850, fitted first (PIXFIRST)
-  PIXE: layer 2 composition Fe, PIXH K
-  RBS: layer 1 thickness, layer 2 thickness, layer 3 thickness
-
-  fit took 0.15 s
-
-  PIXE: reduced chi-square 3.4779 on 349 dof   (was 3.5531)
-  9 evaluations, converged
-
-  RBS: reduced chi-square 22.3005 on 728 dof   (was 22.3013)
-  9 evaluations, converged
-  data scaled by 1.00000 over the norm window   (correction factor set to 1.1118)
-  layer 2 composition Fe           0.475578  +/- 0.01299   (was 0.475531)
-  layer 1 thickness                 14 /cm2  +/- 0.05092 /cm2   (was 14 /cm2)
-  layer 2 thickness                202 /cm2  +/- 0.3792 /cm2   (was 202 /cm2)
-  layer 3 thickness                336 /cm2  +/- 2.35 /cm2   (was 337 /cm2)
-  PIXH K                           0.665683  +/- 0.009402   (was 0.712906)
-
-  FeNi: Si [20000/cm2] - SiO2 [336/cm2] - Fe0.48Ni [202/cm2] - Pt [14/cm2]
+    [1] layer 2 composition Ni       PIXE
+    [2] layer 1 thickness            RBS
+    [3] layer 2 thickness            RBS
+    [4] layer 3 thickness            RBS
+    [5] PIXH                         PIXE
 ```
 
-Run `GO` until nothing moves, here twice. The PIXE stage fits H_K at the
-thickness the previous RBS stage left, so H_K settles one round later
-than the rest.
+`PARMS` lists which spectrum fits each parameter, and which H is fitted
+and why. `GO` then fits Ni and H_K to the PIXE spectrum over channels
+500–850, the thicknesses to the RBS spectrum over 360–1090, and repeats
+the two until nothing moves: the PIXE yields depend a little on the
+thicknesses, the RBS spectrum on the composition.
+
+```
+PERT Command: go
+  Fitting FeNi: Si [20000/cm2] - SiO2 [401/cm2] - FeNi [182/cm2] - Pt [15/cm2]
+  PIXE, channels 500-850: layer 2 composition Ni, PIXH K
+  RBS, channels 360-1090: layer 1 thickness, layer 2 thickness, layer 3 thickness
+
+  fit took 0.63 s, 3 rounds PIXE -> RBS
+
+  PIXE: reduced chi-square 3.4791 on 349 dof   (was 8.7103)
+  RBS:  reduced chi-square 22.3077 on 728 dof   (was 25.7546)
+  75 evaluations, converged
+  data scaled by 1.00033 over the norm window   (correction factor set to 1.1118)
+  layer 2 composition Ni             2.1026  +/- 0.05747   (was 1)
+  layer 1 thickness                 14 /cm2  +/- 0.05092 /cm2   (was 15 /cm2)
+  layer 2 thickness                202 /cm2  +/- 0.3793 /cm2   (was 182 /cm2)
+  layer 3 thickness                336 /cm2  +/- 2.351 /cm2   (was 401 /cm2)
+  PIXH K                           0.665863  +/- 0.00941   (was 1)
+
+  FeNi: Si [20000/cm2] - SiO2 [336/cm2] - FeNi2.10 [202/cm2] - Pt [14/cm2]
+```
+
+Each spectrum reports its own chi-square. The PIXE one is the measure of
+the composition fit; the RBS one of the thicknesses. A second `GO` takes
+one round and changes nothing, which confirms the fit has settled.
+
+Fitting Ni to PIXE rather than RBS matters here. Each parameter is fitted
+to one spectrum only, so the RBS spectrum, with about 200 times the
+counts (1.07 million against 5500 over the windows) and its remaining
+misfit, can't pull the composition its way.
 
 ![The FeNi PIXE spectrum after the fit: all four Fe and Ni K lines matched](../assets/feni-pixe.png)
 
-All four lines now match. Only the Fe content and H_K were free; each
+All four lines now match. Only the Ni content and H_K were free; each
 Kβ follows from its Kα through the atomic data, so the two Kβ peaks
 matching too is a check on the calibration and the line data.
 
@@ -383,8 +349,8 @@ matching too is a check on the calibration and the line data.
 ```
 Your wish? sim show
  >  1            14 /cm2     Pt 1           [14 /CM2  Pt 14.05]
-    2           202 /cm2     Fe 0.48 Ni 1   [202 /CM2  Fe 65.12 Ni 136.93]
-    3           336 /cm2     Si 1 O 2       [336 /CM2  Si 111.99 O 223.98]
+    2           202 /cm2     Fe 1 Ni 2.10   [202 /CM2  Fe 65.11 Ni 136.89]
+    3           336 /cm2     Si 1 O 2       [336 /CM2  Si 112.01 O 224.02]
     4         20000 /cm2     Si 1           [20000 /CM2  Si 20000]
   maxpth 1000   straggle 0   multiple 0   absorber 0
 ```
@@ -392,7 +358,7 @@ Your wish? sim show
 | Layer | Areal density (10¹⁵ at/cm²) | Composition |
 |---|---|---|
 | Pt | 14 | |
-| FeNi | 202 (Fe 65, Ni 137) | Fe/Ni = 0.476 ± 0.013, i.e. Fe₃₂Ni₆₈ |
+| FeNi | 202 (Fe 65, Ni 137) | Ni/Fe = 2.10 ± 0.06, i.e. Fe₃₂Ni₆₈ |
 | SiO₂ | 336 | |
 
 The uncertainties are statistical only, as PERT reports them.
@@ -420,7 +386,7 @@ PERT Command: report on
   report on
 PERT Command: go
   ...
-  FeNi: Si [20000/cm2] - SiO2 [336/cm2] - Fe0.48Ni [202/cm2] - Pt [14/cm2]
+  FeNi: Si [20000/cm2] - SiO2 [336/cm2] - FeNi2.10 [202/cm2] - Pt [14/cm2]
 
   updated FeNi.report
   wrote FeNi.pert
@@ -448,12 +414,11 @@ it and fits in one line:
 window 360 1090
 pixwin 500 850
 normalize 420 580
-pixfirst
-composition 2 Fe
+composition 2 Ni pixe
 thickness 1
 thickness 2
 thickness 3
-pixh K
+pixh
 ```
 
 **`SNAP`** (`SNAPSHOT`) at the RUMP prompt writes the same files at any

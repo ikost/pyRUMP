@@ -1,16 +1,17 @@
-"""PERT fitting the PIXE spectrum together with the RBS one.
+"""PERT fitting compositions to the PIXE spectrum, the rest to the RBS one.
 
 The acceptance tests are films whose elements RBS can hardly tell apart --
 W-Ta (masses 184 and 181) and permalloy Ni-Fe -- simulated in RBS and PIXE
 with a known ratio, given Poisson noise, and fitted from a wrong start, the
-PIXE instrumental constant H included. With PIXE windows over the lines the
-ratio must come back, and more tightly than from RBS alone.
+PIXE instrumental constant H included. With the composition fitted to PIXE
+over its lines the ratio must come back, and more tightly than from RBS.
 """
 
 from __future__ import annotations
 
 import contextlib
 import io
+import re
 
 import numpy as np
 import pytest
@@ -103,9 +104,14 @@ def fitted(output: str, name: str) -> tuple[float, float]:
 
 # -- the acceptance tests -----------------------------------------------------
 
+TA_WINDOW = f"pert pixwin {channel(7.9)} {channel(10.0)}"
+FE_NI_WINDOW = f"pert pixwin {channel(6.2)} {channel(8.5)}"
+
 
 @needs_data
-def test_w_ta_ratio_from_rbs_and_pixe(tmp_path):
+def test_w_ta_ratio_from_pixe(tmp_path):
+    """Ta fitted to the PIXE spectrum, the thickness to RBS: the ratio comes
+    back, with H_L 25% off found too, and far more tightly than RBS gives it."""
     rbs_only = film(tmp_path, "W", "Ta")
     output = run(rbs_only, "pert window 380 500", "pert composition 1 Ta",
                  "pert thick 1", "pert go")
@@ -114,28 +120,45 @@ def test_w_ta_ratio_from_rbs_and_pixe(tmp_path):
     both = film(tmp_path, "W", "Ta")
     both.pixe.h = (1.0, 1.25, 1.0)  # H_L off by 25%: the fit must find it
     output = run(
-        both, "pert window 380 500", "pert composition 1 Ta", "pert thick 1",
-        f"pert pixwin {channel(7.9)} {channel(10.0)}", "pert pixh l", "pert go",
+        both, "pert window 380 500", "pert composition 1 Ta pixe", "pert thick 1",
+        TA_WINDOW, "pert pixh", "pert go",
     )
     ta, sigma = fitted(output, "layer 1 composition Ta")
     h, sigma_h = fitted(output, "PIXH L")
     assert abs(ta - 1.0) < 3 * sigma, (ta, sigma)
     assert abs(h - 1.0) < 3 * sigma_h, (h, sigma_h)
     assert sigma < sigma_rbs / 2, (sigma, sigma_rbs)
-    assert "PIXE chi-square" in output and "RBS chi-square" in output
+    assert re.search(rf"PIXE, channels {channel(7.9)}-{channel(10.0)}: +layer 1 composition Ta, "
+                     "PIXH L", output)
+    assert re.search(r"RBS, channels 380-500: +layer 1 thickness", output)
+    assert "rounds PIXE -> RBS" in output
+    assert "PIXE: reduced chi-square" in output and "RBS:  reduced chi-square" in output
     assert both.pixe.h[1] == pytest.approx(h, rel=1e-4)  # written back
 
 
 @needs_data
-def test_permalloy_ni_fe_ratio_from_rbs_and_pixe(tmp_path):
-    session = film(tmp_path, "Ni", "Fe", truth=0.25, start=0.6)
-    session.pixe.h = (1.3, 1.0, 1.0)
-    output = run(
-        session, "pert window 300 420", "pert composition 1 Fe", "pert thick 1",
-        f"pert pixwin {channel(6.2)} {channel(8.5)}", "pert pixh k", "pert go",
+def test_permalloy_fe_from_pixe_whatever_the_rbs_misfit(tmp_path):
+    """The RBS data two channels off the simulation's calibration -- a
+    misfit the counts can't average out. Fitted to RBS, the Fe content goes
+    with it; fitted to PIXE, it comes back."""
+    lines = ("pert window 300 420", "pert thick 1", FE_NI_WINDOW, "pert pixh")
+
+    def shifted():
+        session = film(tmp_path, "Ni", "Fe", truth=0.25, start=0.6)
+        session.pixe.h = (1.3, 1.0, 1.0)
+        rbs = session.buffers.active_buffer.spectrum
+        rbs.counts = np.roll(rbs.counts, 2)
+        return session
+
+    from_rbs, _ = fitted(
+        run(shifted(), "pert window 300 420", "pert composition 1 Fe", "pert thick 1",
+            "pert go"),
+        "layer 1 composition Fe",
     )
-    fe, sigma = fitted(output, "layer 1 composition Fe")
+    fe, sigma = fitted(run(shifted(), "pert composition 1 Fe pixe", *lines, "pert go"),
+                       "layer 1 composition Fe")
     assert abs(fe - 0.25) < 3 * sigma, (fe, sigma)
+    assert abs(fe - 0.25) < abs(from_rbs - 0.25) / 3, (fe, from_rbs)
 
 
 @needs_data
@@ -146,11 +169,20 @@ def test_a_normalisation_window_sets_the_pixe_dose_too(tmp_path):
     session = film(tmp_path, "W", "Ta", dose=1.2)
     output = run(
         session, "pert window 380 500", "pert normalize 100 300",
-        "pert composition 1 Ta", "pert thick 1",
-        f"pert pixwin {channel(7.9)} {channel(10.0)}", "pert pixh l", "pert go",
+        "pert composition 1 Ta pixe", "pert thick 1", TA_WINDOW, "pert pixh", "pert go",
     )
     h, sigma_h = fitted(output, "PIXH L")
     assert abs(h - 1.0) < 3 * sigma_h + 0.02, (h, sigma_h)
+
+
+@needs_data
+def test_h_stays_as_calibrated_without_pixh(tmp_path):
+    session = film(tmp_path, "W", "Ta")
+    session.pixe.h = (1.0, 1.1, 1.0)
+    output = run(session, "pert window 380 500", "pert composition 1 Ta pixe",
+                 "pert thick 1", TA_WINDOW, "pert go")
+    assert session.pixe.h == (1.0, 1.1, 1.0)
+    assert "PIXH" not in output
 
 
 # -- the commands -------------------------------------------------------------
@@ -170,45 +202,91 @@ def test_pixe_windows_are_added_listed_and_cleared(tmp_path):
 
 
 @needs_data
-def test_pixe_windows_and_h_round_trip_through_a_pert_file(tmp_path):
+def test_the_spectrum_choice_and_pixh_round_trip_through_a_pert_file(tmp_path):
     session = film(tmp_path, "W", "Ta")
-    run(session, "pert window 380 500", "pert pixwin 786 994", "pert pixh l 0.5 2",
+    run(session, "pert window 380 500", "pert pixwin 786 994",
+        "pert composition 1 Ta pixe 0.5 2", "pert composition 1 W rbs", "pert pixh 0.5 2",
         f"pert save {tmp_path / 'setup'}")
-    text = (tmp_path / "setup.pert").read_text()
-    assert "pixwin 786 994" in text and "pixh L 0.5 2" in text
+    text = (tmp_path / "setup.pert").read_text().splitlines()
+    assert "composition 1 Ta pixe 0.5 2" in text and "composition 1 W" in text
+    assert "pixh 0.5 2" in text and "pixwin 786 994" in text
     again = film(tmp_path, "W", "Ta")
     run(again, f"pert get {tmp_path / 'setup'}")
     assert [(w.low, w.high) for w in again.pert.pixe_windows] == [(786, 994)]
-    assert [(v.name, v.bounds) for v in again.pert.varying] == [("PIXH L", (0.5, 2.0))]
+    assert [(v.name, v.spectrum, v.bounds) for v in again.pert.varying] == [
+        ("layer 1 composition Ta", "pixe", (0.5, 2.0)),
+        ("layer 1 composition W", "rbs", None),
+        ("PIXH", "pixe", (0.5, 2.0)),
+    ]
 
 
 @needs_data
-def test_pixe_h_takes_k_l_or_m(tmp_path):
+def test_parms_shows_the_spectrum_of_each_parameter_and_h(tmp_path):
     session = film(tmp_path, "W", "Ta")
-    with pytest.raises(CommandError, match="K, L or M"):
-        run(session, "pert pixh x")
+    run(session, "pert window 380 500", TA_WINDOW, "pert composition 1 Ta pixe", "pert thick 1")
+    output = run(session, "pert parms")
+    assert "PIXE H      K 1   L 1   M 1   fixed (PIXE H to change)" in output
+    assert re.search(r"\[1\] layer 1 composition Ta +PIXE", output)
+    assert re.search(r"\[2\] layer 1 thickness +RBS", output)
+    run(session, "pert pixh")
+    assert "L fitted (Ta L lines in the PIXE windows)" in run(session, "pert parms")
 
 
 @needs_data
-def test_go_needs_a_pixe_spectrum_for_pixe_windows(tmp_path):
+def test_pixh_takes_no_shell(tmp_path):
+    session = film(tmp_path, "W", "Ta")
+    with pytest.raises(CommandError, match="takes no shell"):
+        run(session, "pert pixh l")
+
+
+@needs_data
+def test_go_needs_a_pixe_spectrum_for_pixe_parameters(tmp_path):
     session = film(tmp_path, "W", "Ta")
     session.buffers.active_buffer.pixe = None
-    with pytest.raises(CommandError, match="no PIXE spectrum"):
-        run(session, "pert pixwin 786 994", "pert composition 1 Ta", "pert go")
+    with pytest.raises(CommandError, match="the active buffer has none"):
+        run(session, "pert pixwin 786 994", "pert composition 1 Ta pixe", "pert go")
 
 
 @needs_data
-def test_go_needs_pixe_windows_to_vary_h(tmp_path):
+def test_go_needs_pixe_windows_for_pixe_parameters(tmp_path):
     session = film(tmp_path, "W", "Ta")
     with pytest.raises(CommandError, match="no PIXE windows"):
-        run(session, "pert composition 1 Ta", "pert pixh l", "pert go")
+        run(session, "pert composition 1 Ta pixe", "pert go")
 
 
 @needs_data
 def test_go_rejects_a_pixe_window_outside_the_spectrum(tmp_path):
     session = film(tmp_path, "W", "Ta")
     with pytest.raises(CommandError, match="outside the PIXE spectrum"):
-        run(session, "pert pixwin 5000 6000", "pert composition 1 Ta", "pert go")
+        run(session, "pert pixwin 5000 6000", "pert composition 1 Ta pixe", "pert go")
+
+
+@needs_data
+def test_go_refuses_an_element_without_lines_in_the_windows(tmp_path):
+    """Windows over the W and Ta L lines: Si's K lines (1.74 keV) lie far
+    outside, so the PIXE spectrum can't fit Si -- as with O in an oxide."""
+    session = film(tmp_path, "W", "Ta")
+    with pytest.raises(CommandError, match="Si has no simulated counts"):
+        run(session, "pert pixwin 786 994", "pert composition 2 Si pixe", "pert go")
+
+
+@needs_data
+def test_go_refuses_every_element_of_a_comp_layer_from_pixe(tmp_path):
+    session = film(tmp_path, "W", "Ta")
+    with pytest.raises(CommandError, match="only their ratios count"):
+        run(session, TA_WINDOW, "pert composition 1 W pixe", "pert composition 1 Ta pixe",
+            "pert go")
+
+
+@needs_data
+def test_go_refuses_pixh_with_every_element_of_its_shell_from_pixe(tmp_path):
+    """In MODE ATOMS, W and Ta amounts both from PIXE with H_L free: doubling
+    H and halving both gives the same spectrum."""
+    session = film(tmp_path, "W", "Ta")
+    run(session, "mode atoms")
+    with pytest.raises(CommandError, match="trade off"):
+        run(session, TA_WINDOW, "pert atoms 1 W pixe", "pert atoms 1 Ta pixe", "pert pixh",
+            "pert go")
 
 
 @needs_data
@@ -227,73 +305,7 @@ def test_pixe_in_pert_opens_the_pixe_prompt(tmp_path):
     session = film(tmp_path, "W", "Ta")
     stack = ["rump"]
     with contextlib.redirect_stdout(io.StringIO()):
-        for line in ("pert", "pixw 786 994", "pixh l", "pixe"):
+        for line in ("pert", "pixw 786 994", "pixh", "pixe"):
             execute_line(session, line, stack)
     assert stack == ["rump", "pixe"]
     assert [(w.low, w.high) for w in session.pert.pixe_windows] == [(786, 994)]
-
-
-# -- PIXFIRST -----------------------------------------------------------------
-
-
-@needs_data
-def test_pixfirst_takes_the_ratio_from_pixe_when_rbs_is_off(tmp_path):
-    """The RBS data two channels off the simulation's calibration -- a
-    systematic misfit the counts can't average out. Fitted jointly, the RBS
-    spectrum's far greater counts pull the Fe content with it; PIXFIRST
-    takes it from the X-ray lines alone, and the thickness from RBS."""
-    lines = ("pert window 300 420", "pert composition 1 Fe", "pert thick 1",
-             f"pert pixwin {channel(6.2)} {channel(8.5)}", "pert pixh k")
-    joint = film(tmp_path, "Ni", "Fe", truth=0.25, start=0.6)
-    rbs = joint.buffers.active_buffer.spectrum
-    rbs.counts = np.roll(rbs.counts, 2)
-    fe_joint, _ = fitted(run(joint, *lines, "pert go"), "layer 1 composition Fe")
-
-    first = film(tmp_path, "Ni", "Fe", truth=0.25, start=0.6)
-    rbs = first.buffers.active_buffer.spectrum
-    rbs.counts = np.roll(rbs.counts, 2)
-    output = run(first, *lines, "pert pixfirst", "pert go")
-    fe, sigma = fitted(output, "layer 1 composition Fe")
-    assert abs(fe - 0.25) < 3 * sigma, (fe, sigma)
-    assert abs(fe - 0.25) < abs(fe_joint - 0.25) / 3, (fe, fe_joint)
-    assert "PIXE: layer 1 composition Fe, PIXH K" in output
-    assert "RBS: layer 1 thickness" in output
-    assert "PIXE: reduced chi-square" in output and "RBS: reduced chi-square" in output
-
-
-@needs_data
-def test_pixfirst_round_trips_and_is_listed(tmp_path):
-    session = film(tmp_path, "W", "Ta")
-    run(session, "pert window 380 500", "pert pixwin 786 994", "pert pixfirst",
-        f"pert save {tmp_path / 'setup'}")
-    assert "pixfirst" in (tmp_path / "setup.pert").read_text().split()
-    again = film(tmp_path, "W", "Ta")
-    run(again, f"pert get {tmp_path / 'setup'}")
-    assert again.pert.pixe_first
-    assert "PIXE fit    first" in run(again, "pert parms")
-    run(again, "pert pixfirst off")
-    assert not again.pert.pixe_first
-    assert "PIXE fit    joint" in run(again, "pert parms")
-
-
-@needs_data
-def test_pixfirst_needs_pixe_windows(tmp_path):
-    session = film(tmp_path, "W", "Ta")
-    with pytest.raises(CommandError, match="no PIXE windows"):
-        run(session, "pert composition 1 Ta", "pert pixfirst", "pert go")
-
-
-@needs_data
-def test_pixfirst_needs_something_for_pixe_to_fit(tmp_path):
-    session = film(tmp_path, "W", "Ta")
-    with pytest.raises(CommandError, match="nothing for the PIXE spectrum"):
-        run(session, "pert pixwin 786 994", "pert thick 1", "pert pixfirst", "pert go")
-
-
-@needs_data
-def test_pixfirst_refuses_an_element_without_lines_in_the_windows(tmp_path):
-    """Windows over the W and Ta L lines: Si's K lines (1.74 keV) lie far
-    outside, so the PIXE spectrum can't fit Si -- as with O in an oxide."""
-    session = film(tmp_path, "W", "Ta")
-    with pytest.raises(CommandError, match="Si has no simulated counts"):
-        run(session, "pert pixwin 786 994", "pert composition 2 Si", "pert pixfirst", "pert go")

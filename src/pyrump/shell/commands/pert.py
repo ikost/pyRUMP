@@ -40,7 +40,7 @@ from ...fit.parameters import (
     thickness,
 )
 from ...fit.windows import MAX_ERROR_WINDOWS, Window, WindowSet
-from ...script.lcm import thickness_label, thickness_mode_views
+from ...script.lcm import thickness_label, thickness_mode_views, to_sample
 from ..dispatch import ArgReader, CommandError, CommandTable
 from .. import plotting, snapshot
 from .rump import (
@@ -86,16 +86,20 @@ def _format_varying(varying: list[Vary], script=None) -> list[str]:
     """Lines for the 'varying:' block, one per parameter, 1-based ``[n]``.
 
     Given the ``script``, a THICKNESS bound is labelled with its layer's unit.
+    When anything is fitted to the PIXE spectrum, each line says which
+    spectrum fits it.
     """
     if not varying:
         return ["  varying:    (nothing selected)"]
+    tagged = any(v.spectrum == "pixe" for v in varying)
     lines = ["  varying:"]
     for i, v in enumerate(varying, start=1):
         bound = ""
         if v.bounds:
             unit = _bound_unit(v, script)
             bound = f"  bounds {v.bounds[0]:g}-{v.bounds[1]:g}{f' {unit}' if unit else ''}"
-        lines.append(f"    [{i}] {v.name}{bound}")
+        name = f"{v.name:28s} {v.spectrum.upper()}" if tagged else v.name
+        lines.append(f"    [{i}] {name}{bound}")
     return lines
 
 
@@ -112,9 +116,11 @@ def _vary_command(entry: Vary) -> str:
     elif entry.kind == "equation":
         base = f"equation {entry.layer + 1} {entry.index + 1}"
     elif entry.kind == "pixe_h":
-        base = f"pixh {entry.symbol}"
+        base = "pixh"
     else:
         base = entry.name
+    if entry.kind in _TAGGABLE and entry.spectrum == "pixe":
+        base += " pixe"
     if entry.bounds is not None:
         base += f" {entry.bounds[0]:g} {entry.bounds[1]:g}"
     return base
@@ -129,8 +135,6 @@ def _to_lines(state: PertState) -> list[str]:
         lines.append(f"normalize {norm.low} {norm.high}")
     if not state.multi:
         lines.append("single")
-    if state.pixe_first:
-        lines.append("pixfirst")
     lines.extend(_vary_command(v) for v in state.varying)
     return lines
 
@@ -158,12 +162,15 @@ class Vary:
     """
 
     parameter: object
-    kind: str                 # thickness | composition | atoms | equation | simple | sample | pixe_h
+    kind: str                 # thickness | composition | atoms | species | equation | simple | sample | pixe_h
     layer: int = -1
     index: int = -1
     symbol: str = ""
     name: str = ""
     bounds: tuple[float, float] | None = None
+    spectrum: str = "rbs"
+    """Which spectrum GO fits it to: ``"rbs"``, or ``"pixe"`` for a
+    COMPOSITION, ATOMS or SPECIES typed with ``PIXE``, and for ``PIXH``."""
 
 
 @dataclass(slots=True)
@@ -172,13 +179,9 @@ class PertState:
 
     varying: list[Vary] = field(default_factory=list)
     windows: WindowSet = field(default_factory=WindowSet)
-    #: PIXE channels (numbered as the .PIX file numbers them) fitted
-    #: together with the RBS spectrum -- ``PIXWIN <lo> <hi>``.
+    #: PIXE channels (numbered as the .PIX file numbers them) the
+    #: parameters typed with PIXE are fitted over -- ``PIXWIN <lo> <hi>``.
     pixe_windows: list[Window] = field(default_factory=list)
-    #: PIXFIRST: GO fits the compositions and PIXH to the PIXE spectrum
-    #: alone, then the rest to the RBS spectrum alone, instead of both
-    #: spectra at once.
-    pixe_first: bool = False
     multi: bool = True
     verbose: bool = False
     autocmp: bool = False
@@ -186,7 +189,7 @@ class PertState:
     #: HIGHLIGHT: shade the windows on the plots (on by default).
     highlight: bool = True
 
-    def describe(self, script=None) -> str:
+    def describe(self, script=None, session=None) -> str:
         lines = [f"  mode        {'multiple' if self.multi else 'single'} variable"]
         lines.append(f"  autocmp     {'on' if self.autocmp else 'off'}")
         lines.append(f"  report      {'on' if self.report else 'off'}")
@@ -197,12 +200,10 @@ class PertState:
             f"  norm win    {f'{norm.low}-{norm.high}' if norm else '(none)'}"
         )
         lines.append(f"  PIXE win    {_format_pixe_windows(self.pixe_windows)}")
-        if self.pixe_windows:
-            lines.append(
-                "  PIXE fit    "
-                + ("first: compositions and PIXH from PIXE, the rest from RBS"
-                   if self.pixe_first else "joint: both spectra at once")
-            )
+        if session is not None and (
+            self.pixe_windows or any(v.spectrum == "pixe" for v in self.varying)
+        ):
+            lines.append(f"  PIXE H      {_pixe_h_note(session, self)}")
         lines.extend(_format_varying(self.varying, script))
         return "\n".join(lines)
 
@@ -294,6 +295,15 @@ def _optional_bounds(args: ArgReader) -> tuple[float, float] | None:
     return low, high
 
 
+def _optional_spectrum(args: ArgReader) -> str:
+    """Parse the optional ``PIXE``/``RBS`` after a COMPOSITION, ATOMS or
+    SPECIES element: which spectrum GO fits it to (RBS when omitted)."""
+    token = args.peek()
+    if token is not None and token.lower() in ("pixe", "rbs"):
+        return args.token().lower()
+    return "rbs"
+
+
 def _add(session, entry: Vary) -> None:
     """Add ``entry`` to what PERT varies, or replace it in place if the same
     parameter is already selected -- RUMP's own semantics (pert.c's
@@ -362,11 +372,13 @@ def _layer_element(session, layer: int, symbol: str, kind: str) -> str:
 
 @needs_mode("comp")
 def cmd_composition(session, args: ArgReader) -> None:
-    """``COMPOSITION <layer> <element> [<min> <max>]`` -- vary one element's
-    stoichiometry in a layer.
+    """``COMPOSITION <layer> <element> [PIXE|RBS] [<min> <max>]`` -- vary one
+    element's stoichiometry in a layer. ``PIXE`` fits it to the PIXE
+    spectrum over the ``PIXWIN`` channels instead of the RBS one.
     """
     layer = _layer_argument(session, args)
     symbol = args.token("an element symbol")
+    spectrum = _optional_spectrum(args)
     bound = _optional_bounds(args)
     args.done()
     index = _element_index(session, symbol)
@@ -384,14 +396,15 @@ def cmd_composition(session, args: ArgReader) -> None:
             symbol=canonical,
             name=f"layer {layer + 1} composition {canonical}",
             bounds=bound,
+            spectrum=spectrum,
         ),
     )
 
 
 @needs_mode("atoms")
 def cmd_atoms(session, args: ArgReader) -> None:
-    """``ATOMS <layer> <element> [<min> <max>]`` -- vary one element's own
-    areal density.
+    """``ATOMS <layer> <element> [PIXE|RBS] [<min> <max>]`` -- vary one
+    element's own areal density (``PIXE``: fitted to the PIXE spectrum).
 
     Unlike ``COMPOSITION``, the layer's total thickness is re-derived as the
     sum of its composition row on every trial, so the other elements' own
@@ -402,6 +415,7 @@ def cmd_atoms(session, args: ArgReader) -> None:
     """
     layer = _layer_argument(session, args)
     symbol = args.token("an element symbol")
+    spectrum = _optional_spectrum(args)
     bound = _optional_bounds(args)
     args.done()
     index = _element_index(session, symbol)
@@ -419,6 +433,7 @@ def cmd_atoms(session, args: ArgReader) -> None:
             symbol=canonical,
             name=f"layer {layer + 1} atoms {canonical}",
             bounds=bound,
+            spectrum=spectrum,
         ),
     )
 
@@ -426,6 +441,7 @@ def cmd_atoms(session, args: ArgReader) -> None:
 def cmd_species(session, args: ArgReader) -> None:
     layer = _layer_argument(session, args)
     symbol = args.token("an element symbol")
+    spectrum = _optional_spectrum(args)
     bound = _optional_bounds(args)
     args.done()
     index = _element_index(session, symbol)
@@ -443,6 +459,7 @@ def cmd_species(session, args: ArgReader) -> None:
             symbol=canonical,
             name=f"layer {layer + 1} species {canonical}",
             bounds=bound,
+            spectrum=spectrum,
         ),
     )
 
@@ -523,7 +540,7 @@ def _show_windows(session) -> None:
 def cmd_window(session, args: ArgReader) -> None:
     state = state_for(session)
     if not args:
-        print(state.describe(session.script))
+        print(state.describe(session.script, session))
         return
     token = args.peek()
     if token is not None and token.lower() in ("clear", "none", "reset"):
@@ -582,14 +599,13 @@ def cmd_normalize(session, args: ArgReader) -> None:
 
 
 def cmd_pixwin(session, args: ArgReader) -> None:
-    """``PIXWIN <lo> <hi>`` -- fit the PIXE spectrum over these channels
-    too, together with the RBS one: the same sample drives both, and each
-    spectrum weighs in by its own counting statistics. Channels are
-    numbered as the ``.PIX`` file numbers them, as PIXE ``REGION`` takes
-    them. Put the windows on clear peaks: the PIXE continuum is not
-    simulated. Meant for elements whose RBS signals overlap but whose X-ray
-    lines don't (Ta-W, Fe-Ni, Ni-Co) -- best with lines of the same shell,
-    so H cancels in their ratio (see ``PIXH``).
+    """``PIXWIN <lo> <hi>`` -- the PIXE channels that COMPOSITION, ATOMS
+    and SPECIES typed with ``PIXE`` (and ``PIXH``) are fitted over; GO fits
+    those to the PIXE spectrum and everything else to the RBS one, in turn
+    until neither moves. Channels are numbered as the ``.PIX`` file numbers
+    them, as PIXE ``REGION`` takes them. Put the windows on clear peaks: the
+    PIXE continuum is not simulated. Meant for elements whose RBS signals
+    overlap but whose X-ray lines don't (Ta-W, Fe-Ni, Ni-Co).
 
     ``PIXWIN CLEAR [<n>]`` removes window *n*, or all of them; ``PIXWIN``
     alone lists them. A pyRUMP addition.
@@ -630,52 +646,28 @@ def cmd_pixwin(session, args: ArgReader) -> None:
 
 
 def cmd_pixh(session, args: ArgReader) -> None:
-    """``PIXH K|L|M [<min> <max>]`` -- vary the PIXE instrumental constant
-    H of that shell, so the PIXE spectrum decides the ratio and RBS the
-    amount. Needs ``PIXWIN`` windows. A pyRUMP addition."""
-    family = args.token("K, L or M").upper()
-    if family not in ("K", "L", "M"):
-        raise CommandError(f"PIXH: expected K, L or M, not {family!r}")
+    """``PIXH [<min> <max>]`` -- vary the PIXE instrumental constant H with
+    the elements fitted to the PIXE spectrum: GO varies H of the shells
+    (K, L, M) whose lines of those elements fall in the ``PIXWIN``
+    channels. Without ``PIXH``, H stays at the PIXE prompt's values
+    (``PIXE H``), as calibrated. A pyRUMP addition."""
+    token = args.peek()
+    if token is not None and token.upper() in ("K", "L", "M"):
+        raise CommandError(
+            "PIXH takes no shell: GO varies H of the shells whose lines of the "
+            "PIXE-fitted elements fall in the PIXE windows"
+        )
     bound = _optional_bounds(args)
     args.done()
-    param = pixe_h(family)
-    if bound is not None:
-        param = replace(param, lower=bound[0], upper=bound[1])
     _add(session, Vary(
-        parameter=param, kind="pixe_h", symbol=family, name=f"PIXH {family}", bounds=bound,
+        parameter=None, kind="pixe_h", name="PIXH", bounds=bound, spectrum="pixe",
     ))
 
 
-#: The selections PIXFIRST fits to the PIXE spectrum: what an element's
+#: The selections that take ``PIXE`` or ``RBS``: what an element's X-ray
 #: lines measure. Everything else -- thicknesses, calibration, beam,
-#: profiles -- goes to the RBS spectrum.
-_PIXE_KINDS = ("composition", "atoms", "species", "pixe_h")
-
-
-def cmd_pixfirst(session, args: ArgReader) -> None:
-    """``PIXFIRST [OFF]`` -- how GO uses the PIXE spectrum (default off).
-
-    Off, both spectra are fitted at once, each weighing in by its own
-    counting statistics. Where both are sensitive to the same composition,
-    the one with more counts decides it, and an RBS spectrum usually has
-    far more -- along with any systematic misfit it carries.
-
-    On, GO fits in two stages: first the ``COMPOSITION``, ``ATOMS``,
-    ``SPECIES`` and ``PIXH`` selections to the PIXE spectrum alone, over
-    the ``PIXWIN`` channels, everything else held; then everything else to
-    the RBS spectrum alone, over the ``WINDOW`` channels, those held. Each
-    stage reports its own chi-square. Needs ``PIXWIN`` windows, and every
-    element varied in the first stage must have lines in them. A pyRUMP
-    addition, saved by ``SAVE``.
-    """
-    token = args.optional()
-    args.done()
-    state = state_for(session)
-    state.pixe_first = token is None or token.lower() not in ("off", "no", "0")
-    print(
-        "  PIXE fit first: compositions and PIXH from PIXE, the rest from RBS"
-        if state.pixe_first else "  PIXE fit joint: both spectra at once"
-    )
+#: profiles -- is fitted to the RBS spectrum.
+_TAGGABLE = ("composition", "atoms", "species")
 
 
 def cmd_single(session, args: ArgReader) -> None:
@@ -692,7 +684,7 @@ def cmd_multi(session, args: ArgReader) -> None:
 
 def cmd_parms(session, args: ArgReader) -> None:
     args.done()
-    print(state_for(session).describe(session.script))
+    print(state_for(session).describe(session.script, session))
 
 
 def cmd_show(session, args: ArgReader) -> None:
@@ -735,7 +727,7 @@ def cmd_get(session, args: ArgReader) -> None:
     session.pert = PertState(autocmp=state.autocmp, report=state.report, highlight=state.highlight)
     execute_file(session, path, stack=["rump", "pert"])
     print(f"read {path}")
-    print(state_for(session).describe(session.script))
+    print(state_for(session).describe(session.script, session))
     _show_windows(session)
     if run_go:
         cmd_go(session, ArgReader([], command="go"))
@@ -1002,36 +994,163 @@ def _display(session, entry: Vary, per_areal: float | None):
     return 1.0, _g6, ""
 
 
-def _pixe_extra(session, state: PertState, data_buffer) -> list:
-    """The PIXE spectrum as GO's second spectrum, over the PIXE windows --
-    or nothing, without windows. Checked here, before the fit starts."""
-    from ...fit.lm import ExtraSpectrum
+#: The label of GO's PIXE fit.
+_PIXE_STAGE = "PIXE"
+
+#: GO repeats the PIXE and the RBS fit until no value moves by more than
+#: this fraction, at most MAX_ROUNDS times.
+ROUND_TOLERANCE = 1e-3
+MAX_ROUNDS = 10
+
+#: A shell takes part in PIXH when it carries at least this share of the
+#: PIXE-fitted elements' counts in the windows.
+SHELL_SHARE = 0.01
+
+
+@dataclass(slots=True)
+class _PixePlan:
+    """What GO needs to fit parameters to the PIXE spectrum."""
+
+    simulate: object
+    data: np.ndarray
+    windows: WindowSet
+    varying: list[Vary]
+    """``state.varying`` with ``PIXH`` replaced by one entry per shell."""
+
+    shells: dict[str, list[str]]
+    """The shells PIXH varies, each with the PIXE-fitted elements whose
+    lines of that shell fall in the windows."""
+
+
+def _pixe_mask(state: PertState, pixe) -> np.ndarray:
+    """The PIXWIN channels as a mask over the PIXE spectrum."""
+    size = pixe.spectrum.counts.size
+    first = round(pixe.calibration.first)
+    mask = np.zeros(size, dtype=bool)
+    for window in state.pixe_windows:
+        low, high = window.low - first, window.high - first
+        if high < 0 or low >= size:
+            raise CommandError(
+                f"go: PIXE window {window.low}-{window.high} is outside the PIXE "
+                f"spectrum's channels {first}-{first + size - 1}"
+            )
+        mask[max(low, 0):min(high, size - 1) + 1] = True
+    return mask
+
+
+def _counts_in_windows(session, pixe, mask, inputs: FitInputs) -> dict:
+    """Simulated counts in the PIXE windows, by ``(layer, element, shell)``."""
+    from ...pixe.spectrum import synthesize
     from ..pixe_sim import simulate_with
 
+    simulated = simulate_with(
+        session, inputs.sample, inputs.beam, inputs.geometry, inputs.measurement,
+        inputs.pixe_h, pixe,
+    )
+    groups: dict[tuple[int, str, str], list] = {}
+    for line in simulated.lines:
+        for layer, counts in line.by_layer.items():
+            if counts > 0:
+                groups.setdefault((layer, line.symbol, line.family), []).append(
+                    replace(line, counts=counts)
+                )
+    result = {}
+    for key, lines in groups.items():
+        spectrum = synthesize(
+            lines, simulated.calibration, simulated.detector, escape=simulated.escape,
+        ).counts
+        n = min(spectrum.size, mask.size)
+        result[key] = float(spectrum[:n][mask[:n]].sum())
+    return result
+
+
+def _pixe_plan(session, state: PertState, data_buffer, inputs: FitInputs) -> _PixePlan | None:
+    """GO's PIXE fit, checked before anything runs -- or ``None`` when
+    nothing is fitted to the PIXE spectrum."""
+    from ..pixe_sim import simulate_with
+
+    pixe_side = [v for v in state.varying if v.spectrum == "pixe"]
+    if not pixe_side:
+        return None
+    names = ", ".join(v.name for v in pixe_side)
     if not state.pixe_windows:
-        if any(v.kind == "pixe_h" for v in state.varying):
-            raise CommandError(
-                "go: PIXH sets the PIXE spectrum's scale, but no PIXE windows "
-                "are set -- PIXWIN <lo> <hi>"
-            )
-        return []
+        raise CommandError(
+            f"go: {names} fitted to the PIXE spectrum, but no PIXE windows are set "
+            "-- PIXWIN <lo> <hi>"
+        )
     pixe = data_buffer.pixe
     if pixe is None:
         raise CommandError(
-            "go: PIXE windows are set, but the active buffer has no PIXE spectrum "
+            f"go: {names} fitted to the PIXE spectrum, but the active buffer has none "
             "-- PIXE GET <file>, or PIXE PAIR ON and read the .RBS again"
         )
-    counts = np.asarray(pixe.spectrum.counts, dtype=float)
-    first = round(pixe.calibration.first)
-    mask = np.zeros(counts.size, dtype=bool)
-    for window in state.pixe_windows:
-        low, high = window.low - first, window.high - first
-        if high < 0 or low >= counts.size:
+    mask = _pixe_mask(state, pixe)
+    counts = _counts_in_windows(session, pixe, mask, inputs)
+
+    elements = [v for v in pixe_side if v.kind in _TAGGABLE]
+    tagged = {(v.layer, v.symbol) for v in elements}
+
+    def element_counts(layer, symbol, shell=None):
+        return sum(
+            c for (lay, sym, fam), c in counts.items()
+            if lay == layer and sym == symbol and (shell is None or fam == shell)
+        )
+
+    for entry in elements:
+        if element_counts(entry.layer, entry.symbol) < 1.0:
             raise CommandError(
-                f"go: PIXE window {window.low}-{window.high} is outside the PIXE "
-                f"spectrum's channels {first}-{first + counts.size - 1}"
+                f"go: {entry.name} is fitted to the PIXE spectrum, but {entry.symbol} "
+                f"has no simulated counts in the PIXE windows -- widen PIXWIN to its "
+                f"lines, or fit it to RBS"
             )
-        mask[max(low, 0):min(high, counts.size - 1) + 1] = True
+    for layer in sorted({v.layer for v in elements if v.kind == "composition"}):
+        present = set(session.script.layers[layer].composition)
+        fitted = {v.symbol for v in elements if v.kind == "composition" and v.layer == layer}
+        if present <= fitted:
+            raise CommandError(
+                f"go: every element of layer {layer + 1} is fitted to the PIXE spectrum, "
+                "but in MODE COMP only their ratios count -- leave one of them unvaried"
+            )
+
+    shells: dict[str, list[str]] = {}
+    varying = list(state.varying)
+    pixh = next((v for v in state.varying if v.kind == "pixe_h"), None)
+    if pixh is not None:
+        if not elements:
+            raise CommandError(
+                "go: PIXH varies H with the elements fitted to the PIXE spectrum, but "
+                "none is -- COMPOSITION <layer> <element> PIXE"
+            )
+        total = sum(element_counts(lay, sym) for lay, sym in tagged)
+        for shell in "KLM":
+            share = sum(element_counts(lay, sym, shell) for lay, sym in tagged)
+            if share >= SHELL_SHARE * total:
+                shells[shell] = sorted({
+                    sym for lay, sym in tagged if element_counts(lay, sym, shell) >= 1.0
+                })
+        for shell in shells:
+            in_shell = sum(c for (_, _, fam), c in counts.items() if fam == shell)
+            anchor = sum(
+                c for (lay, sym, fam), c in counts.items()
+                if fam == shell and (lay, sym) not in tagged
+            )
+            if anchor < SHELL_SHARE * in_shell:
+                raise CommandError(
+                    f"go: PIXH {shell}: every element with {shell} lines in the PIXE "
+                    f"windows is fitted to the PIXE spectrum, so H_{shell} and their "
+                    "amounts trade off -- fit one of them to RBS, or hold H (no PIXH)"
+                )
+        expanded = []
+        for shell in shells:
+            parameter = pixe_h(shell)
+            if pixh.bounds is not None:
+                parameter = replace(parameter, lower=pixh.bounds[0], upper=pixh.bounds[1])
+            expanded.append(Vary(
+                parameter=parameter, kind="pixe_h", symbol=shell, name=f"PIXH {shell}",
+                bounds=pixh.bounds, spectrum="pixe",
+            ))
+        at = varying.index(pixh)
+        varying[at:at + 1] = expanded
 
     def run_pixe(current: FitInputs) -> np.ndarray:
         return simulate_with(
@@ -1039,11 +1158,34 @@ def _pixe_extra(session, state: PertState, data_buffer) -> list:
             current.measurement, current.pixe_h, pixe,
         ).counts
 
-    return [ExtraSpectrum(simulate=run_pixe, data=counts, mask=mask)]
+    first = round(pixe.calibration.first)
+    windows = WindowSet(error=[Window(w.low - first, w.high - first) for w in state.pixe_windows])
+    return _PixePlan(
+        simulate=run_pixe, data=np.asarray(pixe.spectrum.counts, dtype=float),
+        windows=windows, varying=varying, shells=shells,
+    )
 
 
-#: The label of PIXFIRST's first stage; the joint fit has none.
-_PIXE_STAGE = "PIXE"
+def _pixe_h_note(session, state: PertState) -> str:
+    """PARMS's ``PIXE H`` line: the values, and which are fitted."""
+    h = session.pixe.h
+    values = f"K {h[0]:g}   L {h[1]:g}   M {h[2]:g}   "
+    if not any(v.kind == "pixe_h" for v in state.varying):
+        return values + "fixed (PIXE H to change)"
+    try:
+        buffer = session.buffers.require_active()
+        inputs = FitInputs(
+            sample=to_sample(session.script, session.table, session.densities),
+            beam=buffer.beam, geometry=buffer.geometry, calibration=buffer.calibration,
+            measurement=buffer.measurement, pixe_h=tuple(h),
+        )
+        plan = _pixe_plan(session, state, buffer, inputs)
+    except (CommandError, ValueError, KeyError):
+        plan = None
+    if plan is None or not plan.shells:
+        return values + "fitted for the shells of the PIXE elements' lines in the windows"
+    lines = ", ".join(f"{' '.join(syms)} {shell}" for shell, syms in plan.shells.items())
+    return values + f"{', '.join(plan.shells)} fitted ({lines} lines in the PIXE windows)"
 
 
 @dataclass(slots=True)
@@ -1053,73 +1195,17 @@ class _Stage:
     label: str
     varying: list[Vary]
     simulate: object
-    data: np.ndarray
     windows: WindowSet
-    extra: list
 
 
-def _stages(session, state: PertState, data_buffer, inputs: FitInputs, run_rbs, observed, extra):
-    """The fits GO runs: one joint fit, or with PIXFIRST the PIXE stage and
-    then, if anything is left to vary, the RBS stage."""
-    if not state.pixe_first:
-        return [_Stage("", state.varying, run_rbs, observed, state.windows, extra)]
-    if not extra:
-        raise CommandError(
-            "go: PIXFIRST fits the PIXE spectrum first, but no PIXE windows are set "
-            "-- PIXWIN <lo> <hi>"
-        )
-    pixe_side = [v for v in state.varying if v.kind in _PIXE_KINDS]
-    rbs_side = [v for v in state.varying if v.kind not in _PIXE_KINDS]
-    if not pixe_side:
-        raise CommandError(
-            "go: PIXFIRST, but nothing for the PIXE spectrum to fit "
-            "-- vary a COMPOSITION, ATOMS, SPECIES or PIXH"
-        )
-    spectrum = extra[0]
-    _check_lines_in_windows(session, pixe_side, data_buffer.pixe, spectrum.mask, inputs)
-    # The PIXE data take the dose the RBS normalisation window reads now, as
-    # they would in a joint fit.
-    scale = 1.0
-    if state.windows.normalisation is not None:
-        theory = np.asarray(run_rbs(inputs), dtype=float)
-        n = min(theory.size, observed.size)
-        scale = state.windows.normalisation_factor(observed[:n], theory[:n])
-    first = round(data_buffer.pixe.calibration.first)
-    pixe_windows = WindowSet(error=[Window(w.low - first, w.high - first) for w in state.pixe_windows])
-    stages = [_Stage(
-        _PIXE_STAGE, pixe_side, spectrum.simulate, spectrum.data * scale, pixe_windows, [],
-    )]
-    if rbs_side:
-        stages.append(_Stage("RBS", rbs_side, run_rbs, observed, state.windows, []))
-    return stages
-
-
-def _check_lines_in_windows(session, entries: list[Vary], pixe, mask, inputs: FitInputs) -> None:
-    """Refuse a PIXE-stage element with no simulated counts in the PIXE
-    windows: the PIXE spectrum can't say anything about it."""
-    from ..pixe_sim import simulate_with
-
-    simulated = simulate_with(
-        session, inputs.sample, inputs.beam, inputs.geometry, inputs.measurement,
-        inputs.pixe_h, pixe,
-    )
-    for entry in entries:
-        if entry.kind == "pixe_h":
-            continue
-        counts = simulated.by_element.get(entry.symbol)
-        n = 0 if counts is None else min(counts.size, mask.size)
-        if n == 0 or counts[:n][mask[:n]].sum() < 1.0:
-            raise CommandError(
-                f"go: PIXFIRST fits {entry.name} to the PIXE spectrum, but "
-                f"{entry.symbol} has no simulated counts in the PIXE windows "
-                "-- widen PIXWIN to its lines, or PIXFIRST OFF"
-            )
+def _channels(windows: list[Window]) -> str:
+    return ", ".join(f"{w.low}-{w.high}" for w in windows) or "all channels"
 
 
 def cmd_go(session, args: ArgReader) -> None:
     args.done()
     from ...fit.lm import fit
-    from ...script.lcm import structure_label, to_sample
+    from ...script.lcm import structure_label
     from ...sim.engine import simulate
 
     state = state_for(session)
@@ -1136,22 +1222,6 @@ def cmd_go(session, args: ArgReader) -> None:
 
     data_buffer = session.buffers.require_active()
     observed = np.asarray(data_buffer.spectrum.counts, dtype=float)
-    extra = _pixe_extra(session, state, data_buffer)
-
-    sample_id = _report_stem(data_buffer)
-    initial_structure = structure_label(
-        session.script, normalize=session.plot.composition_fraction
-    )
-    header_lines = [f"  Fitting {sample_id}: {initial_structure}"]
-    if extra:
-        header_lines.append(
-            f"  with the PIXE spectrum over channels "
-            f"{', '.join(f'{w.low}-{w.high}' for w in state.pixe_windows)}"
-            + (", fitted first (PIXFIRST)" if state.pixe_first else "")
-        )
-    for line in header_lines:
-        print(line)
-    report_lines = list(header_lines)
 
     sample = to_sample(session.script, session.table, session.densities)
     inputs = FitInputs(
@@ -1162,6 +1232,8 @@ def cmd_go(session, args: ArgReader) -> None:
         measurement=data_buffer.measurement,
         pixe_h=tuple(session.pixe.h),
     )
+    plan = _pixe_plan(session, state, data_buffer, inputs)
+    varying = plan.varying if plan is not None else state.varying
 
     def run(current: FitInputs) -> np.ndarray:
         return simulate(
@@ -1176,14 +1248,42 @@ def cmd_go(session, args: ArgReader) -> None:
             faithful=session.settings.faithful,
         ).counts
 
-    starting = {v.name: v.parameter.get(inputs) for v in state.varying}
+    if plan is None:
+        stages = [_Stage("", varying, run, state.windows)]
+    else:
+        pixe_side = [v for v in varying if v.spectrum == "pixe"]
+        rbs_side = [v for v in varying if v.spectrum != "pixe"]
+        stages = [_Stage(_PIXE_STAGE, pixe_side, plan.simulate, plan.windows)]
+        if rbs_side:
+            stages.append(_Stage("RBS", rbs_side, run, state.windows))
+
+    sample_id = _report_stem(data_buffer)
+    initial_structure = structure_label(
+        session.script, normalize=session.plot.composition_fraction
+    )
+    header_lines = [f"  Fitting {sample_id}: {initial_structure}"]
+    if plan is not None:
+        windows = {_PIXE_STAGE: state.pixe_windows, "RBS": state.windows.error}
+        heads = {
+            stage.label: f"{stage.label}, channels {_channels(windows[stage.label])}:"
+            for stage in stages
+        }
+        width = max(len(head) for head in heads.values())
+        for stage in stages:
+            header_lines.append(
+                f"  {heads[stage.label]:{width}s} {', '.join(v.name for v in stage.varying)}"
+            )
+    for line in header_lines:
+        print(line)
+    report_lines = list(header_lines)
+
+    starting = {v.name: v.parameter.get(inputs) for v in varying}
     per_areal = {
         v.layer: _units_per_areal(session, inputs, v.layer)
-        for v in state.varying
+        for v in varying
         if v.kind == "thickness"
     }
-    fit_parameters = {v.name: _fit_parameter(v, per_areal.get(v.layer)) for v in state.varying}
-    stages = _stages(session, state, data_buffer, inputs, run, observed, extra)
+    fit_parameters = {v.name: _fit_parameter(v, per_areal.get(v.layer)) for v in varying}
 
     initial_reduced: dict[str, float] = {}
     stage_label = ""
@@ -1198,73 +1298,103 @@ def cmd_go(session, args: ArgReader) -> None:
         # figure repainting instead of being declared hung.
         plotting.pump(session)
 
-    # Each stage's last result and its evaluations; the uncertainties of
-    # every parameter, from whichever fit varied it.
-    outcomes: list[tuple[_Stage, object, int]] = []
+    def values() -> np.ndarray:
+        return np.array([v.parameter.get(inputs) for v in varying], dtype=float)
+
+    # The last result of each stage; the uncertainties of every parameter,
+    # from the last fit that varied it.
+    outcomes: dict[str, object] = {}
     uncertainties: dict[str, float] = {}
+    evaluations = 0
+    rounds, settled = 0, True
     started = time.perf_counter()
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("always", RuntimeWarning)
-            for stage in stages:
-                stage_label = stage.label
-                if stage.label:
-                    print(f"  {stage.label}: {', '.join(v.name for v in stage.varying)}")
-                groups = [stage.varying] if state.multi else [[v] for v in stage.varying]
-                evaluations = 0
-                for group in groups:
-                    result = fit(
-                        stage.simulate,
-                        stage.data,
-                        inputs,
-                        [fit_parameters[v.name] for v in group],
-                        windows=stage.windows,
-                        progress=_progress,
-                        extra=stage.extra,
-                    )
-                    evaluations += result.n_evaluations
-                    uncertainties.update(result.uncertainties)
-                    if not state.multi:
-                        entry = group[0]
-                        factor, fmt, unit = _display(session, entry, per_areal.get(entry.layer))
-                        value = result.parameters[entry.parameter.name] * factor
-                        print(
-                            f"  {entry.name}: {fmt(value)}{f' {unit}' if unit else ''}"
-                            f"   chi2/dof {result.reduced_chi_square:.4f}"
+            while True:
+                rounds += 1
+                before = values()
+                for stage in stages:
+                    stage_label = stage.label
+                    data = observed
+                    if stage.label == _PIXE_STAGE:
+                        # The PIXE data take the dose the RBS normalisation
+                        # window reads, as the RBS data do.
+                        scale = 1.0
+                        if state.windows.normalisation is not None:
+                            theory = np.asarray(run(inputs), dtype=float)
+                            n = min(theory.size, observed.size)
+                            scale = state.windows.normalisation_factor(observed[:n], theory[:n])
+                        data = plan.data * scale
+                    groups = [stage.varying] if state.multi else [[v] for v in stage.varying]
+                    for group in groups:
+                        result = fit(
+                            stage.simulate,
+                            data,
+                            inputs,
+                            [fit_parameters[v.name] for v in group],
+                            windows=stage.windows,
+                            progress=_progress,
                         )
-                outcomes.append((stage, result, evaluations))
+                        evaluations += result.n_evaluations
+                        uncertainties.update(result.uncertainties)
+                        if not state.multi:
+                            entry = group[0]
+                            factor, fmt, unit = _display(session, entry, per_areal.get(entry.layer))
+                            value = result.parameters[entry.parameter.name] * factor
+                            print(
+                                f"  {entry.name}: {fmt(value)}{f' {unit}' if unit else ''}"
+                                f"   chi2/dof {result.reduced_chi_square:.4f}"
+                            )
+                        outcomes[stage.label] = result
+                if len(stages) < 2:
+                    break
+                after = values()
+                change = np.abs(after - before) / np.maximum(np.abs(after), 1e-12)
+                if np.all(change < ROUND_TOLERANCE):
+                    break
+                if rounds == MAX_ROUNDS:
+                    settled = False
+                    break
     except ValueError as error:
         raise CommandError(f"go: {error}") from None
     elapsed = time.perf_counter() - started
 
-    for entry in state.varying:
+    for entry in varying:
         _write_back(session, entry, inputs, starting[entry.name])
     session.editor = None
     session.touch()
 
-    report_lines.append(f"\n  fit took {elapsed:.2f} s")
-    for stage, result, evaluations in outcomes:
+    took = f"\n  fit took {elapsed:.2f} s"
+    if len(stages) > 1:
+        took += f", {rounds} round{'s' if rounds > 1 else ''} PIXE -> RBS"
+    report_lines.append(took)
+    converged = settled and all(result.success for result in outcomes.values())
+    width = max(len(label) for label in outcomes)
+    for i, stage in enumerate(stages):
+        result = outcomes[stage.label]
+        label = f"{stage.label + ':':{width + 1}s} " if stage.label else ""
         chi_line = (
-            f"\n  {f'{stage.label}: ' if stage.label else ''}"
+            f"{'' if i else chr(10)}  {label}"
             f"reduced chi-square {result.reduced_chi_square:.4f} on {result.dof} dof"
         )
         if stage.label in initial_reduced:
             chi_line += f"   (was {initial_reduced[stage.label]:.4f})"
         report_lines.append(chi_line)
-        if result.parts:
-            report_lines.append("  " + ",   ".join(
-                f"{label} chi-square {part.total:.1f} over {part.n_used} channels"
-                for label, part in result.parts.items()
-            ))
-        status = "converged" if result.success else "did not converge"
-        report_lines.append(f"  {evaluations} evaluations, {status}")
+    if not settled:
+        status = f"did not settle in {MAX_ROUNDS} rounds"
+    else:
+        status = "converged" if converged else "did not converge"
+    report_lines.append(f"  {evaluations} evaluations, {status}")
+    for stage in stages:
+        result = outcomes[stage.label]
         if result.n_invalid:
+            where = f" ({stage.label})" if stage.label else ""
             report_lines.append(
                 f"  warning: {result.n_invalid} windowed channels had "
-                "no predicted counts"
+                f"no predicted counts{where}"
             )
-    # The RBS fit's normalisation: the joint one, or PIXFIRST's RBS stage.
-    rbs = next((r for stage, r, _ in outcomes if stage.label != _PIXE_STAGE), None)
+    rbs = outcomes.get("RBS", outcomes.get(""))
     if rbs is not None and rbs.normalisation != 1.0:
         # RUMP writes the fitted scale back into the buffer's CORR factor
         # (pert.c:1402-1403, "Estimated correction factor set for buffer"),
@@ -1280,14 +1410,14 @@ def cmd_go(session, args: ArgReader) -> None:
     # An ATOMS line brackets its layer's resulting thickness in Angstroms --
     # the same view SIM SHOW brackets in MODE ATOMS.
     angstroms = [None] * len(session.script.layers)
-    if any(v.kind == "atoms" for v in state.varying):
+    if any(v.kind == "atoms" for v in varying):
         try:
             angstroms = thickness_mode_views(
                 session.script, session.table, session.densities, to_atoms=False
             )
         except KeyError:
             pass  # an element the table doesn't know: no brackets, as in SIM SHOW
-    for entry in state.varying:
+    for entry in varying:
         name = entry.parameter.name
         value = entry.parameter.get(inputs)
         sigma = uncertainties.get(name)
@@ -1340,9 +1470,7 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     # Not PIXE, which opens the PIXE prompt here as everywhere: four
     # letters each, so PIX and PIXE fall through to it.
     ("PIXWIN", 4, cmd_pixwin,
-     "fit the PIXE spectrum too, over these channels, or PIXWIN CLEAR [<n>]"),
-    ("PIXFIRST", 4, cmd_pixfirst,
-     "GO fits compositions and PIXH to PIXE first, then the rest to RBS (PIXFIRST OFF: jointly)"),
+     "PIXE channels for the PIXE-fitted parameters, or PIXWIN CLEAR [<n>]"),
     ("SINGLE", 2, cmd_single, "vary one parameter at a time"),
     ("MULTI", 3, cmd_multi, "vary all parameters together (default)"),
     ("VOLUME", 3, cmd_volume, "verbose progress messages"),
@@ -1358,11 +1486,11 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("THICKNESS", 2, cmd_thickness,
      "vary a layer thickness [<min> <max> in the layer's unit, e.g. A] (needs MODE COMP)"),
     ("COMPOSITION", 3, cmd_composition,
-     "vary an element in a layer [<min> <max>] (needs MODE COMP)"),
+     "vary an element in a layer [PIXE|RBS] [<min> <max>] (needs MODE COMP)"),
     ("ATOMS", 3, cmd_atoms,
-     "vary one element's areal density, others held fixed [<min> <max> in /CM2] "
+     "vary one element's areal density, others held fixed [PIXE|RBS] [<min> <max> in /CM2] "
      "(needs MODE ATOMS)"),
-    ("SPECIES", 2, cmd_species, "vary the species composition [<min> <max>]"),
+    ("SPECIES", 2, cmd_species, "vary the species composition [PIXE|RBS] [<min> <max>]"),
     ("EQUATION", 2, cmd_equation, "vary an equation parameter [<min> <max>]"),
     ("MEV", 3, _simple("mev"), "vary the beam energy [<min> <max>]"),
     ("FWHM", 2, _simple("fwhm"), "vary the detector resolution [<min> <max>]"),
@@ -1376,7 +1504,8 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("OFFSET", 3, _simple("kev(0)"),
      "vary the calibration energy offset (e.g. a sample-charging shift) [<min> <max>]"),
     ("KEV(0)", -6, _simple("kev(0)"), "synonym for OFFSET"),
-    ("PIXH", 4, cmd_pixh, "vary the PIXE instrumental constant H of K, L or M lines [<min> <max>]"),
+    ("PIXH", 4, cmd_pixh,
+     "vary PIXE's H for the shells of the PIXE-fitted elements' lines [<min> <max>]"),
     ("COMPARE", 0, cmd_compare, "plot the active buffer against the simulation"),
     ("CMP", -3, cmd_compare, "synonym for COMPARE"),
     ("EXPORTCMP", 7, cmd_exportcmp,

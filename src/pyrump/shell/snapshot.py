@@ -326,6 +326,11 @@ def _current_values(session, buffer: Buffer) -> list[str]:
     )
     lines = []
     for entry in state.varying:
+        if entry.kind == "pixe_h":
+            # PIXH has a shell only once GO finds it: list all three.
+            h = " ".join(f"{v:g}" for v in session.pixe.h)
+            lines.append(f"  {'PIXH (H of K L M)':26s} {h:>14s}")
+            continue
         per_areal = (
             _units_per_areal(session, inputs, entry.layer) if entry.kind == "thickness" else None
         )

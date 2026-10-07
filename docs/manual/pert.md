@@ -276,127 +276,94 @@ usage: PIXWIN <first> <last>
 usage: PIXWIN CLEAR [<n>]
 ```
 
-Fits the buffer's PIXE spectrum together with the RBS one, over these PIXE
-channels. Channels are numbered as the `.PIX` file numbers them, as PIXE
-`REGION` takes them. It's meant for alloys whose elements overlap in RBS
-but not in their X-ray lines: Ta–W, Fe–Ni (permalloy), Ni–Co.
+Sets the PIXE channels that the parameters fitted to the PIXE spectrum are
+fitted over. Channels are numbered as the `.PIX` file numbers them, as
+PIXE `REGION` takes them. This is for alloys whose elements overlap in RBS
+but not in their X-ray lines: Ta–W, Fe–Ni, Ni–Co.
 
-* **The same sample drives both spectra.** A `COMPOSITION` or `THICKNESS`
-  selection moves the RBS and the PIXE simulation together, and each
-  spectrum weighs in by its own counting statistics. RBS pins the amount;
-  the X-ray lines tell the elements apart.
+**You choose, element by element, which spectrum fits it.** `COMPOSITION`,
+`ATOMS` and `SPECIES` take `PIXE` after the element
+([`COMPOSITION 2 Fe PIXE`](#composition)). Without it, or with `RBS`, the
+element is fitted to the RBS spectrum, as in RUMP. Everything else —
+thicknesses, calibration, beam — is always fitted to RBS. GO then
+alternates:
+
+1. the `PIXE` parameters, and H with [`PIXH`](#pixh-new), fitted to the PIXE
+   spectrum over the `PIXWIN` channels, everything else held;
+2. the rest fitted to the RBS spectrum over the [`WINDOW`](#window)
+   channels, the PIXE parameters held;
+
+and repeats both until no value moves by more than 0.1 % (at most 10
+rounds), since the two depend on each other a little: the PIXE yields on
+the thicknesses, the RBS spectrum on the composition. Each parameter is
+fitted to one spectrum only, so the two never pull against each other.
+GO reports each spectrum's chi-square, and how many rounds it took.
+
 * **Put the windows on clear peaks.** The PIXE continuum isn't simulated, so
   a window over background would be fitted to nothing. One window may span a
   whole group of lines. Overlaps such as Fe Kβ on Ni Kα, or Ta Lβ near W Lα,
   are fine, because the simulation has every line.
-* **Use lines of the same shell** (both K, or both L). The instrumental
-  constant H then cancels in the ratio. Vary it with [`PIXH`](#pixh-new), so
-  an uncalibrated H can't pull the amount away from what RBS says.
+* **Leave an element unvaried as the reference.** In MODE COMP only the
+  ratios count: fit `Ta` to PIXE against a fixed `W`, and the thickness to
+  RBS. GO refuses every element of a layer fitted to PIXE in MODE COMP.
+* **A normalisation window** ([`NORMALIZE`](#normalize)) sets the dose for
+  the PIXE data too.
+
+GO refuses `PIXE` parameters without `PIXWIN` windows or without a PIXE
+spectrum in the buffer (`PIXE GET`, or `PAIR ON`), and an element with no
+simulated counts in the windows — O in an oxide, say — since the PIXE
+spectrum can say nothing about it.
 
 Up to 10 windows. `PIXWIN CLEAR` removes all of them, `PIXWIN CLEAR <n>`
 only window *n*, and `PIXWIN` alone lists them. They're saved with `SAVE`,
-so snapshots keep them too. The buffer needs a PIXE spectrum (`PIXE GET`, or
-`PAIR ON`).
-
-GO reports the chi-square of each spectrum as well as the combined one. The
-PIXE window shades the PIXE windows ([`HIGHLIGHT`](#highlight-new)), and its
-`COMPARE` scores the chi-square over them:
+so snapshots keep them too. The PIXE window shades them
+([`HIGHLIGHT`](#highlight-new)), and its `COMPARE` scores the chi-square
+over them. `PARMS` shows the spectrum each parameter is fitted to, and H:
 
 ```
 PERT Command: window 380 500
 PERT Command: pixwin 786 994        /* Ta L and W L lines, 7.9-10 keV */
-PERT Command: composition 1 Ta
+PERT Command: composition 1 Ta pixe
 PERT Command: thickness 1
-PERT Command: pixh l
+PERT Command: pixh
+PERT Command: parms
+  mode        multiple variable
+  autocmp     off
+  report      off
+  highlight   on
+  error win   [1] 380-500
+  norm win    (none)
+  PIXE win    [1] 786-994
+  PIXE H      K 1   L 1.25   M 1   L fitted (Ta L lines in the PIXE windows)
+  varying:
+    [1] layer 1 composition Ta       PIXE
+    [2] layer 1 thickness            RBS
+    [3] PIXH                         PIXE
 PERT Command: go
   Fitting film: Si [20000/cm2] - WTa2 [1000/cm2]
-  with the PIXE spectrum over channels 786-994
+  PIXE, channels 786-994: layer 1 composition Ta, PIXH L
+  RBS, channels 380-500:  layer 1 thickness
 
-  fit took 0.46 s
+  fit took 0.33 s, 2 rounds PIXE -> RBS
 
-  reduced chi-square 1.0872 on 327 dof   (was 7.6828)
-  RBS chi-square 182.7 over 121 channels,   PIXE chi-square 172.8 over 209 channels
-  27 evaluations, converged
-  layer 1 composition Ta            1.01124  +/- 0.01927   (was 2)
-  layer 1 thickness               1000 /cm2  +/- 0.2022 /cm2   (was 1000 /cm2)
-  PIXH L                           0.991168  +/- 0.00882   (was 1.25)
+  PIXE: reduced chi-square 1.1153 on 207 dof   (was 10.7757)
+  RBS:  reduced chi-square 1.5234 on 120 dof   (was 1.5276)
+  40 evaluations, converged
+  layer 1 composition Ta            1.01684  +/- 0.02061   (was 2)
+  layer 1 thickness               1000 /cm2  +/- 0.2016 /cm2   (was 1000 /cm2)
+  PIXH L                           0.990994  +/- 0.008716   (was 1.25)
 
-  film: Si [20000/cm2] - WTa1.01 [1000/cm2]
+  film: Si [20000/cm2] - WTa1.02 [1000/cm2]
 ```
 
-That is a simulated W–Ta film (truth: Ta 1, H 1) started at Ta 2 with H
+That is a simulated W–Ta film (truth: Ta 1, H 1) started at Ta 2 with H_L
 25% off. From RBS alone the same fit gives Ta to ±0.057; the PIXE lines
-narrow it to ±0.019.
-
-#### `PIXFIRST` `[new]`
-
-```
-usage: PIXFIRST [OFF]
-```
-
-Sets which spectrum decides the composition. By default (`PIXFIRST OFF`)
-GO fits both spectra at once. Where both are sensitive to the same
-composition, the one with more counts decides it, and that is usually RBS.
-RBS also brings along any systematic misfit, such as a calibration a few
-keV off. Fe and Ni edges, for example, lie only ~12 channels apart in RBS,
-so such a misfit goes straight into the ratio.
-
-With `PIXFIRST` on, GO fits in two stages:
-
-1. The `COMPOSITION`, `ATOMS`, `SPECIES` and `PIXH` selections, to the PIXE
-   spectrum alone over the `PIXWIN` channels. Everything else is held.
-2. Everything else (thicknesses, calibration, beam ...), to the RBS spectrum
-   alone over the `WINDOW` channels. The compositions are held.
-
-Each stage reports its own chi-square. A normalisation window's dose scale
-applies to the PIXE data in stage 1, as in a joint fit. GO refuses
-`PIXFIRST` without `PIXWIN` windows, with nothing for stage 1 to fit, or
-for an element with no simulated counts in the PIXE windows (O in an oxide,
-say), since the PIXE spectrum can't tell anything about it. `PIXFIRST` is
-saved with `SAVE`, and `PARMS` shows it under `PIXE fit`.
-
-An FeNi layer under 13 × 10¹⁵ at/cm² of Pt (examples `FeNi.RBS` and
-`FeNi.PIX`), with the PIXE calibration set from the Fe and Ni Kα peaks:
-
-```
-PERT Command: window 820 1090
-PERT Command: pixwin 500 850        /* Fe and Ni K lines */
-PERT Command: composition 2 Fe
-PERT Command: thickness 1
-PERT Command: thickness 2
-PERT Command: pixh k
-PERT Command: pixfirst
-PERT Command: go
-  Fitting FeNi: Si [20000/cm2] - SiO2 [438/cm2] - FeNi [172/cm2] - Pt [13/cm2]
-  with the PIXE spectrum over channels 500-850, fitted first (PIXFIRST)
-  PIXE: layer 2 composition Fe, PIXH K
-  RBS: layer 1 thickness, layer 2 thickness
-
-  fit took 0.19 s
-
-  PIXE: reduced chi-square 3.4761 on 349 dof   (was 9.5817)
-  15 evaluations, converged
-
-  RBS: reduced chi-square 56.4442 on 269 dof   (was 58.7052)
-  9 evaluations, converged
-  layer 2 composition Fe           0.475758  +/- 0.01299   (was 1)
-  layer 1 thickness                 13 /cm2  +/- 0.04584 /cm2   (was 13 /cm2)
-  layer 2 thickness                180 /cm2  +/- 0.3749 /cm2   (was 172 /cm2)
-  PIXH K                           0.700328  +/- 0.009894   (was 1)
-
-  FeNi: Si [20000/cm2] - SiO2 [438/cm2] - Fe0.48Ni [180/cm2] - Pt [13/cm2]
-```
-
-Fitted jointly, the same selections stay at Fe ≈ 1.0 and push H down
-instead. The RBS spectrum alone gives Fe 1.25, while the four Fe and Ni K
-peaks all match at Fe 0.48. Run `GO` again after a `PIXFIRST` fit: stage 2's
-thicknesses change the PIXE yields a little. The whole analysis of this
-sample, from loading the data to saving the session, is the
+narrow it to ±0.021. The whole analysis of a measured Fe–Ni film, from
+loading the data to saving the session, is the
 [FeNi worked example](../getting-started/feni-rbs-pixe.md).
 
-`PIXWIN`, `PIXFIRST` and `PIXH` need all four letters, so that `PIXE` (or
-`PIX`) still opens the PIXE prompt from PERT, as it does at every other
-prompt.
+`PIXWIN` and `PIXH` need all four letters, so that `PIXE` (or `PIX`) still
+opens the PIXE prompt from PERT, as it does at every other prompt.
 
 ### Parameters
 
@@ -424,11 +391,13 @@ PERT Command: thickness 2 300 360
 #### `COMPOSITION`
 
 ```
-usage: COMPOSITION <layer> <element> [<min> <max>]
+usage: COMPOSITION <layer> <element> [PIXE|RBS] [<min> <max>]
 ```
 
 Varies one element's stoichiometry in a layer. The element must already be
-in that layer. Needs [MODE COMP](config.md#mode-new).
+in that layer. Needs [MODE COMP](config.md#mode-new). `PIXE` fits it to the
+PIXE spectrum over the [`PIXWIN`](#pixwin-new) channels instead of the RBS
+one.
 
 ```
 PERT Command: composition 2 Mn 2 4
@@ -442,11 +411,14 @@ PERT Command: composition 2 Mn 2 4
 #### `ATOMS` `[new]`
 
 ```
-usage: ATOMS <layer> <element> [<min> <max>]
+usage: ATOMS <layer> <element> [PIXE|RBS] [<min> <max>]
 ```
 
 Varies one element's own areal density in a layer, keeping the other
 elements' amounts fixed, in 10¹⁵ at/cm². Needs [MODE ATOMS](config.md#mode-new).
+`PIXE` fits it to the PIXE spectrum over the [`PIXWIN`](#pixwin-new)
+channels. With H calibrated and held (no [`PIXH`](#pixh-new)), every
+element of a layer can be fitted to PIXE this way, each amount absolute.
 
 ```
 PERT Command: atoms 2 Mn
@@ -455,11 +427,11 @@ PERT Command: atoms 2 Mn
 #### `SPECIES`
 
 ```
-usage: SPECIES <layer> <element> [<min> <max>]
+usage: SPECIES <layer> <element> [PIXE|RBS] [<min> <max>]
 ```
 
 Varies one element of a layer's [`SPECIES`](sim.md#species). The element
-must already be declared there.
+must already be declared there. `PIXE` fits it to the PIXE spectrum.
 
 ```
 PERT Command: species 2 Au
@@ -572,19 +544,33 @@ PERT Command: offset
 #### `PIXH` `[new]`
 
 ```
-usage: PIXH K|L|M [<min> <max>]
+usage: PIXH [<min> <max>]
 ```
 
-Varies the PIXE instrumental constant H of the K, L or M lines, in a fit
-with [`PIXWIN`](#pixwin-new) windows: the PIXE spectrum then sets the ratio
-of elements with lines in that shell, and RBS their amount. The fitted H is
-written back to the PIXE setup (PIXE `H`). GO refuses it without PIXE
-windows.
+Varies the PIXE instrumental constant H together with the parameters
+fitted to the PIXE spectrum. GO varies H of each shell (K, L or M) whose
+lines of those elements fall in the [`PIXWIN`](#pixwin-new) channels: Fe
+and Ni K lines in the windows, H_K. The PIXE spectrum then gives only the
+ratios of the elements, which is all it needs to. The fitted H is written
+back to the PIXE setup (PIXE `H`).
+
+Without `PIXH`, H stays at the PIXE prompt's values, as calibrated on a
+standard: the PIXE spectrum then gives absolute amounts. `PARMS` says
+which H is fitted, and why:
 
 ```
-PERT Command: pixh l
-  varying PIXH L
+PERT Command: pixh
+  varying PIXH
+PERT Command: parms
+  ...
+  PIXE H      K 1   L 1.25   M 1   L fitted (Ta L lines in the PIXE windows)
 ```
+
+H scales the counts of every element in its shell, so some element with
+lines there must not be fitted to PIXE: its amount, from RBS, sets the
+scale. GO refuses `PIXH` when every element with lines of a fitted shell
+in the windows is fitted to PIXE (`ATOMS 1 W PIXE` and `ATOMS 1 Ta PIXE`
+together, say).
 
 ### Reading the fit report
 
