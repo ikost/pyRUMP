@@ -217,6 +217,13 @@ def _pixe_setup_lines(session) -> list[str]:
     ]
 
 
+def _pixe_data_lines(pixe) -> list[str]:
+    """The PIXE spectrum's own calibration. PIXE GET takes it from the
+    file's header, so a CALIB typed since has to follow the GET."""
+    c = pixe.calibration
+    return [f"PIXE calib {c.kevch:.10g} {c.kev0:.10g}"]
+
+
 def _view_lines(session) -> list[str]:
     """The RBS plot as it was drawn."""
     plot = session.plot
@@ -285,6 +292,7 @@ def fingerprint(session, *, labels: bool = True) -> str | None:
         parts.append(f"pixe {pixe.path if pixe is not None else None} {session.pixe.enabled}")
         if pixe is not None:
             parts.append(f"pixe counts {counts_digest(pixe.spectrum.counts)}")
+            parts += _pixe_data_lines(pixe)
     return "\n".join(parts)
 
 
@@ -583,6 +591,7 @@ def _restore_macro(
         spectrum = buffer.pixe
         if spectrum is not None and spectrum.path is not None:
             lines.append(f"PIXE GET {_quoted(spectrum.path, folder.resolve())}")
+            lines += _pixe_data_lines(spectrum)
         elif spectrum is not None:
             lines.append("! its PIXE spectrum was not read from a file: not restored")
         lines.append(f"PIXE pair {'on' if session.pixe.pair else 'off'}")

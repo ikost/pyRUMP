@@ -262,6 +262,32 @@ def test_acquisition_macro_and_paired_pixe_restore(work, tmp_path, monkeypatch):
 
 
 @needs_data
+def test_a_pixe_calibration_typed_after_reading_survives_the_restore(
+    work, tmp_path, monkeypatch,
+):
+    """PIXE GET takes the calibration from the .PIX header, so the macro
+    sets the spectrum's own calibration after the GET; changing it since
+    the snapshot counts as unsaved."""
+    data = tmp_path / "data"
+    data.mkdir()
+    for name in ("MnPt.RBS", "MnPt.PIX", "MnPt.lcm"):
+        shutil.copy(EXAMPLES / name, data / name)
+    first = Session.create(str(DATA))
+    run(first, "pixe pair on", f"xeq {data / 'MnPt.RBS'}", f"sim get {data / 'MnPt.lcm'}",
+        "pixe calib 0.010045 -0.0233", "snap")
+    text = (work / "MA8408_fit.xeq").read_text()
+    assert text.index("PIXE GET") < text.rindex("PIXE calib 0.010045 -0.0233")
+    assert not snapshot.unsaved(first)
+    run(first, "pixe calib 0.0101 -0.02")
+    assert snapshot.unsaved(first)
+
+    elsewhere(tmp_path, monkeypatch)
+    again = restored(work / "MA8408_fit.xeq")
+    calibration = again.buffers.active_buffer.pixe.calibration
+    assert (calibration.kevch, calibration.kev0) == (0.010045, -0.0233)
+
+
+@needs_data
 def test_pixe_tilt_restores_into_a_session_paired_by_its_pyrumprc(work, tmp_path, monkeypatch):
     """PAIR ON refuses a THETA: the macro unpairs before replaying the
     PIXE setup, and sets the snapshot's PAIR after the data."""
