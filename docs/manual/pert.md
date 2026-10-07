@@ -328,8 +328,73 @@ That is a simulated W–Ta film (truth: Ta 1, H 1) started at Ta 2 with H
 25% off. From RBS alone the same fit gives Ta to ±0.057; the PIXE lines
 narrow it to ±0.019.
 
-`PIXWIN` and `PIXH` need all four letters, so that `PIXE` (or `PIX`) still
-opens the PIXE prompt from PERT, as it does at every other prompt.
+#### `PIXFIRST` `[new]`
+
+```
+usage: PIXFIRST [OFF]
+```
+
+Sets which spectrum decides the composition. By default (`PIXFIRST OFF`)
+GO fits both spectra at once. Where both are sensitive to the same
+composition, the one with more counts decides it, and that is usually RBS.
+RBS also brings along any systematic misfit, such as a calibration a few
+keV off. Fe and Ni edges, for example, lie only ~12 channels apart in RBS,
+so such a misfit goes straight into the ratio.
+
+With `PIXFIRST` on, GO fits in two stages:
+
+1. The `COMPOSITION`, `ATOMS`, `SPECIES` and `PIXH` selections, to the PIXE
+   spectrum alone over the `PIXWIN` channels. Everything else is held.
+2. Everything else (thicknesses, calibration, beam ...), to the RBS spectrum
+   alone over the `WINDOW` channels. The compositions are held.
+
+Each stage reports its own chi-square. A normalisation window's dose scale
+applies to the PIXE data in stage 1, as in a joint fit. GO refuses
+`PIXFIRST` without `PIXWIN` windows, with nothing for stage 1 to fit, or
+for an element with no simulated counts in the PIXE windows (O in an oxide,
+say), since the PIXE spectrum can't tell anything about it. `PIXFIRST` is
+saved with `SAVE`, and `PARMS` shows it under `PIXE fit`.
+
+An FeNi layer under 13 × 10¹⁵ at/cm² of Pt (examples `FeNi.RBS` and
+`FeNi.PIX`), with the PIXE calibration set from the Fe and Ni Kα peaks:
+
+```
+PERT Command: window 820 1090
+PERT Command: pixwin 500 850        /* Fe and Ni K lines */
+PERT Command: composition 2 Fe
+PERT Command: thickness 1
+PERT Command: thickness 2
+PERT Command: pixh k
+PERT Command: pixfirst
+PERT Command: go
+  Fitting MA3472: Si [20000/cm2] - SiO2 [438/cm2] - FeNi [172/cm2] - Pt [13/cm2]
+  with the PIXE spectrum over channels 500-850, fitted first (PIXFIRST)
+  PIXE: layer 2 composition Fe, PIXH K
+  RBS: layer 1 thickness, layer 2 thickness
+
+  fit took 0.19 s
+
+  PIXE: reduced chi-square 3.4761 on 349 dof   (was 9.5817)
+  15 evaluations, converged
+
+  RBS: reduced chi-square 56.4442 on 269 dof   (was 58.7052)
+  9 evaluations, converged
+  layer 2 composition Fe           0.475758  +/- 0.01299   (was 1)
+  layer 1 thickness                 13 /cm2  +/- 0.04584 /cm2   (was 13 /cm2)
+  layer 2 thickness                180 /cm2  +/- 0.3749 /cm2   (was 172 /cm2)
+  PIXH K                           0.700328  +/- 0.009894   (was 1)
+
+  MA3472: Si [20000/cm2] - SiO2 [438/cm2] - Fe0.48Ni [180/cm2] - Pt [13/cm2]
+```
+
+Fitted jointly, the same selections stay at Fe ≈ 1.0 and push H down
+instead. The RBS spectrum alone gives Fe 1.25, while the four Fe and Ni K
+peaks all match at Fe 0.48. Run `GO` again after a `PIXFIRST` fit: stage 2's
+thicknesses change the PIXE yields a little.
+
+`PIXWIN`, `PIXFIRST` and `PIXH` need all four letters, so that `PIXE` (or
+`PIX`) still opens the PIXE prompt from PERT, as it does at every other
+prompt.
 
 ### Parameters
 

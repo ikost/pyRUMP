@@ -231,3 +231,69 @@ def test_pixe_in_pert_opens_the_pixe_prompt(tmp_path):
             execute_line(session, line, stack)
     assert stack == ["rump", "pixe"]
     assert [(w.low, w.high) for w in session.pert.pixe_windows] == [(786, 994)]
+
+
+# -- PIXFIRST -----------------------------------------------------------------
+
+
+@needs_data
+def test_pixfirst_takes_the_ratio_from_pixe_when_rbs_is_off(tmp_path):
+    """The RBS data two channels off the simulation's calibration -- a
+    systematic misfit the counts can't average out. Fitted jointly, the RBS
+    spectrum's far greater counts pull the Fe content with it; PIXFIRST
+    takes it from the X-ray lines alone, and the thickness from RBS."""
+    lines = ("pert window 300 420", "pert composition 1 Fe", "pert thick 1",
+             f"pert pixwin {channel(6.2)} {channel(8.5)}", "pert pixh k")
+    joint = film(tmp_path, "Ni", "Fe", truth=0.25, start=0.6)
+    rbs = joint.buffers.active_buffer.spectrum
+    rbs.counts = np.roll(rbs.counts, 2)
+    fe_joint, _ = fitted(run(joint, *lines, "pert go"), "layer 1 composition Fe")
+
+    first = film(tmp_path, "Ni", "Fe", truth=0.25, start=0.6)
+    rbs = first.buffers.active_buffer.spectrum
+    rbs.counts = np.roll(rbs.counts, 2)
+    output = run(first, *lines, "pert pixfirst", "pert go")
+    fe, sigma = fitted(output, "layer 1 composition Fe")
+    assert abs(fe - 0.25) < 3 * sigma, (fe, sigma)
+    assert abs(fe - 0.25) < abs(fe_joint - 0.25) / 3, (fe, fe_joint)
+    assert "PIXE: layer 1 composition Fe, PIXH K" in output
+    assert "RBS: layer 1 thickness" in output
+    assert "PIXE: reduced chi-square" in output and "RBS: reduced chi-square" in output
+
+
+@needs_data
+def test_pixfirst_round_trips_and_is_listed(tmp_path):
+    session = film(tmp_path, "W", "Ta")
+    run(session, "pert window 380 500", "pert pixwin 786 994", "pert pixfirst",
+        f"pert save {tmp_path / 'setup'}")
+    assert "pixfirst" in (tmp_path / "setup.pert").read_text().split()
+    again = film(tmp_path, "W", "Ta")
+    run(again, f"pert get {tmp_path / 'setup'}")
+    assert again.pert.pixe_first
+    assert "PIXE fit    first" in run(again, "pert parms")
+    run(again, "pert pixfirst off")
+    assert not again.pert.pixe_first
+    assert "PIXE fit    joint" in run(again, "pert parms")
+
+
+@needs_data
+def test_pixfirst_needs_pixe_windows(tmp_path):
+    session = film(tmp_path, "W", "Ta")
+    with pytest.raises(CommandError, match="no PIXE windows"):
+        run(session, "pert composition 1 Ta", "pert pixfirst", "pert go")
+
+
+@needs_data
+def test_pixfirst_needs_something_for_pixe_to_fit(tmp_path):
+    session = film(tmp_path, "W", "Ta")
+    with pytest.raises(CommandError, match="nothing for the PIXE spectrum"):
+        run(session, "pert pixwin 786 994", "pert thick 1", "pert pixfirst", "pert go")
+
+
+@needs_data
+def test_pixfirst_refuses_an_element_without_lines_in_the_windows(tmp_path):
+    """Windows over the W and Ta L lines: Si's K lines (1.74 keV) lie far
+    outside, so the PIXE spectrum can't fit Si -- as with O in an oxide."""
+    session = film(tmp_path, "W", "Ta")
+    with pytest.raises(CommandError, match="Si has no simulated counts"):
+        run(session, "pert pixwin 786 994", "pert composition 2 Si", "pert pixfirst", "pert go")

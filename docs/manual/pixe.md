@@ -476,7 +476,10 @@ PERT fits the PIXE spectrum together with the RBS one, over the PIXE
 windows set with [`PIXWIN <first> <last>`](pert.md#pixwin-new). The element
 amounts move both simulations, through the shared sample, and H can be varied
 with them ([`PIXH K|L|M`](pert.md#pixh-new)). That's how alloys that overlap in RBS (Ta–W,
-Fe–Ni, Ni–Co) get their ratio from their X-ray lines.
+Fe–Ni, Ni–Co) get their ratio from their X-ray lines. Where the RBS spectrum
+is sensitive to the same ratio and outweighs the PIXE one,
+[`PIXFIRST`](pert.md#pixfirst-new) fits the compositions to the PIXE spectrum
+alone first, then the rest to RBS.
 
 Still to come: the PIXE energy calibration and resolution as fit
 parameters, the background (with its scale s), and fitting the PIXE spectrum

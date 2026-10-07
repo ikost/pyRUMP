@@ -129,6 +129,8 @@ def _to_lines(state: PertState) -> list[str]:
         lines.append(f"normalize {norm.low} {norm.high}")
     if not state.multi:
         lines.append("single")
+    if state.pixe_first:
+        lines.append("pixfirst")
     lines.extend(_vary_command(v) for v in state.varying)
     return lines
 
@@ -173,6 +175,10 @@ class PertState:
     #: PIXE channels (numbered as the .PIX file numbers them) fitted
     #: together with the RBS spectrum -- ``PIXWIN <lo> <hi>``.
     pixe_windows: list[Window] = field(default_factory=list)
+    #: PIXFIRST: GO fits the compositions and PIXH to the PIXE spectrum
+    #: alone, then the rest to the RBS spectrum alone, instead of both
+    #: spectra at once.
+    pixe_first: bool = False
     multi: bool = True
     verbose: bool = False
     autocmp: bool = False
@@ -191,6 +197,12 @@ class PertState:
             f"  norm win    {f'{norm.low}-{norm.high}' if norm else '(none)'}"
         )
         lines.append(f"  PIXE win    {_format_pixe_windows(self.pixe_windows)}")
+        if self.pixe_windows:
+            lines.append(
+                "  PIXE fit    "
+                + ("first: compositions and PIXH from PIXE, the rest from RBS"
+                   if self.pixe_first else "joint: both spectra at once")
+            )
         lines.extend(_format_varying(self.varying, script))
         return "\n".join(lines)
 
@@ -634,6 +646,38 @@ def cmd_pixh(session, args: ArgReader) -> None:
     ))
 
 
+#: The selections PIXFIRST fits to the PIXE spectrum: what an element's
+#: lines measure. Everything else -- thicknesses, calibration, beam,
+#: profiles -- goes to the RBS spectrum.
+_PIXE_KINDS = ("composition", "atoms", "species", "pixe_h")
+
+
+def cmd_pixfirst(session, args: ArgReader) -> None:
+    """``PIXFIRST [OFF]`` -- how GO uses the PIXE spectrum (default off).
+
+    Off, both spectra are fitted at once, each weighing in by its own
+    counting statistics. Where both are sensitive to the same composition,
+    the one with more counts decides it, and an RBS spectrum usually has
+    far more -- along with any systematic misfit it carries.
+
+    On, GO fits in two stages: first the ``COMPOSITION``, ``ATOMS``,
+    ``SPECIES`` and ``PIXH`` selections to the PIXE spectrum alone, over
+    the ``PIXWIN`` channels, everything else held; then everything else to
+    the RBS spectrum alone, over the ``WINDOW`` channels, those held. Each
+    stage reports its own chi-square. Needs ``PIXWIN`` windows, and every
+    element varied in the first stage must have lines in them. A pyRUMP
+    addition, saved by ``SAVE``.
+    """
+    token = args.optional()
+    args.done()
+    state = state_for(session)
+    state.pixe_first = token is None or token.lower() not in ("off", "no", "0")
+    print(
+        "  PIXE fit first: compositions and PIXH from PIXE, the rest from RBS"
+        if state.pixe_first else "  PIXE fit joint: both spectra at once"
+    )
+
+
 def cmd_single(session, args: ArgReader) -> None:
     args.done()
     state_for(session).multi = False
@@ -998,6 +1042,80 @@ def _pixe_extra(session, state: PertState, data_buffer) -> list:
     return [ExtraSpectrum(simulate=run_pixe, data=counts, mask=mask)]
 
 
+#: The label of PIXFIRST's first stage; the joint fit has none.
+_PIXE_STAGE = "PIXE"
+
+
+@dataclass(slots=True)
+class _Stage:
+    """One fit GO runs: what it varies, against which spectrum."""
+
+    label: str
+    varying: list[Vary]
+    simulate: object
+    data: np.ndarray
+    windows: WindowSet
+    extra: list
+
+
+def _stages(session, state: PertState, data_buffer, inputs: FitInputs, run_rbs, observed, extra):
+    """The fits GO runs: one joint fit, or with PIXFIRST the PIXE stage and
+    then, if anything is left to vary, the RBS stage."""
+    if not state.pixe_first:
+        return [_Stage("", state.varying, run_rbs, observed, state.windows, extra)]
+    if not extra:
+        raise CommandError(
+            "go: PIXFIRST fits the PIXE spectrum first, but no PIXE windows are set "
+            "-- PIXWIN <lo> <hi>"
+        )
+    pixe_side = [v for v in state.varying if v.kind in _PIXE_KINDS]
+    rbs_side = [v for v in state.varying if v.kind not in _PIXE_KINDS]
+    if not pixe_side:
+        raise CommandError(
+            "go: PIXFIRST, but nothing for the PIXE spectrum to fit "
+            "-- vary a COMPOSITION, ATOMS, SPECIES or PIXH"
+        )
+    spectrum = extra[0]
+    _check_lines_in_windows(session, pixe_side, data_buffer.pixe, spectrum.mask, inputs)
+    # The PIXE data take the dose the RBS normalisation window reads now, as
+    # they would in a joint fit.
+    scale = 1.0
+    if state.windows.normalisation is not None:
+        theory = np.asarray(run_rbs(inputs), dtype=float)
+        n = min(theory.size, observed.size)
+        scale = state.windows.normalisation_factor(observed[:n], theory[:n])
+    first = round(data_buffer.pixe.calibration.first)
+    pixe_windows = WindowSet(error=[Window(w.low - first, w.high - first) for w in state.pixe_windows])
+    stages = [_Stage(
+        _PIXE_STAGE, pixe_side, spectrum.simulate, spectrum.data * scale, pixe_windows, [],
+    )]
+    if rbs_side:
+        stages.append(_Stage("RBS", rbs_side, run_rbs, observed, state.windows, []))
+    return stages
+
+
+def _check_lines_in_windows(session, entries: list[Vary], pixe, mask, inputs: FitInputs) -> None:
+    """Refuse a PIXE-stage element with no simulated counts in the PIXE
+    windows: the PIXE spectrum can't say anything about it."""
+    from ..pixe_sim import simulate_with
+
+    simulated = simulate_with(
+        session, inputs.sample, inputs.beam, inputs.geometry, inputs.measurement,
+        inputs.pixe_h, pixe,
+    )
+    for entry in entries:
+        if entry.kind == "pixe_h":
+            continue
+        counts = simulated.by_element.get(entry.symbol)
+        n = 0 if counts is None else min(counts.size, mask.size)
+        if n == 0 or counts[:n][mask[:n]].sum() < 1.0:
+            raise CommandError(
+                f"go: PIXFIRST fits {entry.name} to the PIXE spectrum, but "
+                f"{entry.symbol} has no simulated counts in the PIXE windows "
+                "-- widen PIXWIN to its lines, or PIXFIRST OFF"
+            )
+
+
 def cmd_go(session, args: ArgReader) -> None:
     args.done()
     from ...fit.lm import fit
@@ -1029,6 +1147,7 @@ def cmd_go(session, args: ArgReader) -> None:
         header_lines.append(
             f"  with the PIXE spectrum over channels "
             f"{', '.join(f'{w.low}-{w.high}' for w in state.pixe_windows)}"
+            + (", fitted first (PIXFIRST)" if state.pixe_first else "")
         )
     for line in header_lines:
         print(line)
@@ -1064,16 +1183,13 @@ def cmd_go(session, args: ArgReader) -> None:
         if v.kind == "thickness"
     }
     fit_parameters = {v.name: _fit_parameter(v, per_areal.get(v.layer)) for v in state.varying}
-    groups = (
-        [state.varying] if state.multi else [[v] for v in state.varying]
-    )
+    stages = _stages(session, state, data_buffer, inputs, run, observed, extra)
 
-    initial_reduced = None
+    initial_reduced: dict[str, float] = {}
+    stage_label = ""
 
     def _progress(evaluation: int, reduced: float) -> None:
-        nonlocal initial_reduced
-        if initial_reduced is None:
-            initial_reduced = reduced
+        initial_reduced.setdefault(stage_label, reduced)
         if state.verbose:
             print(f"    eval {evaluation:3d}   chi2/dof {reduced:.4f}")
         # Each evaluation is a full simulation, so a fit blocks the prompt --
@@ -1082,29 +1198,41 @@ def cmd_go(session, args: ArgReader) -> None:
         # figure repainting instead of being declared hung.
         plotting.pump(session)
 
-    result = None
+    # Each stage's last result and its evaluations; the uncertainties of
+    # every parameter, from whichever fit varied it.
+    outcomes: list[tuple[_Stage, object, int]] = []
+    uncertainties: dict[str, float] = {}
     started = time.perf_counter()
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("always", RuntimeWarning)
-            for group in groups:
-                result = fit(
-                    run,
-                    observed,
-                    inputs,
-                    [fit_parameters[v.name] for v in group],
-                    windows=state.windows,
-                    progress=_progress,
-                    extra=extra,
-                )
-                if not state.multi:
-                    entry = group[0]
-                    factor, fmt, unit = _display(session, entry, per_areal.get(entry.layer))
-                    value = result.parameters[entry.parameter.name] * factor
-                    print(
-                        f"  {entry.name}: {fmt(value)}{f' {unit}' if unit else ''}"
-                        f"   chi2/dof {result.reduced_chi_square:.4f}"
+            for stage in stages:
+                stage_label = stage.label
+                if stage.label:
+                    print(f"  {stage.label}: {', '.join(v.name for v in stage.varying)}")
+                groups = [stage.varying] if state.multi else [[v] for v in stage.varying]
+                evaluations = 0
+                for group in groups:
+                    result = fit(
+                        stage.simulate,
+                        stage.data,
+                        inputs,
+                        [fit_parameters[v.name] for v in group],
+                        windows=stage.windows,
+                        progress=_progress,
+                        extra=stage.extra,
                     )
+                    evaluations += result.n_evaluations
+                    uncertainties.update(result.uncertainties)
+                    if not state.multi:
+                        entry = group[0]
+                        factor, fmt, unit = _display(session, entry, per_areal.get(entry.layer))
+                        value = result.parameters[entry.parameter.name] * factor
+                        print(
+                            f"  {entry.name}: {fmt(value)}{f' {unit}' if unit else ''}"
+                            f"   chi2/dof {result.reduced_chi_square:.4f}"
+                        )
+                outcomes.append((stage, result, evaluations))
     except ValueError as error:
         raise CommandError(f"go: {error}") from None
     elapsed = time.perf_counter() - started
@@ -1115,33 +1243,39 @@ def cmd_go(session, args: ArgReader) -> None:
     session.touch()
 
     report_lines.append(f"\n  fit took {elapsed:.2f} s")
-    chi_line = f"\n  reduced chi-square {result.reduced_chi_square:.4f} on {result.dof} dof"
-    if initial_reduced is not None:
-        chi_line += f"   (was {initial_reduced:.4f})"
-    report_lines.append(chi_line)
-    if result.parts:
-        report_lines.append("  " + ",   ".join(
-            f"{label} chi-square {part.total:.1f} over {part.n_used} channels"
-            for label, part in result.parts.items()
-        ))
-    status = "converged" if result.success else "did not converge"
-    report_lines.append(f"  {result.n_evaluations} evaluations, {status}")
-    if result.normalisation != 1.0:
+    for stage, result, evaluations in outcomes:
+        chi_line = (
+            f"\n  {f'{stage.label}: ' if stage.label else ''}"
+            f"reduced chi-square {result.reduced_chi_square:.4f} on {result.dof} dof"
+        )
+        if stage.label in initial_reduced:
+            chi_line += f"   (was {initial_reduced[stage.label]:.4f})"
+        report_lines.append(chi_line)
+        if result.parts:
+            report_lines.append("  " + ",   ".join(
+                f"{label} chi-square {part.total:.1f} over {part.n_used} channels"
+                for label, part in result.parts.items()
+            ))
+        status = "converged" if result.success else "did not converge"
+        report_lines.append(f"  {evaluations} evaluations, {status}")
+        if result.n_invalid:
+            report_lines.append(
+                f"  warning: {result.n_invalid} windowed channels had "
+                "no predicted counts"
+            )
+    # The RBS fit's normalisation: the joint one, or PIXFIRST's RBS stage.
+    rbs = next((r for stage, r, _ in outcomes if stage.label != _PIXE_STAGE), None)
+    if rbs is not None and rbs.normalisation != 1.0:
         # RUMP writes the fitted scale back into the buffer's CORR factor
         # (pert.c:1402-1403, "Estimated correction factor set for buffer"),
         # rather than only reporting it -- CORRECTION and a normalisation
         # window can't be varied together (WindowSet.validate_against), so
         # this never fights with a PERT CORRECTION selection.
-        new_correction = data_buffer.measurement.correction * result.normalisation
+        new_correction = data_buffer.measurement.correction * rbs.normalisation
         data_buffer.measurement = replace(data_buffer.measurement, correction=new_correction)
         report_lines.append(
-            f"  data scaled by {result.normalisation:.5f} over the norm window"
+            f"  data scaled by {rbs.normalisation:.5f} over the norm window"
             f"   (correction factor set to {new_correction:.5g})"
-        )
-    if result.n_invalid:
-        report_lines.append(
-            f"  warning: {result.n_invalid} windowed channels had "
-            "no predicted counts"
         )
     # An ATOMS line brackets its layer's resulting thickness in Angstroms --
     # the same view SIM SHOW brackets in MODE ATOMS.
@@ -1156,7 +1290,7 @@ def cmd_go(session, args: ArgReader) -> None:
     for entry in state.varying:
         name = entry.parameter.name
         value = entry.parameter.get(inputs)
-        sigma = result.uncertainties.get(name)
+        sigma = uncertainties.get(name)
         before = starting[entry.name]
         factor, fmt, unit = _display(session, entry, per_areal.get(entry.layer))
         suffix = f" {unit}" if unit else ""
@@ -1207,6 +1341,8 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     # letters each, so PIX and PIXE fall through to it.
     ("PIXWIN", 4, cmd_pixwin,
      "fit the PIXE spectrum too, over these channels, or PIXWIN CLEAR [<n>]"),
+    ("PIXFIRST", 4, cmd_pixfirst,
+     "GO fits compositions and PIXH to PIXE first, then the rest to RBS (PIXFIRST OFF: jointly)"),
     ("SINGLE", 2, cmd_single, "vary one parameter at a time"),
     ("MULTI", 3, cmd_multi, "vary all parameters together (default)"),
     ("VOLUME", 3, cmd_volume, "verbose progress messages"),
