@@ -34,8 +34,12 @@ from .xsect import IonisationTable
 #: flow in.
 SHELLS = {"K": ("K",), "L": ("L1", "L2", "L3"), "M": ("M1", "M2", "M3", "M4", "M5")}
 
-#: Lines produced this much more weakly than the element's strongest are
-#: dropped: they would not show in any spectrum.
+#: Lines produced this much more weakly than the strongest line of their
+#: element and shell (K, L or M) are dropped: they would not show in any
+#: spectrum. Per shell, because the shells' lines lie far apart in energy:
+#: next to a 1.9 MeV He beam's L lines of Ni (0.85 keV, thousands of barns,
+#: stopped by any filter) its Kβ (0.2 b) would be dropped, yet it is the
+#: line a spectrum shows at 8.26 keV.
 WEAK_LINE = 1e-4
 
 
@@ -82,11 +86,12 @@ def line_production(
     produced: list[LineProduction] = []
     for family in SHELLS:
         holes = vacancies(z, family, energy, ionisation, atomic)
+        shell_lines = []
         for line in atomic.lines(z):
             if line.shell in holes:
                 omega = atomic.fluorescence_yield(z, line.shell)
-                produced.append(LineProduction(line, holes[line.shell] * omega * line.rate))
-    if not produced:
-        return []
-    strongest = max(float(p.sigma_barn.max()) for p in produced)
-    return [p for p in produced if p.sigma_barn.max() >= WEAK_LINE * strongest]
+                shell_lines.append(LineProduction(line, holes[line.shell] * omega * line.rate))
+        if shell_lines:
+            strongest = max(float(p.sigma_barn.max()) for p in shell_lines)
+            produced += [p for p in shell_lines if p.sigma_barn.max() >= WEAK_LINE * strongest]
+    return produced

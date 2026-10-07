@@ -121,6 +121,23 @@ def test_m_shells_are_tabulated_from_tin_up():
     assert helium.sigma(78, "M5", 1.9) > 1000 * helium.sigma(78, "L3", 1.9)
 
 
+@pytest.mark.parametrize("ion, energy", [("He4", 1.9), ("H1", 2.0)])
+def test_weak_lines_are_judged_within_their_shell(ion, energy):
+    """Slow 4He makes thousands of times more L vacancies than K in Ca-Zn,
+    and far more M than L in Pt, but the soft L (M) lines never reach a
+    filtered detector: Kβ and Pt's L lines must not be dropped next to them."""
+    table, atomic = ionisation_table(ion), atomic_data()
+    for z in [*range(20, 36), 78]:
+        kept = {p.line.line for p in line_production(z, np.array([energy]), table, atomic)}
+        family = "L" if z == 78 else "K"
+        holes = set(table.shells(z))
+        strong = {
+            l.line for l in atomic.lines(z)
+            if l.shell.startswith(family) and l.shell in holes and l.rate > 0.01
+        }
+        assert strong <= kept, (z, strong - kept)
+
+
 # -- yields -------------------------------------------------------------------
 
 

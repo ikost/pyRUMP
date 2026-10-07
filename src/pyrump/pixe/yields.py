@@ -241,17 +241,18 @@ def simulate_lines(
     grams = atoms * masses / AVOGADRO
     mass_thickness = grams.sum(axis=1)  # g/cm^2
     fractions = grams / mass_thickness[:, None]
+    present = [(i, z) for i, z in enumerate(grid.element_z) if fractions[:, i].any()]
+    # Per-layer split of each line: slab k's sum goes to layer_index[k].
+    film_layers = grid.layer_index[film]
+    layers = np.unique(film_layers)
+    slot = np.searchsorted(layers, film_layers)
 
-    def attenuation(energy_keV: float) -> np.ndarray:
-        """A_k for one X-ray energy: absorption above slab k, times the
-        slab's own self-absorption."""
-        mu = sum(
-            fractions[:, i] * atomic.mu(z, energy_keV)
-            for i, z in enumerate(grid.element_z)
-            if fractions[:, i].any()
-        )
-        x = mu * mass_thickness / cos_out
-        above = np.concatenate(([0.0], np.cumsum(x)[:-1]))
+    def attenuation(energy_keV: np.ndarray) -> np.ndarray:
+        """A_k for each X-ray energy, slabs down the rows: absorption above
+        slab k, times the slab's own self-absorption."""
+        mu = sum(np.outer(fractions[:, i], atomic.mu(z, energy_keV)) for i, z in present)
+        x = mu * (mass_thickness / cos_out)[:, None]
+        above = np.cumsum(x, axis=0) - x
         self_absorption = np.where(x > 1e-12, -np.expm1(-x) / np.maximum(x, 1e-300), 1.0)
         return np.exp(-above) * self_absorption
 
@@ -266,21 +267,26 @@ def simulate_lines(
         if not per_slab_atoms.any():
             continue
         element = periodic_table.by_z(z)
-        for produced in line_production(z, energies, ionisation, atomic):
-            energy = produced.line.energy_keV
-            if not e_min <= energy <= e_max:
-                continue
-            sigma = produced.sigma_barn[:-1] * BARN_CM2
-            eff = float(efficiency(detector, energy, periodic_table, atomic))
-            per_slab = per_slab_atoms * sigma * attenuation(energy)
-            scale = exposure.h_for(produced.family) * exposure.ions * solid * eff
-            by_layer: dict[int, float] = {}
-            for layer, value in zip(grid.layer_index[film], per_slab * scale):
-                by_layer[int(layer)] = by_layer.get(int(layer), 0.0) + float(value)
+        produced = [
+            p for p in line_production(z, energies, ionisation, atomic)
+            if e_min <= p.line.energy_keV <= e_max
+        ]
+        if not produced:
+            continue
+        # Every line of the element at once: one attenuation and efficiency
+        # lookup per element rather than per line.
+        line_energy = np.array([p.line.energy_keV for p in produced])
+        eff = efficiency(detector, line_energy, periodic_table, atomic)
+        absorbed = attenuation(line_energy)
+        for n, line in enumerate(produced):
+            sigma = line.sigma_barn[:-1] * BARN_CM2
+            per_slab = per_slab_atoms * sigma * absorbed[:, n]
+            scale = exposure.h_for(line.family) * exposure.ions * solid * float(eff[n])
+            per_layer = np.bincount(slot, weights=per_slab * scale, minlength=layers.size)
             yields.append(LineYield(
-                z=z, symbol=element.symbol, line=produced.line,
-                counts=float(per_slab.sum() * scale),
-                sigma_barn=float(produced.sigma_barn[-1]), efficiency=eff,
-                by_layer=by_layer,
+                z=z, symbol=element.symbol, line=line.line,
+                counts=float(per_layer.sum()),
+                sigma_barn=float(line.sigma_barn[-1]), efficiency=float(eff[n]),
+                by_layer={int(layer): float(v) for layer, v in zip(layers, per_layer)},
             ))
     return sorted(yields, key=lambda y: -y.counts)
