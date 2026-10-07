@@ -11,10 +11,13 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from pyrump.model.geometry import Geometry, GeometryKind
 from pyrump.model.spectrum import Calibration
 from pyrump.pixe import yields as yields_module
 from pyrump.pixe.atomic import atomic_data
-from pyrump.pixe.detector import Absorber, PixeDetector, disc_solid_angle_msr
+from pyrump.pixe.detector import (
+    DEFAULT_GEOMETRY, Absorber, PixeDetector, angles, disc_solid_angle_msr,
+)
 from pyrump.pixe.production import line_production
 from pyrump.pixe.spectrum import resolution_sigma_keV, synthesize
 from pyrump.pixe.xsect import ion_name, ionisation_table
@@ -35,6 +38,11 @@ DATA = data_dir()
 needs_data = pytest.mark.skipif(DATA is None, reason="legacy data tables unavailable")
 PROTON = Beam(e0_MeV=2.0, z=1, mass=1.00728)
 HELIUM = Beam(e0_MeV=1.9, z=2, mass=4.0026)
+
+
+def _tilted(theta: float, phi: float = 45.0) -> Geometry:
+    """The default PIXE geometry, GEOMETRY IBM, with the sample tilted."""
+    return Geometry(theta=theta, phi=phi, kind=GeometryKind.IBM)
 
 
 @pytest.fixture(scope="module")
@@ -149,8 +157,8 @@ def test_thin_film_limit(tables):
     thickness = 0.5  # 1e15 at/cm^2
     detector = PixeDetector()
     exposure = Exposure(charge_uC=10.0)
-    lines = simulate_lines(_film(table, [("Ti", thickness)]), PROTON, 0.0, detector,
-                           exposure, registry, table)
+    lines = simulate_lines(_film(table, [("Ti", thickness)]), PROTON, DEFAULT_GEOMETRY,
+                           detector, exposure, registry, table)
     produced = next(p for p in line_production(22, np.array([PROTON.e0_MeV]),
                                                ionisation_table("H1"), atomic_data())
                     if p.line.line == "KL3")
@@ -172,7 +180,7 @@ def test_overlayer_attenuates_by_beer_lambert(tables):
     sample = _film(table, [("Pt", cap), ("Ti", 0.5)])
     exposure = Exposure(charge_uC=10.0)
     counts = {
-        angle: _counts(simulate_lines(sample, PROTON, 0.0, PixeDetector(angle_deg=angle),
+        angle: _counts(simulate_lines(sample, PROTON, _tilted(0.0, phi=angle), PixeDetector(),
                                       exposure, registry, table), "Ti", "KL3")
         for angle in (0.0, 60.0)
     }
@@ -191,8 +199,8 @@ def test_yield_is_linear_in_charge_solid_angle_h_and_live_time(tables):
     sample = _film(table, [("Mn", 50.0)])
 
     def mn_kalpha(exposure, detector=PixeDetector()):
-        return _counts(simulate_lines(sample, HELIUM, 9.0, detector, exposure, registry, table),
-                       "Mn", "KL3")
+        return _counts(simulate_lines(sample, HELIUM, _tilted(9.0), detector, exposure,
+                                      registry, table), "Mn", "KL3")
 
     base = mn_kalpha(Exposure(charge_uC=10.0))
     assert mn_kalpha(Exposure(charge_uC=20.0)) == pytest.approx(2 * base, rel=1e-12)
@@ -210,8 +218,8 @@ def test_finer_sublayers_converge(tables, monkeypatch):
     sample = _film(table, [("Ru", 40.0), ("Pt", 300.0), ("Mn", 300.0)])
 
     def run():
-        lines = simulate_lines(sample, HELIUM, 9.0, PixeDetector(), Exposure(charge_uC=10.0),
-                               registry, table)
+        lines = simulate_lines(sample, HELIUM, _tilted(9.0), PixeDetector(),
+                               Exposure(charge_uC=10.0), registry, table)
         return {(l.symbol, l.line.line): l.counts for l in lines}
 
     coarse = run()
@@ -226,8 +234,8 @@ def test_substrate_and_absorber_layers_make_no_lines(tables):
     table, registry = tables
     sample = _film(table, [("Al", 1000.0), ("Ti", 50.0)], substrate="Cu")
     sample.absorber_layers = 1
-    lines = simulate_lines(sample, PROTON, 0.0, PixeDetector(), Exposure(charge_uC=1.0),
-                           registry, table)
+    lines = simulate_lines(sample, PROTON, DEFAULT_GEOMETRY, PixeDetector(),
+                           Exposure(charge_uC=1.0), registry, table)
     assert {line.symbol for line in lines} == {"Ti"}
     assert all(set(line.by_layer) == {1} for line in lines)
 
@@ -242,8 +250,8 @@ def test_a_thick_substrate_saturates_where_the_beam_stops(tables):
     def si_k(substrate_thickness):
         sample = _film(table, [("Mn", 50.0)])
         sample.thicknesses[-1] = substrate_thickness
-        lines = simulate_lines(sample, HELIUM, 9.0, PixeDetector(), Exposure(charge_uC=10.0),
-                               registry, table, include_substrate=True)
+        lines = simulate_lines(sample, HELIUM, _tilted(9.0), PixeDetector(),
+                               Exposure(charge_uC=10.0), registry, table, include_substrate=True)
         return sum(l.counts for l in lines if l.symbol == "Si" and l.line.shell == "K")
 
     thin, four, eight = si_k(2000.0), si_k(20000.0), si_k(40000.0)
@@ -257,7 +265,7 @@ def test_substrate_lines_only_when_included(tables):
     sample = _film(table, [("Ti", 50.0)], substrate="Cu")
 
     def symbols(include):
-        return {l.symbol for l in simulate_lines(sample, PROTON, 0.0, PixeDetector(),
+        return {l.symbol for l in simulate_lines(sample, PROTON, DEFAULT_GEOMETRY, PixeDetector(),
                                                  Exposure(charge_uC=1.0), registry, table,
                                                  include_substrate=include)}
 
@@ -335,12 +343,21 @@ def test_mylar_by_the_mixture_rule(tables):
     assert 0 < expected < 0.1  # the test means something
 
 
-def test_exit_angle_follows_the_tilt():
-    detector = PixeDetector(angle_deg=45.0)
-    assert detector.exit_angle(-9.0) == 36.0  # turned towards the detector
-    assert detector.exit_angle(9.0) == 54.0
-    assert PixeDetector(angle_deg=45.0, tilt_sign=-1).exit_angle(-9.0) == 54.0
-    assert PixeDetector(angle_deg=45.0, tilt_sign=0).exit_angle(-9.0) == 45.0
+def test_angles_follow_the_geometry_as_for_rbs():
+    # The default: IBM, 45 deg from the beam, normal incidence.
+    assert DEFAULT_GEOMETRY == Geometry(theta=0.0, phi=45.0, kind=GeometryKind.IBM)
+    assert angles(DEFAULT_GEOMETRY) == pytest.approx((0.0, 45.0))
+    # IBM: PSI = |THETA + PHI|, a negative THETA turning it towards the detector.
+    assert angles(_tilted(-9.0)) == pytest.approx((9.0, 36.0))
+    assert angles(_tilted(9.0)) == pytest.approx((9.0, 54.0))
+    # CORNELL: cos PSI = cos THETA cos PHI, either sign.
+    cornell = np.degrees(np.arccos(np.cos(np.radians(9.0)) * np.cos(np.radians(45.0))))
+    for theta in (9.0, -9.0):
+        geometry = Geometry(theta=theta, phi=45.0, kind=GeometryKind.CORNELL)
+        assert angles(geometry) == pytest.approx((9.0, cornell))
+    # GENERAL: PSI as typed.
+    general = Geometry(theta=-9.0, phi=45.0, psi=20.0, kind=GeometryKind.GENERAL)
+    assert angles(general) == pytest.approx((9.0, 20.0))
 
 
 def test_solid_angle_of_a_round_detector():
@@ -358,10 +375,11 @@ def test_tilt_lengthens_the_way_out(tables):
     table, registry = tables
     sample = _film(table, [("Pt", 400.0), ("Ti", 0.5)])
     exposure = Exposure(charge_uC=10.0)
-    detector = PixeDetector(angle_deg=45.0)
+    detector = PixeDetector()
 
     def ti(theta):
-        return _counts(simulate_lines(sample, PROTON, theta, detector, exposure, registry, table),
+        return _counts(simulate_lines(sample, PROTON, _tilted(theta), detector, exposure,
+                                      registry, table),
                        "Ti", "KL3")
 
     assert ti(9.0) < ti(-9.0)

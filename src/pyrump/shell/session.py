@@ -34,7 +34,7 @@ from ..model.geometry import Geometry
 from ..model.spectrum import Calibration, Spectrum
 from ..physics.xsec.rutherford import ScreeningModel
 from ..pixe.data import PixeData
-from ..pixe.detector import DEFAULT_CALIBRATION, PixeDetector
+from ..pixe.detector import DEFAULT_CALIBRATION, DEFAULT_GEOMETRY, PixeDetector
 from ..script.lcm import Script
 from ..sim.engine import Beam
 
@@ -465,6 +465,13 @@ class PixeState:
     #: Whether reading ``x.RBS`` also loads ``x.PIX`` from the same folder.
     pair: bool = False
     detector: PixeDetector = field(default_factory=PixeDetector)
+    #: Where the PIXE detector stands, in RUMP's terms: GEOMETRY, THETA, PHI
+    #: and PSI at the PIXE prompt, set apart from the RBS buffer's.
+    geometry: Geometry = DEFAULT_GEOMETRY
+    #: ``THETA RBS``: the sample tilt is the RBS buffer's THETA (and follows
+    #: PERT THETA), not :attr:`geometry`'s own. PAIR ON forces it
+    #: (:attr:`follows_rbs`).
+    theta_rbs: bool = False
     #: For a spectrum whose header has no usable calibration.
     calibration: Calibration = DEFAULT_CALIBRATION
     #: The PIXE window's channel range (channel numbers as the spectrum
@@ -492,6 +499,17 @@ class PixeState:
     last_error: str | None = None
     #: The PIXE window, separate from the RBS one (:attr:`Session.figure`).
     figure: object | None = None
+
+    @property
+    def follows_rbs(self) -> bool:
+        """Whether the tilt is the RBS buffer's: under ``THETA RBS``, and
+        always with PAIR ON -- the two spectra of one run, one sample."""
+        return self.theta_rbs or self.pair
+
+    def geometry_for(self, rbs: Geometry) -> Geometry:
+        """The PIXE detector's geometry next to the RBS geometry ``rbs``:
+        its own, the tilt taken from ``rbs`` when it :attr:`follows_rbs`."""
+        return replace(self.geometry, theta=rbs.theta) if self.follows_rbs else self.geometry
 
 
 @dataclass(slots=True)

@@ -1,10 +1,10 @@
 """Run the PIXE simulation for the shell: SIM sample in, PIXE spectrum out.
 
 The sample is the one SIM edits and the RBS simulation uses -- all of it,
-the substrate included with the thickness SIM gives it; the beam, tilt
-and charge are the ACTIVE buffer's (one run, one charge integrator), the
-live fraction its PIXE spectrum's; the detector, H values and escape
-setting are the PIXE prompt's.
+the substrate included with the thickness SIM gives it; the beam and charge
+are the ACTIVE buffer's (one run, one charge integrator), the live fraction
+its PIXE spectrum's; the detector, its geometry, H values and escape
+setting are the PIXE prompt's -- the tilt the buffer's under THETA RBS.
 """
 
 from __future__ import annotations
@@ -14,8 +14,9 @@ from ..pixe.yields import Exposure, simulate_lines
 
 
 def reference_buffer(session):
-    """The buffer whose beam, tilt and charge the simulation uses: the
-    ACTIVE data buffer, or the session defaults when there is none."""
+    """The buffer whose beam and charge (and, under THETA RBS, tilt) the
+    simulation uses: the ACTIVE data buffer, or the session defaults when
+    there is none."""
     buffer = session.buffers.active_buffer
     if buffer is None or session.buffers.active == 0:
         return session.settings.experiment_defaults
@@ -40,7 +41,9 @@ def simulate(session) -> PixeSpectrum | None:
 
 def simulate_with(session, sample, beam, geometry, measurement, h, data) -> PixeSpectrum:
     """The PIXE simulation for these inputs -- what :func:`simulate` runs
-    for the ACTIVE buffer, and PERT's GO for each trial of a fit. ``data``,
+    for the ACTIVE buffer, and PERT's GO for each trial of a fit.
+    ``geometry`` is the RBS buffer's (or the trial's): under THETA RBS the
+    PIXE detector takes its tilt. ``data``,
     the measured PIXE spectrum (or ``None``), gives the live fraction and
     the channels; the detector and escape setting are the PIXE prompt's."""
     state = session.pixe
@@ -52,7 +55,7 @@ def simulate_with(session, sample, beam, geometry, measurement, h, data) -> Pixe
         h=tuple(h),
     )
     lines = simulate_lines(
-        sample, beam, geometry.theta, state.detector, exposure,
+        sample, beam, state.geometry_for(geometry), state.detector, exposure,
         session.registry, session.table, include_substrate=True,
         faithful=session.settings.faithful,
     )

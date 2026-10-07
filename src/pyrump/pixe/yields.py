@@ -52,7 +52,7 @@ from ..sim.precal import march_inbound
 from ..stopping.bragg import bragg_coefficients
 from ..stopping.table import StoppingTable
 from .atomic import AtomicData, XrayLine, atomic_data
-from .detector import Absorber, PixeDetector
+from .detector import Absorber, PixeDetector, angles
 from .production import line_production
 from .xsect import ion_name, ionisation_table
 
@@ -173,7 +173,7 @@ def pixe_grid(sample, alpha_deg: float, exit_deg: float, periodic_table):
 def simulate_lines(
     sample,
     beam,
-    theta_deg: float,
+    geometry: Geometry,
     detector: PixeDetector,
     exposure: Exposure,
     registry,
@@ -186,10 +186,10 @@ def simulate_lines(
     """Yield of every line of every film element, strongest first.
 
     ``sample`` is the RBS simulation's :class:`~pyrump.sim.engine.UniformSample`
-    and ``beam`` its :class:`~pyrump.sim.engine.Beam`; ``theta_deg`` is the
-    sample's tilt, the RBS geometry's signed THETA. The beam comes in at
-    ``|theta_deg|`` to the normal, the X-rays leave at
-    :meth:`PixeDetector.exit_angle`.
+    and ``beam`` its :class:`~pyrump.sim.engine.Beam`; ``geometry`` is the
+    PIXE detector's, in RUMP's terms -- GEOMETRY, THETA, PHI, PSI. The beam
+    comes in at |THETA| to the normal, the X-rays leave at the PSI the
+    geometry gives (:func:`~pyrump.pixe.detector.angles`).
     """
     atomic = atomic or atomic_data()
     ionisation = ionisation_table(ion_name(beam.z, beam.mass))
@@ -198,7 +198,7 @@ def simulate_lines(
             f"beam energy {beam.e0_MeV:g} MeV outside the cross-section tables "
             f"({ionisation.e_min:g}-{ionisation.e_max:g} MeV)"
         )
-    alpha_deg, exit_deg = abs(theta_deg), detector.exit_angle(theta_deg)
+    alpha_deg, exit_deg = angles(geometry)
     fine, geometry, grid = pixe_grid(sample, alpha_deg, exit_deg, periodic_table)
     cos_in = np.cos(np.radians(alpha_deg))
     cos_out = np.cos(np.radians(exit_deg))

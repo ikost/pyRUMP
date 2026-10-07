@@ -9,8 +9,9 @@ entering, and does not turn PIXE on -- so ``~/.pyrumprc`` can set up the
 detector with one-shots, or with a ``pixe`` ... ``disable`` block.
 
 A PIXE spectrum lives on a buffer (:attr:`~pyrump.shell.session.Buffer.pixe`)
-next to that buffer's RBS spectrum, and shares its beam, geometry and
-charge. The detector, calibration default and plot settings are the
+next to that buffer's RBS spectrum, and shares its beam and charge. The
+detector, its geometry (GEOMETRY, THETA, PHI, PSI -- the tilt the buffer's
+under THETA RBS), the calibration default and plot settings are the
 session's (:class:`~pyrump.shell.session.PixeState`).
 """
 
@@ -21,9 +22,10 @@ from pathlib import Path
 
 import numpy as np
 
+from ...model.geometry import GeometryKind
 from ...model.spectrum import Spectrum
 from ...pixe.data import PixeData
-from ...pixe.detector import COMPOUNDS, Absorber, disc_solid_angle_msr
+from ...pixe.detector import COMPOUNDS, Absorber, angles, disc_solid_angle_msr
 from ...pixe.yields import Exposure
 from ..dispatch import ArgReader, CommandError, CommandTable
 from ..session import Buffer
@@ -102,10 +104,12 @@ def setup_lines(session) -> list[str]:
     """The settings as PIXE commands -- what SHOW prints, ready for
     ``~/.pyrumprc``."""
     state = session.pixe
-    d, c = state.detector, state.calibration
+    d, c, g = state.detector, state.calibration, state.geometry
     lines = [
-        f"angle {d.angle_deg:g}",
-        f"tiltsign {d.tilt_sign:d}",
+        f"geometry {g.kind.name.lower()}",
+        f"theta {'rbs' if state.theta_rbs else f'{g.theta:g}'}",
+        f"phi {g.phi:g}",
+        f"psi {g.psi:g}",
         f"solid {d.solid_angle_msr:.6g}",
         f"window {d.window.material} {d.window.thickness_um:g}",
         f"crystal {d.crystal.material} {d.crystal.thickness_um:g}",
@@ -136,11 +140,7 @@ def cmd_show(session, args: ArgReader) -> None:
     from ..pixe_sim import reference_buffer
 
     reference = reference_buffer(session)
-    theta = reference.geometry.theta
-    print(
-        f"  ! with THETA {theta:g}: beam {abs(theta):g} deg, X-rays "
-        f"{state.detector.exit_angle(theta):g} deg to the sample normal"
-    )
+    print(f"  {_angles_note(session)}")
     # The dose is the RBS buffer's, CORRECTION included: tuning CORR for
     # RBS rescales the PIXE simulation too.
     m = reference.measurement
@@ -249,14 +249,18 @@ def _pixe_only_buffer(session, path: Path) -> Buffer:
 
 def cmd_pair(session, args: ArgReader) -> None:
     """``PAIR ON|OFF`` -- whether reading ``x.RBS`` (GET or XEQ) also loads
-    ``x.PIX`` from the same folder."""
+    ``x.PIX`` from the same folder. ON also makes the PIXE tilt the RBS
+    buffer's THETA: the two spectra of one run, one sample."""
     token = args.optional()
     args.done()
     if token is not None:
         if token.lower() not in ("on", "off"):
             raise CommandError("PAIR: expected ON or OFF")
         session.pixe.pair = token.lower() == "on"
+        pixe_plotting.refresh(session)
     print(f"  pair {'on' if session.pixe.pair else 'off'}")
+    if token is not None:
+        print(f"  {_angles_note(session)}")
 
 
 # ---------------------------------------------------------------------------
@@ -284,27 +288,117 @@ def _detector_number(field: str, label: str, unit: str, *, low: float = 0.0,
     return handler
 
 
-cmd_angle = _detector_number(
-    "angle_deg", "angle", "  ! deg, detector axis to the untilted sample's normal",
-    low=-90.0, high=90.0,
-)
+# ---------------------------------------------------------------------------
+# Geometry
+# ---------------------------------------------------------------------------
 
 
-def cmd_tiltsign(session, args: ArgReader) -> None:
-    """``TILTSIGN 1|-1|0`` -- how the sample's tilt THETA moves the X-rays'
-    exit angle, ``|ANGLE + TILTSIGN x THETA|``: 1 when a negative THETA
-    turns the sample towards the PIXE detector, -1 when away, 0 when the
-    tilt leaves the detector direction alone."""
+def _angles_note(session) -> str:
+    """What the PIXE geometry gives next to the ACTIVE buffer: the beam's
+    and the X-rays' angles to the sample normal."""
+    from ..pixe_sim import reference_buffer
+
+    state = session.pixe
+    geometry = state.geometry_for(reference_buffer(session).geometry)
+    beam, out = angles(geometry)
+    tilt = f"THETA {geometry.theta:g}"
+    if state.pair:
+        tilt += " from the RBS buffer (PAIR ON)"
+    elif state.theta_rbs:
+        tilt += " from the RBS buffer"
+    return f"! {tilt}: beam {beam:g} deg, X-rays {out:.4g} deg to the sample normal"
+
+
+def _set_geometry(session, **changes) -> None:
+    session.pixe.geometry = replace(session.pixe.geometry, **changes)
+    pixe_plotting.refresh(session)
+
+
+def cmd_geometry(session, args: ArgReader) -> None:
+    """``GEOMETRY [IBM|CORNELL|GENERAL]`` -- how the X-rays' exit angle PSI
+    follows from THETA and PHI, as RBS's GEOMETRY does for its detector."""
     token = args.optional()
     args.done()
-    detector = session.pixe.detector
     if token is not None:
-        if token not in ("1", "-1", "0", "+1"):
-            raise CommandError("TILTSIGN: expected 1, -1 or 0")
-        detector = replace(detector, tilt_sign=int(token))
-        session.pixe.detector = detector
+        try:
+            kind = GeometryKind[token.upper()]
+        except KeyError:
+            raise CommandError("GEOMETRY: expected IBM, CORNELL or GENERAL") from None
+        _set_geometry(session, kind=kind)
+    print(f"  geometry {session.pixe.geometry.kind.name.lower()}")
+    print(f"  {_angles_note(session)}")
+
+
+cmd_geometry.details = """\
+Where the PIXE detector stands, in the same terms as RBS's GEOMETRY (the
+manual's Experimental geometry page draws all three):
+  IBM      beside the beam, in the plane the sample turns in:
+           PSI = |THETA + PHI|, a negative THETA turning it towards it
+  CORNELL  above or below the beam: cos PSI = cos THETA x cos PHI
+  GENERAL  anywhere: PSI as typed
+Default: IBM, PHI 45, THETA 0 -- 45 deg from the beam, normal incidence."""
+
+
+def cmd_theta(session, args: ArgReader) -> None:
+    """``THETA [<deg>|RBS]`` -- the sample tilt for PIXE: its own, or
+    the RBS buffer's (RBS), which then follows PERT THETA too."""
+    token = args.optional()
+    args.done()
+    state = session.pixe
+    if token is not None:
+        if token.upper() == "RBS":
+            state.theta_rbs = True
+        else:
+            try:
+                value = float(token)
+            except ValueError:
+                raise CommandError("THETA: expected degrees or RBS") from None
+            if state.pair:
+                raise CommandError(
+                    "THETA: PAIR ON takes the tilt from the RBS buffer; PAIR OFF first"
+                )
+            if not -90.0 < value < 90.0:
+                raise CommandError("THETA: must be between -90 and 90")
+            state.theta_rbs = False
+            state.geometry = replace(state.geometry, theta=value)
         pixe_plotting.refresh(session)
-    print(f"  tiltsign {detector.tilt_sign:d}")
+    print(f"  theta {'rbs' if state.theta_rbs else f'{state.geometry.theta:g}'}")
+    print(f"  {_angles_note(session)}")
+
+
+cmd_theta.details = """\
+The beam's angle to the sample normal, in degrees: 0 (the default) is
+normal incidence. THETA RBS takes the RBS buffer's THETA instead -- the
+same sample, tilted once for both detectors -- and follows it while PERT
+fits THETA; a number unlinks it again. PAIR ON always takes the RBS
+buffer's (the two spectra of one run) and refuses a number. The sign says which way the sample
+turns, as for RBS: with GEOMETRY IBM a negative THETA turns it towards the
+PIXE detector."""
+
+
+def _geometry_angle(field: str, low: float, high: float, note: str):
+    """A setter for PHI or PSI, in degrees, ``low <= value < high``."""
+    def handler(session, args: ArgReader) -> None:
+        value = args.optional_number()
+        args.done()
+        if value is not None:
+            if not low <= value < high:
+                raise CommandError(f"{field.upper()}: must be from {low:g} up to {high:g}")
+            _set_geometry(session, **{field: value})
+        print(f"  {field} {getattr(session.pixe.geometry, field):g}  ! {note}")
+        print(f"  {_angles_note(session)}")
+
+    handler.__doc__ = f"``{field.upper()} [<deg>]`` -- show or set the PIXE {note}."
+    return handler
+
+
+cmd_phi = _geometry_angle("phi", 0.0, 180.0, "deg, the detector to the beam (looking back)")
+cmd_psi = _geometry_angle("psi", 0.0, 90.0, "deg, the detector to the normal: GENERAL only")
+
+
+# ---------------------------------------------------------------------------
+# Detector
+# ---------------------------------------------------------------------------
 
 
 def cmd_solid(session, args: ArgReader) -> None:
@@ -593,6 +687,18 @@ def _pixe_export_buffer(session) -> tuple[int, Buffer]:
     return index, buffer
 
 
+def _export_angles(session, rbs) -> str:
+    """The PIXE geometry for an export header, next to the RBS geometry
+    ``rbs`` of the buffer exported."""
+    geometry = session.pixe.geometry_for(rbs)
+    beam, out = angles(geometry)
+    return (
+        f"geometry {geometry.kind.name.lower()}  theta {geometry.theta:g}"
+        f"{' (RBS)' if session.pixe.follows_rbs else ''}  phi {geometry.phi:g}"
+        f"  psi {geometry.psi:g}: beam {beam:g} deg, X-rays {out:.4g} deg to the sample normal"
+    )
+
+
 def _pixe_header(session, index: int, buffer: Buffer, what: str) -> list[str]:
     """What is needed to read a PIXE export: the spectrum, the run it shares
     with the RBS spectrum, and the PIXE setup."""
@@ -603,7 +709,6 @@ def _pixe_header(session, index: int, buffer: Buffer, what: str) -> list[str]:
 
     data, b, g, m = buffer.pixe, buffer.beam, buffer.geometry, buffer.measurement
     c = data.calibration
-    detector = session.pixe.detector
     times = (f"live {data.live_time_s:g} s  real {data.real_time_s:g} s"
              f"  (live fraction {data.live_fraction:.6f})"
              if data.live_time_s and data.real_time_s else "live/real time unknown")
@@ -616,8 +721,7 @@ def _pixe_header(session, index: int, buffer: Buffer, what: str) -> list[str]:
         f"Calibration    {c.kevch:.8g} keV/ch  offset {c.kev0:.8g} keV"
         f"  first channel {c.first:g}  {c.npt} channels",
         f"Beam           {_wrascii_beam_code(session, b)}  {b.e0_MeV:.6f} MeV",
-        f"Angles         theta {g.theta:g} deg: beam {abs(g.theta):g} deg,"
-        f" X-rays {detector.exit_angle(g.theta):g} deg to the sample normal",
+        f"Angles         {_export_angles(session, g)}",
         f"Dose           charge {m.charge_uC:.6f} uC  charge state {m.charge_state}"
         f"  corr {m.correction:.6f}",
         f"Setup          {'; '.join(setup_lines(session))}",
@@ -860,10 +964,13 @@ _ENTRIES: list[tuple[str, int, object, str]] = [
     ("SHOW", 2, cmd_show, "the settings, as commands for ~/.pyrumprc"),
     # Data
     ("GET", 3, cmd_get, "read a PIXE spectrum (.PIX) into the active buffer"),
-    ("PAIR", 3, cmd_pair, "ON: reading x.RBS also reads x.PIX"),
+    ("PAIR", 3, cmd_pair, "ON: reading x.RBS also reads x.PIX, THETA follows RBS"),
     # Detector
-    ("ANGLE", 2, cmd_angle, "detector axis to the untilted sample's normal, degrees"),
-    ("TILTSIGN", 2, cmd_tiltsign, "how THETA moves the exit angle: 1, -1 or 0"),
+    # Geometry
+    ("GEOMETRY", 4, cmd_geometry, "where the detector is: IBM, CORNELL or GENERAL"),
+    ("THETA", 3, cmd_theta, "sample tilt, degrees (0: normal incidence), or RBS"),
+    ("PHI", 3, cmd_phi, "detector to the beam (looking back), degrees"),
+    ("PSI", 3, cmd_psi, "detector to the sample normal, degrees: GENERAL only"),
     ("SOLID", 2, cmd_solid, "solid angle: msr, or area mm^2 and distance [MM|IN]"),
     ("WINDOW", 2, cmd_window, "detector window: element and thickness in µm"),
     ("CRYSTAL", 2, cmd_crystal, "detector crystal: element and thickness in µm"),
@@ -903,8 +1010,9 @@ TABLE.note_synonym("EXPORTCMP", "EC")
 _HELP_GROUPS: list[tuple[str, list[str]]] = [
     ("Getting around", ["HELP", "RETURN", "DISABLE", "SHOW"]),
     ("Data", ["GET", "PAIR"]),
+    ("Geometry", ["GEOMETRY", "THETA", "PHI", "PSI"]),
     ("Detector",
-     ["ANGLE", "TILTSIGN", "SOLID", "WINDOW", "CRYSTAL", "FWHM", "FANO", "FILTER", "CALIB",
+     ["SOLID", "WINDOW", "CRYSTAL", "FWHM", "FANO", "FILTER", "CALIB",
       "ESCAPE"]),
     ("Simulation", ["H", "LINES"]),
     ("PIXE window",

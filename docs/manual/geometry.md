@@ -1,8 +1,9 @@
 ## Experimental geometry
 
-An RBS spectrum depends on three directions: the **beam**, the **detector**
-and the **sample normal**. Three angles between them describe the
-experiment, each set on the data buffer:
+A spectrum — RBS or PIXE — depends on three directions: the **beam**, the
+**detector** and the **sample normal**. Three angles between them describe
+the experiment, each set on the data buffer for the RBS detector (and in
+the PIXE prompt for the [PIXE detector](#the-pixe-detector)):
 
 | Command | Angle between | What it sets |
 |---|---|---|
@@ -102,4 +103,23 @@ Acquisition files often use `GENERAL` and spell all three angles out:
 ### Fitting the tilt
 
 When fitting, [`PERT THETA`](pert.md#theta) varies `THETA`; with `IBM` or
-`CORNELL` the exit angle follows it, with `GENERAL` it stays at `PSI`.
+`CORNELL` the exit angle follows it, with `GENERAL` it stays at `PSI`. The
+PIXE detector's tilt follows only with `PAIR ON` or `THETA RBS` (below).
+
+### The PIXE detector
+
+The PIXE detector is placed the same way, in the same three cases: in the
+figures above, "detector" can be either. Its `GEOMETRY`, `THETA`, `PHI` and
+`PSI` are typed in the [PIXE prompt](pixe.md#detector-setup), apart from
+the RBS buffer's, since the two detectors stand in different places. The
+default is `GEOMETRY IBM`, `PHI 45` and `THETA 0`: the detector beside the
+beam, 45° from it, and the beam at normal incidence, so the X-rays leave at
+45° to the normal.
+
+The sample is one, tilted once for both detectors: `THETA RBS` in the PIXE
+prompt takes the tilt from the RBS buffer, and follows it through a
+`PERT THETA` fit. `PAIR ON` — the `.RBS` and `.PIX` files of one run read
+together — always does, and refuses a `THETA` of the PIXE prompt's own. The PIXE detector's own `GEOMETRY` then says what the
+tilt does to its X-rays. On the RC43 endstation, the RBS file's `THETA -9`
+turns the sample towards the PIXE detector, beside the beam: `IBM`,
+\|−9 + 45\| = 36°.

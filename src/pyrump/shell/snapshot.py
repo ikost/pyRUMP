@@ -207,11 +207,14 @@ def _label_lines(buffer: Buffer) -> list[str]:
 
 
 def _pixe_setup_lines(session) -> list[str]:
-    """The PIXE settings, PAIR left out (it goes after the data is read, so
-    reading the data doesn't pair it a second time)."""
+    """The PIXE settings, PAIR switched off first: the restoring session's
+    own PAIR ON (from ``~/.pyrumprc``) would pair the data a second time and
+    refuse a THETA. The snapshot's PAIR goes after the data is read."""
     from .commands.pixe import setup_lines
 
-    return [f"PIXE {line}" for line in setup_lines(session) if not line.startswith("pair ")]
+    return ["PIXE pair off"] + [
+        f"PIXE {line}" for line in setup_lines(session) if not line.startswith("pair ")
+    ]
 
 
 def _view_lines(session) -> list[str]:

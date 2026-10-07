@@ -17,8 +17,11 @@ import pytest
 matplotlib = pytest.importorskip("matplotlib")
 matplotlib.use("Agg")
 
+from pyrump.model.geometry import Geometry, GeometryKind  # noqa: E402
 from pyrump.model.spectrum import Calibration, Spectrum  # noqa: E402
-from pyrump.pixe.detector import DEFAULT_CALIBRATION, PixeDetector  # noqa: E402
+from pyrump.pixe.detector import (  # noqa: E402
+    DEFAULT_CALIBRATION, DEFAULT_GEOMETRY, PixeDetector,
+)
 from pyrump.shell import plotting  # noqa: E402
 from pyrump.shell.commands.pixe import setup_lines  # noqa: E402
 from pyrump.shell.dispatch import CommandError  # noqa: E402
@@ -88,19 +91,19 @@ def test_disable_turns_pixe_off_and_leaves(session):
 
 
 def test_one_shots_do_not_turn_pixe_on(empty_session):
-    stack = run(empty_session, "pixe angle 30", "pixe disable")
+    stack = run(empty_session, "pixe phi 30", "pixe disable")
     assert stack == ["rump"] and not empty_session.pixe.enabled
-    assert empty_session.pixe.detector.angle_deg == 30
+    assert empty_session.pixe.geometry.phi == 30
 
 
 def test_pyrumprc_block_ending_in_disable_stores_the_setup_only(empty_session, tmp_path):
     rc = tmp_path / "rc"
-    rc.write_text("pixe\n angle 30\n solid 2.5\n window Be 12.5\n pair on\ndisable\nmev 2.5\n")
+    rc.write_text("pixe\n phi 30\n solid 2.5\n window Be 12.5\n pair on\ndisable\nmev 2.5\n")
     stack = ["rump"]
     execute_file(empty_session, rc, stack)
     assert stack == ["rump"] and not empty_session.pixe.enabled
     detector = empty_session.pixe.detector
-    assert (detector.angle_deg, detector.solid_angle_msr) == (30, 2.5)
+    assert (empty_session.pixe.geometry.phi, detector.solid_angle_msr) == (30, 2.5)
     assert (detector.window.material, detector.window.thickness_um) == ("Be", 12.5)
     assert empty_session.pixe.pair
 
@@ -111,12 +114,14 @@ def test_pyrumprc_block_ending_in_disable_stores_the_setup_only(empty_session, t
 def test_built_in_defaults_without_a_pyrumprc(empty_session):
     assert empty_session.pixe.detector == PixeDetector()
     assert empty_session.pixe.calibration == DEFAULT_CALIBRATION
+    assert empty_session.pixe.geometry == DEFAULT_GEOMETRY
+    assert not empty_session.pixe.theta_rbs
     assert not empty_session.pixe.pair
 
 
 def test_show_prints_commands_that_rebuild_the_setup(empty_session, capsys):
-    run(empty_session, "pixe angle 30", "pixe filter 2 Al 25 hole 10%", "pixe calib 0.0101 -0.04",
-        "pixe pair on")
+    run(empty_session, "pixe geometry general", "pixe phi 30", "pixe psi 20", "pixe theta rbs",
+        "pixe filter 2 Al 25 hole 10%", "pixe calib 0.0101 -0.04", "pixe pair on")
     lines = setup_lines(empty_session)
     fresh = _session()
     run(fresh, *(f"pixe {line}" for line in lines))
@@ -125,6 +130,8 @@ def test_show_prints_commands_that_rebuild_the_setup(empty_session, capsys):
     assert rebuilt.solid_angle_msr == pytest.approx(original.solid_angle_msr, rel=1e-6)
     assert replace(rebuilt, solid_angle_msr=original.solid_angle_msr) == original
     assert fresh.pixe.calibration == empty_session.pixe.calibration
+    assert fresh.pixe.geometry == empty_session.pixe.geometry
+    assert fresh.pixe.theta_rbs
     assert fresh.pixe.pair
     capsys.readouterr()
     run(empty_session, "pixe show")
@@ -135,7 +142,11 @@ def test_show_prints_commands_that_rebuild_the_setup(empty_session, capsys):
 @pytest.mark.parametrize(
     "line, message",
     [
-        ("pixe angle 95", "between -90 and 90"),
+        ("pixe geometry tilted", "IBM, CORNELL or GENERAL"),
+        ("pixe theta 95", "between -90 and 90"),
+        ("pixe theta up", "degrees or RBS"),
+        ("pixe phi 180", "from 0 up to 180"),
+        ("pixe psi -5", "from 0 up to 90"),
         ("pixe solid 0", "positive"),
         ("pixe window Xx 8", "unknown element"),
         ("pixe crystal Si -1", "positive"),
@@ -489,14 +500,57 @@ def test_solid_from_area_and_distance(empty_session, capsys):
         run(empty_session, "pixe solid 25 7 ft")
 
 
-def test_tiltsign_and_show_report_the_angles(empty_session, capsys):
-    run(empty_session, "theta -9", "pixe tiltsign -1")
-    assert empty_session.pixe.detector.tilt_sign == -1
+def test_pixe_tilt_is_its_own_until_theta_rbs(empty_session, capsys):
+    # The RBS buffer's THETA leaves PIXE at normal incidence ...
+    run(empty_session, "theta -9")
     capsys.readouterr()
     run(empty_session, "pixe show")
+    assert "THETA 0: beam 0 deg, X-rays 45 deg" in capsys.readouterr().out
+    # ... until THETA RBS links it: IBM, |-9 + 45| = 36.
+    run(empty_session, "pixe theta rbs")
+    assert "THETA -9 from the RBS buffer: beam 9 deg, X-rays 36 deg" in capsys.readouterr().out
+    run(empty_session, "theta 9", "pixe show")
     assert "beam 9 deg, X-rays 54 deg" in capsys.readouterr().out
-    with pytest.raises(CommandError, match="1, -1 or 0"):
-        run(empty_session, "pixe tiltsign 2")
+    # Linked, it follows any RBS geometry -- PERT THETA's trials too.
+    trial = Geometry(theta=-4.0, phi=10.0, kind=GeometryKind.CORNELL)
+    assert empty_session.pixe.geometry_for(trial) == replace(DEFAULT_GEOMETRY, theta=-4.0)
+    # A number unlinks it.
+    run(empty_session, "pixe theta -20")
+    assert not empty_session.pixe.theta_rbs
+    assert "THETA -20: beam 20 deg, X-rays 25 deg" in capsys.readouterr().out
+
+
+def test_pair_on_makes_the_tilt_follow_rbs(empty_session, capsys):
+    run(empty_session, "theta -9", "pixe theta 5", "pixe pair on")
+    assert "THETA -9 from the RBS buffer (PAIR ON): beam 9 deg, X-rays 36 deg" in (
+        capsys.readouterr().out)
+    trial = Geometry(theta=-4.0, phi=10.0)
+    assert empty_session.pixe.geometry_for(trial).theta == -4.0
+    # A number would break the pairing: refused, nothing changes.
+    with pytest.raises(CommandError, match="PAIR OFF first"):
+        run(empty_session, "pixe theta 12")
+    assert empty_session.pixe.geometry.theta == 5
+    # PAIR OFF: the PIXE prompt's own THETA again.
+    run(empty_session, "pixe pair off")
+    assert "THETA 5: beam 5 deg, X-rays 50 deg" in capsys.readouterr().out
+    assert empty_session.pixe.geometry_for(trial).theta == 5
+
+
+def test_pixe_geometry_follows_rbs_rules(empty_session, capsys):
+    run(empty_session, "pixe theta 25", "pixe phi 35", "pixe geometry cornell")
+    assert "X-rays 42.06 deg" in capsys.readouterr().out
+    run(empty_session, "pixe geometry general", "pixe psi 53.6")
+    assert "X-rays 53.6 deg" in capsys.readouterr().out
+    assert empty_session.pixe.geometry == Geometry(
+        theta=25.0, phi=35.0, psi=53.6, kind=GeometryKind.GENERAL)
+
+
+def test_pixe_angles_shadow_rbs_ones_at_the_pixe_prompt(empty_session):
+    stack = run(empty_session, "pixe", "theta 12", "phi 30")
+    assert stack == ["rump", "pixe"]
+    assert (empty_session.pixe.geometry.theta, empty_session.pixe.geometry.phi) == (12, 30)
+    rbs = empty_session.settings.experiment_defaults.geometry
+    assert (rbs.theta, rbs.phi) != (12, 30)
 
 
 def test_defaults_describe_the_rc43_setup():
@@ -504,7 +558,6 @@ def test_defaults_describe_the_rc43_setup():
     assert (detector.window.material, detector.window.thickness_um) == ("Be", 12.5)
     assert (detector.fwhm_eV, detector.fano) == (122.0, 0.104)
     assert detector.solid_angle_msr == pytest.approx(0.763, rel=1e-3)
-    assert detector.exit_angle(-9.0) == 36.0
     assert [(f.material, f.thickness_um) for f in detector.filters] == [("Mylar", 62.0)]
 
 

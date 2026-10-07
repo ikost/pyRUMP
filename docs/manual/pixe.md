@@ -120,10 +120,11 @@ A buffer may hold an RBS spectrum, a PIXE spectrum, or both.
 * **`GET <file>`** in the PIXE prompt reads a PIXE spectrum into the active
   buffer. With no buffer active, it creates a new one that holds only the
   PIXE spectrum.
-* The beam (ion, energy), the beam tilt and the **charge** come from the
-  buffer's RBS part. RC43 records both spectra in one run with one charge
-  integrator, so the charge in the `.RBS` file is the charge for the `.PIX`
-  file too. A buffer with no RBS part takes these from the defaults —
+* The beam (ion, energy) and the **charge** come from the buffer's RBS
+  part, and so does the sample tilt with `PAIR ON` or `THETA RBS` (see
+  Geometry below; otherwise PIXE has its own `THETA`, 0 by default). RC43
+  records both spectra in one run with one charge integrator, so the
+  charge in the `.RBS` file is the charge for the `.PIX` file too. A buffer with no RBS part takes these from the defaults —
   `MEV`, `BEAM`, `THETA`, `CHARGE` as set in `~/.pyrumprc`, or pyRUMP's own
   hard-coded defaults.
 * **`CORRECTION` applies to PIXE too.** It divides the dose for both
@@ -141,7 +142,10 @@ A buffer may hold an RBS spectrum, a PIXE spectrum, or both.
   factor LT/RT is applied to the PIXE yield.
 * **`PAIR ON|OFF`** (off by default): with `PAIR ON`, reading `x.RBS` with
   `GET` or `XEQ` also looks for `x.PIX` in the same folder (in any upper or
-  lower case) and loads it into the same buffer.
+  lower case) and loads it into the same buffer. The two spectra are then
+  one run on one sample, so the PIXE tilt is always the RBS buffer's
+  `THETA`, as under `THETA RBS`, and a `THETA` typed in the PIXE prompt is
+  refused until `PAIR OFF`.
 
 **The bare-substrate spectrum is just another buffer.** Measure the bare
 substrate under the same conditions, load it like any other measurement
@@ -218,8 +222,10 @@ start every session with PIXE enabled:
 
 ```
 pixe
- angle 45                  ! detector axis to the untilted sample's normal, degrees
- tiltsign 1                ! a negative THETA turns the sample towards the detector
+ geometry ibm              ! where the detector is: IBM, CORNELL or GENERAL
+ theta 0                   ! sample tilt, degrees (0: normal incidence), or RBS
+ phi 45                    ! detector to the beam (looking back), degrees
+ psi 0                     ! detector to the sample normal: GENERAL only
  solid 25 7.125 in         ! 25 mm^2 active area, 7.125 in from the sample
  window Be 12.5            ! window material and thickness, µm
  crystal Si 500            ! crystal thickness, µm
@@ -240,14 +246,35 @@ and the dose, shared with RBS:
   ! dose, shared with RBS: CHARGE 10 uC / CORRECTION 0.8 = 12.5 uC, 7.802e+13 ions (charge state 1)
 ```
 
-**Geometry.** `ANGLE` is the detector axis's angle to the normal of the
-*untilted* sample. Tilting the sample (the RBS geometry's `THETA`) changes
-both directions: the beam comes in at |THETA| to the normal, and the X-rays
-leave at |ANGLE + TILTSIGN × THETA|. `TILTSIGN 1` (the default) is for a
-sample tilted towards the PIXE detector by a negative THETA, as on the
-RC43 endstation: THETA −9° gives 9° in and 36° out. `TILTSIGN -1` is the
-opposite sense, and `TILTSIGN 0` a tilt axis that leaves the detector
-direction alone.
+**Geometry.** The PIXE detector is placed the way the RBS detector is,
+with `GEOMETRY`, `THETA`, `PHI` and `PSI` meaning the same (the
+[Experimental geometry](geometry.md) page draws all three cases), but set
+in the PIXE prompt, apart from the RBS buffer's: the two detectors stand in
+different places.
+
+* `PHI` is the detector's angle to the beam, measured as for RBS from the
+  beam looking back at the source. An untilted sample sees the X-rays
+  leave at `PHI` to its normal.
+* `THETA` is the sample tilt: the beam comes in at |THETA| to the normal.
+  `THETA RBS` takes the RBS buffer's `THETA` instead — one sample, tilted
+  once for both detectors — and follows it while PERT fits `THETA`. A
+  number unlinks it again. `PAIR ON` always takes the RBS buffer's, and
+  refuses a number until `PAIR OFF`.
+* `GEOMETRY` says where the X-rays leave, at PSI to the normal: `IBM`, the
+  detector beside the beam in the plane the sample turns in, PSI =
+  \|THETA + PHI\| (a negative `THETA` turns the sample towards the
+  detector); `CORNELL`, cos PSI = cos THETA × cos PHI; `GENERAL`, `PSI` as
+  typed.
+
+The default, `GEOMETRY IBM`, `PHI 45`, `THETA 0`, has the beam at normal
+incidence and the X-rays leaving at 45°. On the RC43 endstation the sample
+is turned towards the PIXE detector by the RBS file's negative `THETA`:
+with `PAIR ON` or `THETA RBS`, the MnPt example's `THETA -9` gives 9° in and
+\|−9 + 45\| = 36° out. `SHOW`, and every one of these commands, prints
+the two angles in force.
+
+In the PIXE prompt, `THETA`, `PHI`, `PSI` and `GEOMETRY` are the PIXE
+detector's; the RBS buffer's are set at the RUMP level, after `RETURN`.
 
 **Resolution: `FWHM` and `FANO`.** A line's width has two parts:
 electronic noise, the same for every line, and the statistics of the
@@ -296,7 +323,7 @@ silicon drift detector.
 
 | Setting | Default | Source |
 |---|---|---|
-| `ANGLE` | 45°, `TILTSIGN 1` | RC43 endstation |
+| `GEOMETRY` | `IBM`, `PHI 45`, `THETA 0` (normal incidence) | RC43 endstation: the detector 45° from the beam |
 | `SOLID` | 0.763 msr | 25 mm² at 7.125 in |
 | `WINDOW` | Be 12.5 µm | Amptek SDD |
 | `CRYSTAL` | Si 500 µm | Amptek FAST SDD (typical) |
@@ -320,7 +347,8 @@ spectra from this setup, four years apart, pin them down:
   filter. Through the specified 125 µm of Mylar, only 1.7×10⁻⁵ of it would
   arrive and the simulation would be 200 times too weak; the measured yield
   needs **63.0 µm**. `examples/MnPt` (2026) gives **60.8 µm** the same way.
-  The default is their mean, 62 µm — an *effective* thickness, which also
+  Both took the sample tilt from the RBS file (`THETA RBS`). The default
+  is their mean, 62 µm — an *effective* thickness, which also
   takes up any error in the Si K cross section (H_K = 1 assumed). A 5 %
   change in it changes Si K by about 30 %, the higher-energy lines hardly.
 * Si Kα is 78.5 eV wide in both spectra and Mn Kα, fitted as its Kα₁/Kα₂
@@ -342,7 +370,7 @@ Commands marked † are not implemented yet.
 |---|---|
 | Prompt | `RETURN`, `DISABLE`, `SHOW`, `HELP` |
 | Data | `GET <file>`, `PAIR ON\|OFF`, `BARE <buffer>` †, `LIVETIME <live> <real>` † |
-| Geometry | `ANGLE <deg>` (−90 to 90), `TILTSIGN 1\|-1\|0`, `SOLID <msr>` or `SOLID <area mm²> <distance> [MM\|IN]` |
+| Geometry | `GEOMETRY IBM\|CORNELL\|GENERAL`, `THETA <deg>\|RBS` (−90 to 90), `PHI <deg>` (0 to 180), `PSI <deg>` (`GENERAL` only), `SOLID <msr>` or `SOLID <area mm²> <distance> [MM\|IN]` |
 | Detector | `WINDOW <element\|MYLAR\|KAPTON> <µm>`, `CRYSTAL <element> <µm>`, `FWHM <eV>`, `FANO <F>`, `DEADLAYER <µm>` †, `ESCAPE ON\|OFF`, `TAIL ON\|OFF` † |
 | Absorbers | `FILTER` (list), `FILTER <n> <element\|MYLAR\|KAPTON> <µm> [[HOLE] <%>]`, `FILTER CLEAR [<n>]` |
 | Calibration | `CALIB <gain keV/ch> <offset keV>`, `H <K> <L> <M>` or `H K\|L\|M <value>` |

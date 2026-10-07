@@ -262,6 +262,29 @@ def test_acquisition_macro_and_paired_pixe_restore(work, tmp_path, monkeypatch):
 
 
 @needs_data
+def test_pixe_tilt_restores_into_a_session_paired_by_its_pyrumprc(work, tmp_path, monkeypatch):
+    """PAIR ON refuses a THETA: the macro unpairs before replaying the
+    PIXE setup, and sets the snapshot's PAIR after the data."""
+    data = tmp_path / "data"
+    data.mkdir()
+    for name in ("MnPt.RBS", "MnPt.PIX", "MnPt.lcm"):
+        shutil.copy(EXAMPLES / name, data / name)
+    first = Session.create(str(DATA))
+    run(first, "pixe pair on", f"xeq {data / 'MnPt.RBS'}", f"sim get {data / 'MnPt.lcm'}",
+        "pixe pair off", "pixe theta 5", "snap")
+    text = (work / "MA8408_fit.xeq").read_text()
+    assert text.index("PIXE pair off") < text.index("PIXE theta 5")
+
+    elsewhere(tmp_path, monkeypatch)
+    again = Session.create(str(DATA))
+    run(again, "pixe pair on")  # as ~/.pyrumprc would
+    execute_file(again, work / "MA8408_fit.xeq", ["rump"])
+    assert not again.pixe.pair and again.pixe.geometry.theta == 5
+    assert again.buffers.active_buffer.pixe is not None
+    assert snapshot.fingerprint(again) == snapshot.fingerprint(first)
+
+
+@needs_data
 def test_a_corrected_identifier_and_date_are_restored(session, work, tmp_path, monkeypatch):
     """Reloading the data file alone would bring back the typo."""
     run(session, "identifier 'au  marker, corrected'", "date '12:00  10-06-2026'", "snap")
