@@ -32,6 +32,25 @@ and labelled with its symbol (`^{A}X` for an isotope such as `28Si`), the
 same kind of marker WHATISIT draws, so peaks can be labelled on the figure.
 Edges outside the current region are skipped.
 
+With [PIXE](pixe.md) on, each element's main X-ray lines follow its RBS
+line: their energy, and their channel as the PIXE plot's channel axis
+reads it (the active buffer's PIXE calibration). Lines outside the PIXE
+spectrum are left out. If a PIXE plot is showing, the lines are labelled
+on it as well, the way `MARKERS` labels the sample's, even with
+`MARKERS OFF`:
+
+```
+Your wish? element Pt Fe
+  Pt  Z=78  Mass=195.090  K(ion)=0.9219  Energy=  1751.6 keV  Channel=1076.478
+      X-rays  Lα 9.435 keV ch 941.5   Lβ1 11.071 keV ch 1104.5   Lβ2 11.248 keV ch 1122.1
+              Lγ1 12.942 keV ch 1290.7   Mα 2.050 keV ch 206.4   Mβ 2.127 keV ch 214.1
+  Fe  Z=26  Mass= 55.847  K(ion)=0.7524  Energy=  1429.5 keV  Channel= 873.888
+      X-rays  Kα 6.400 keV ch 639.4   Kβ 7.058 keV ch 705.0   Lα 0.705 keV ch 72.5
+              Lβ1 0.718 keV ch 73.7
+```
+
+Both plots' marks last until the plot is next drawn.
+
 #### `MATRIX`
 
 ```

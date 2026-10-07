@@ -390,6 +390,26 @@ def test_markers_all_and_off(session):
         run(session, "markers some", stack=stack)
 
 
+def test_element_lists_and_marks_the_x_ray_lines_with_pixe_on(session, capsys):
+    """ELEMENT adds each element's X-ray lines -- energy, and the channel on
+    the PIXE plot's channel axis -- and labels them on the PIXE plot even
+    with MARKERS OFF; with PIXE off it is RUMP's ELEMENT."""
+    run(session, "element Fe")
+    assert "X-rays" not in capsys.readouterr().out
+    stack = run(session, f"pixe get {EXAMPLES / 'MnPt.PIX'}", "pixe", "calib 0.01 0",
+                "markers off", "plot", "region 50 1190")
+    capsys.readouterr()
+    assert not any(label.startswith("Fe") for label in _labels(session))
+    run(session, "return", stack=stack)
+    run(session, "element Fe Pt")
+    out = capsys.readouterr().out
+    assert "X-rays  Kα 6.400 keV ch 640.0   Kβ 7.058 keV ch 705.8" in out
+    assert "Lα 9.435 keV ch 943.5" in out
+    assert "Kα 66." not in out  # beyond the spectrum: not listed
+    labels = " ".join(_labels(session))
+    assert "Fe Kα" in labels and "Pt Lα" in labels
+
+
 def test_markers_skip_rbs_absorber_layers(empty_session):
     from pyrump.shell.pixe_plotting import sample_elements
 

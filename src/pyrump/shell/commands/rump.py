@@ -1671,6 +1671,10 @@ def cmd_element(session, args: ArgReader) -> None:
     then ticked onto the plot if one is showing (see
     :func:`~pyrump.shell.plotting.mark_element`). RUMP's optional
     cursor-driven marker height is dropped; the ticks sit on the axis.
+
+    With PIXE on, each element's main X-ray lines follow, with their energy
+    and PIXE channel, and are marked on the PIXE plot too (see
+    :func:`~pyrump.shell.pixe_plotting.mark_elements`).
     """
     from ...analysis.elements import matrix_result
 
@@ -1682,26 +1686,60 @@ def cmd_element(session, args: ArgReader) -> None:
 
     buffer = session.buffers.require_active()
     marks: list[tuple[float, float, str]] = []
+    xray_elements: list[tuple[int, str]] = []
     for token in tokens:
         try:
             result = matrix_result(buffer, session.table, session.registry, token)
         except (KeyError, ValueError) as error:
             raise CommandError(f"element: {error}") from None
+        if session.pixe.enabled and (result.z, result.symbol) not in xray_elements:
+            xray_elements.append((result.z, result.symbol))
         if result.k == 0.0:
             print(f"  {result.symbol:2s}  Z={result.z:2d}  Mass={result.mass:7.3f}"
                   "  scattering event cannot occur")
+            _print_xray_lines(session, buffer, result.z)
             continue
         print(
             f"  {result.symbol:2s}  Z={result.z:2d}  Mass={result.mass:7.3f}"
             f"  K(ion)={result.k:6.4f}  Energy={result.energy_keV:8.1f} keV"
             f"  Channel={result.channel:8.3f}"
         )
+        _print_xray_lines(session, buffer, result.z)
         # anlytc.c:243-247: an isotope is labelled ^{A}X, a natural element by symbol.
         label = (f"$^{{{result.mass_number}}}${result.symbol}"
                  if result.mass_number else result.symbol)
         marks.append((result.energy_keV, result.channel, label))
     if marks:
         plotting.mark_element(session, marks)
+    if xray_elements:
+        from .. import pixe_plotting
+
+        pixe_plotting.mark_elements(session, xray_elements)
+
+
+def _print_xray_lines(session, buffer, z: int) -> None:
+    """With PIXE on, the element's main X-ray lines under ELEMENT's RBS
+    line: energy, and channel on the PIXE plot's channel axis (the active
+    buffer's PIXE calibration, or PIXE CALIB's)."""
+    if not session.pixe.enabled:
+        return
+    from ...pixe.atomic import atomic_data
+
+    pixe = getattr(buffer, "pixe", None)
+    calibration = pixe.calibration if pixe is not None else session.pixe.calibration
+    low, high = calibration.edge_energy([0, calibration.npt])
+    lines = [
+        f"{group.label} {group.energy_keV:.3f} keV ch "
+        f"{(group.energy_keV - calibration.kev0) / calibration.kevch:.1f}"
+        for group in atomic_data().line_groups(z)
+        if low <= group.energy_keV < high
+    ]
+    if not lines:
+        print("      X-rays  (none within the PIXE spectrum)")
+        return
+    for start in range(0, len(lines), 3):
+        label = "X-rays" if start == 0 else ""
+        print(f"      {label:6s}  " + "   ".join(lines[start:start + 3]))
 
 
 def cmd_matrix(session, args: ArgReader) -> None:

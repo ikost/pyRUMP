@@ -98,7 +98,10 @@ The PIXE window shows:
   label ("Pt Mα/Mβ"). The yield axis leaves room above the tallest peak for
   them. `MARKERS ON` (the default) marks Kα, Kβ, Lα, Lβ1, Lβ2, Lγ1, Mα and
   Mβ; `MARKERS ALL` adds Ll, Mζ and Mγ; `MARKERS OFF` hides them. RBS
-  absorber layers are left out — the beam never reaches them;
+  absorber layers are left out — the beam never reaches them. To mark an
+  element that isn't in the sample, use
+  [`ELEMENT`](analysis.md#element) at the RUMP prompt: it lists the
+  element's lines and labels them here;
 * with `COMPARE`, the Poisson residuals below the spectrum and the reduced
   chi-square over the channels shown, as in the RBS comparison.
 

@@ -228,12 +228,24 @@ background. Their heights don't match yet, because the composition is
 still `Fe 1 Ni 1`. The simulated peaks also sit 2–3 channels low and are
 too narrow. Fix the calibration and the resolution before fitting:
 
-* **Calibration.** Read the two Kα peak centres off the channel axis
-  along the top of the plot: Fe Kα,
-  6.3995 keV, at channel 638.9; Ni Kα, 7.4723 keV, at channel 745.7.
-  Channel *N* is centred at (*N* + 0.5) × gain + offset, so
-  gain = (7.4723 − 6.3995) / (745.7 − 638.9) = 0.010045 keV/ch and
-  offset = 6.3995 − 639.4 × 0.010045 = −0.0233 keV.
+* **Calibration.** `ELEMENT` lists where each line should be with the
+  calibration in force, on the channel scale along the top of the plot
+  (typed at the PIXE prompt, it reaches the RUMP-level command):
+
+  ```
+  PIXE Command: element Fe Ni
+    Fe  Z=26  Mass= 55.847  K(ion)=0.7524  Energy=  1429.5 keV  Channel= 870.183
+        X-rays  Kα 6.400 keV ch 637.6   Kβ 7.058 keV ch 702.8   Lα 0.705 keV ch 73.6
+                Lβ1 0.718 keV ch 74.9
+    Ni  Z=28  Mass= 58.710  K(ion)=0.7629  Energy=  1449.5 keV  Channel= 882.493
+        X-rays  Kα 7.472 keV ch 743.9   Kβ 8.265 keV ch 822.4   Lα 0.851 keV ch 88.1
+                Lβ1 0.868 keV ch 89.8
+  ```
+
+  On the plot the Kα peaks are centred at 639.4 (Fe Kα, 6.3995 keV) and
+  746.2 (Ni Kα, 7.4723 keV) instead. That axis reads channel =
+  (*E* − offset) / gain, so gain = (7.4723 − 6.3995) / (746.2 − 639.4) =
+  0.010045 keV/ch and offset = 6.3995 − 639.4 × 0.010045 = −0.0233 keV.
 * **Resolution.** The measured peaks are about 7 % wider than the default
   122 eV (quoted at Mn Kα) gives. 131 eV makes them match.
 

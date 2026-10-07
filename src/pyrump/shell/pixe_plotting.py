@@ -198,11 +198,13 @@ _COLORS = ("0.20", "steelblue", "darkgreen", "darkorange", "purple")
 _SIM_COLORS = ("crimson", "orchid", "teal", "goldenrod")
 
 
-def draw(session, *, required: bool = True) -> bool:
+def draw(session, *, required: bool = True, elements=()) -> bool:
     """Draw the current view. Returns whether the window was drawn.
 
     ``required`` makes an empty view an error (the PIXE prompt's PLOT with
-    nothing to show); otherwise there is simply nothing to do.
+    nothing to show); otherwise there is simply nothing to do. ``elements``,
+    ``(Z, symbol)`` pairs, get their lines marked as well, whatever MARKERS
+    says -- ELEMENT's (:func:`mark_elements`).
     """
     state = session.pixe
     if not state.view:
@@ -268,14 +270,27 @@ def draw(session, *, required: bool = True) -> bool:
         # the panels correctly regardless.
         warnings.filterwarnings("ignore", message=".*not compatible with tight_layout")
         figure.tight_layout()
-    if state.markers != "off":
-        marks = _line_marks(ax, sample_elements(session), major_only=state.markers == "on")
+    marked = sample_elements(session) if state.markers != "off" else []
+    marked += [element for element in elements if element not in marked]
+    if marked:
+        marks = _line_marks(ax, marked, major_only=state.markers != "all")
         if marks:
             if state.plot.yhigh is None and shown:
                 _make_headroom(ax, np.concatenate(shown), state.plot.yscale)
             _draw_marks(ax, marks)
     show(figure)
     return True
+
+
+def mark_elements(session, elements) -> bool:
+    """ELEMENT's X-ray lines on the PIXE plot, the way MARKERS labels the
+    sample's, if a PIXE plot is showing. Like ELEMENT's ticks on the RBS
+    plot, they last until the plot is next drawn. Returns whether there was
+    a plot to mark."""
+    state = session.pixe
+    if state.figure is None or not state.view:
+        return False
+    return draw(session, required=False, elements=list(elements))
 
 
 def region_indices(state, calibration) -> tuple[int, int]:
