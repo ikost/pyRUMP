@@ -467,8 +467,7 @@ other layer, with the thickness SIM gives it, as far as the beam gets: where the
 for protons, 0.2 MeV for ⁴He) the rest is dropped, its cross sections being
 orders of magnitude down by then. For 1.9 MeV ⁴He in Si that is about 4 µm,
 so a SIM substrate of 3–5 µm, as is usual for RBS, gives the full
-thick-target yield; a thinner one gives less (MnPt.lcm's 1000 nm Si: about
-half). To see the film's part alone, use `SIM SPLOT <layer>` or
+thick-target yield; a thinner one gives less (1000 nm of Si: about half). To see the film's part alone, use `SIM SPLOT <layer>` or
 `SIM SPLOT <element>`. When a measured bare-substrate background is in use
 (still to come), it supplies the substrate's peaks and the simulation will
 leave the substrate out by itself.

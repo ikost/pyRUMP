@@ -134,19 +134,18 @@ more.
 ### Simulating with SIM
 
 `SIM` edits the sample description that `COMPARE` and `PERT` fit against.
-`examples/MnPt.lcm` is a real 5-layer description for the spectrum loaded
+`examples/MnPt.lcm` is a real 4-layer description for the spectrum loaded
 above — `SIM GET`/`SIM SHOW` work as one-shots, with no need to enter the
 `SIM` sub-level for a quick look:
 
 ```
 Your wish? sim get MnPt.lcm
-read MnPt.lcm: 5 layers
+read MnPt.lcm: 4 layers
 Your wish? sim show
- >  1            40 A        Ru 1
-    2           331 A        Mn 2.73 Pt 1
-    3            40 A        Ru 1
-    4           330 A        Si 1 O 2
-    5          1000 nm       Si 1
+ >  1            40 A        Ru 1           [29 /CM2  Ru 29.04]
+    2           291 A        Mn 2.83 Pt 1   [224 /CM2  Mn 165.41 Pt 58.46]
+    3            38 A        Ru 1           [28 /CM2  Ru 27.88]
+    4             5 um       Si 1           [24888 /CM2  Si 24888.43]
   maxpth 1000   straggle 0   multiple 0   absorber 0
 Your wish? compare              /* data vs. simulation, with residuals */
 ```

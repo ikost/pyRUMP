@@ -72,6 +72,9 @@ CLI tools — but a Python equivalent could be added later if there's real deman
 ![Measured spectrum compared against a pyRUMP simulation, showing a Si / Ru / Mn2.74Pt1 / Ru stack](assets/mnpt-fit.png)
 *Measured data (black) vs. a pyRUMP simulation (red) of a Si / Ru / Mn<sub>2.74</sub>Pt<sub>1</sub> / Ru stack.*
 
+![The PIXE spectrum measured with the same beam compared against pyRUMP's PIXE simulation of the same stack, with the Si, Ru, Mn and Pt X-ray lines marked](assets/mnpt-pixe.png)
+*The PIXE spectrum taken with the same beam (grey) vs. pyRUMP's PIXE simulation (red) of the same sample, with the X-ray lines marked.*
+
 ## Where to go next
 
 - **[Getting started](getting-started/index.md)** — install pyRUMP and run your first simulation

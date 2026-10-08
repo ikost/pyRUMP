@@ -6,6 +6,9 @@
 ![Measured spectrum compared against a pyRUMP simulation, showing a Si / Ru / Mn2.74Pt1 / Ru stack](https://raw.githubusercontent.com/ikost/pyRUMP/main/docs/assets/mnpt-fit.png)
 *Measured data (black) vs. a pyRUMP simulation (red) of a Si / Ru / Mn<sub>2.74</sub>Pt<sub>1</sub> / Ru stack.*
 
+![The PIXE spectrum measured with the same beam compared against pyRUMP's PIXE simulation of the same stack, with the Si, Ru, Mn and Pt X-ray lines marked](https://raw.githubusercontent.com/ikost/pyRUMP/main/docs/assets/mnpt-pixe.png)
+*The PIXE spectrum taken with the same beam (grey) vs. pyRUMP's PIXE simulation (red) of the same sample, with the X-ray lines marked.*
+
 A clean Python reimplementation of **RUMP**, the Rutherford backscattering
 spectrometry (RBS) simulation and analysis package originally written by
 L. R. Doolittle and M. O. Thompson at Cornell.
