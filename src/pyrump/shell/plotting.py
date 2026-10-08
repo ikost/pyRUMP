@@ -619,8 +619,10 @@ def mark_element(session, marks) -> bool:
     """Tick ELEMENT's surface edges along the plot's bottom edge.
 
     ``RbsMark(MK_TKL, ...)`` (anlytc.c:250): one solid tick per element at its
-    predicted edge, labelled with the symbol, drawn the same way as
-    :func:`mark_whatisit`'s best match. ``marks`` is a sequence of
+    predicted edge, labelled with the symbol, shaped like
+    :func:`mark_whatisit`'s best match but taller and in crimson, the colour
+    of the PIXE window's X-ray line markers -- WHATISIT's guesses stay dark,
+    so the two are told apart. ``marks`` is a sequence of
     ``(energy_keV, channel, label)``. Ticks alternate between two heights in
     order along the axis, whatever order the elements were typed in, so
     labels of close edges don't print on top of each other. The
@@ -644,12 +646,13 @@ def mark_element(session, marks) -> bool:
     )
     visible = [(x, label) for x, label in xs if low <= x <= high]
     for row, (x, label) in enumerate(visible):
-        y = 0.05 + 0.05 * (row % 2)
-        ax.plot([x, x], [0.0, y], transform=trans, clip_on=False, color="0.15", lw=1.4)
+        y = 0.08 + 0.06 * (row % 2)
+        ax.plot([x, x], [0.0, y], transform=trans, clip_on=False, color="crimson", lw=1.4)
         ax.annotate(
             label, (x, y), xycoords=trans,
             xytext=(0, 3), textcoords="offset points",
             ha="center", va="bottom", fontsize="small", fontweight="bold",
+            color="crimson",
         )
     show(figure)
     return True
