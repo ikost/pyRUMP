@@ -198,3 +198,42 @@ def test_a_name_without_spaces_completes_unquoted(spaced):
 
 def test_a_new_empty_argument_lists_the_directory(spaced):
     assert _complete("cd ") == ['"My Data/', "plain/"]
+
+
+# -- the separator after a completed directory --------------------------------
+
+
+@pytest.fixture
+def windows_separators(monkeypatch):
+    monkeypatch.setattr(repl.os, "sep", "\\")
+    monkeypatch.setattr(repl.os, "altsep", "/")
+
+
+@pytest.fixture
+def years(tmp_path, monkeypatch):
+    for year in ("2025", "2026"):
+        (tmp_path / "data" / year).mkdir(parents=True)
+    monkeypatch.chdir(tmp_path)
+
+
+def test_windows_completes_a_directory_with_a_backslash(spaced, windows_separators):
+    assert _complete("cd pl") == ["plain\\"]
+    assert _complete("cd My") == ['"My Data\\']
+
+
+def test_windows_respells_a_typed_forward_slash(years, windows_separators):
+    assert _complete("cd data/202") == ["data\\2025\\", "data\\2026\\"]
+
+
+def test_windows_cannot_respell_what_is_before_the_last_space(spaced, windows_separators):
+    # readline replaces only from the last space on; '"My ' stays as typed
+    assert _complete('get "My Data/Mn') == ['Data\\MnPt.lcm"']
+
+
+def test_windows_escaped_spaces_complete_with_a_forward_slash(spaced, windows_separators):
+    # "Data\" followed by a typed space would read back as an escaped space
+    assert _complete(r"cd My\ D") == ["Data/"]
+
+
+def test_posix_never_completes_with_a_backslash(years):
+    assert _complete("cd data/202") == ["data/2025/", "data/2026/"]

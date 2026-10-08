@@ -285,16 +285,31 @@ def _argument_completions(line: str, begidx: int) -> list[str]:
         closing = "" if not opening or path.endswith(("/", os.sep)) else opening
         return opening + path + closing
 
+    # A "\" followed by a typed space would read back as an escaped space, so
+    # names written that way keep "/".
+    native = not escaped
     already = line[start:begidx]
     return [
         full[len(already):]
-        for full in map(spelt, _path_completions(raw))
-        if full.startswith(already)
+        for full in map(spelt, _path_completions(raw, native))
+        # What is before begidx stays in the line as typed, "/" and all.
+        if _native(full).startswith(_native(already))
     ]
 
 
-def _path_completions(text: str) -> list[str]:
-    """Filesystem completions for a partially typed path."""
+def _native(path: str) -> str:
+    """``path`` with Windows' alternative ``/`` turned into ``\\``; POSIX has
+    no alternative separator, so there it is returned as is."""
+    return path.replace(os.altsep, os.sep) if os.altsep else path
+
+
+def _path_completions(text: str, native: bool = True) -> list[str]:
+    """Filesystem completions for a partially typed path.
+
+    With ``native``, they are spelt with the platform's own separator, so on
+    Windows ``data/202`` completes to ``data\\2026\\``; otherwise directories
+    end in ``/`` and the typed part is kept as it was.
+    """
     try:
         expanded = Path(text).expanduser()
         if text.endswith(("/", os.sep)):
@@ -306,8 +321,11 @@ def _path_completions(text: str) -> list[str]:
         # Keep the directory part the user typed, so the completion substitutes
         # cleanly into the line.
         head = text[: len(text) - len(prefix)]
+        separator = "/"
+        if native:
+            head, separator = _native(head), os.sep
         return sorted(
-            head + child.name + ("/" if child.is_dir() else "")
+            head + child.name + (separator if child.is_dir() else "")
             for child in base.iterdir()
             if child.name.startswith(prefix)
         )
