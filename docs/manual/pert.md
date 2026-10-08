@@ -580,21 +580,26 @@ together, say).
 ```
 Your wish? pert get MnPt.pert go
   ...
-  Fitting MnPt: Si [1000nm] - SiO2 [330A] - Ru [40A] - Mn2.73Pt [331A] - Ru [40A]
+  Fitting MA8408: Si [5um] - SiO2 [300A] - Ru [38A] - Mn2.83Pt [291A] - Ru [40A]
 
-  fit took 0.17 s
+  fit took 0.60 s
 
-  reduced chi-square 12.3538 on 397 dof   (was 61.8545)
-  35 evaluations, converged
-  kev(0)                            48.4324  +/- 0.04736   (was 48)
-  layer 2 thickness                   326 A  +/- 0.657 A   (was 331 A)   [250 /CM2]
-  layer 2 composition Mn             2.8231  +/- 0.01217   (was 2.73495)
-  fwhm                              24.9921  +/- 0.03427   (was 15)
+  reduced chi-square 4.4259 on 792 dof   (was 165.1066)
+  87 evaluations, converged
+  fwhm                              19.8701  +/- 0.1221   (was 15)
+  correction                       0.859777  +/- 0.001692   (was 1)
+  kev(0)                            42.5962  +/- 0.1588   (was 48)
+  layer 1 thickness                    40 A  +/- 0.3466 A   (was 40 A)   [29 /CM2]
+  layer 2 thickness                   317 A  +/- 0.7872 A   (was 291 A)   [244 /CM2]
+  layer 3 thickness                    41 A  +/- 0.3302 A   (was 38 A)   [30 /CM2]
+  layer 2 composition Mn             2.7605  +/- 0.01587   (was 2.82931)
+  kev/ch                            1.60215  +/- 0.0001141   (was 1.59)
+  layer 4 thickness                   532 A  +/- 10.05 A   (was 300 A)   [240 /CM2]
 
-  MnPt: Si [1000nm] - SiO2 [330A] - Ru [40A] - Mn2.82Pt [326A] - Ru [40A]
+  MA8408: Si [5um] - SiO2 [532A] - Ru [41A] - Mn2.76Pt [317A] - Ru [40A]
 ```
 
-* **`Fitting MnPt: …`** — the sample name and the layer structure before the
+* **`Fitting MA8408: …`** — the sample name and the layer structure before the
   fit, substrate first. The last line shows the structure after it.
 * **`reduced chi-square … on … dof`** — chi-square per degree of freedom,
   over the error windows; `(was …)` is the value before the fit. Near 1, the

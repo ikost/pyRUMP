@@ -69,8 +69,8 @@ The original RUMP ecosystem included **RUMPX**, an X-Window GUI popular among Wi
 users two decades ago. pyRUMP doesn't have a GUI counterpart yet — the author prefers
 CLI tools — but a Python equivalent could be added later if there's real demand for it.
 
-![Measured RBS spectrum compared against a pyRUMP fit of a Si / Ru / Mn2.73Pt1 / Ru stack, with the Pt, Ru, Mn and Si surface edges marked](assets/mnpt-fit.png)
-*Measured RBS data (grey) vs. a pyRUMP fit (red) of a Si / Ru / Mn<sub>2.73</sub>Pt<sub>1</sub> / Ru stack, with the elements' surface edges marked.*
+![Measured RBS spectrum compared against a pyRUMP fit of a Si / SiO2 / Ru / Mn2.76Pt1 / Ru stack, with the Pt, Ru, Mn, Si and O surface edges marked](assets/mnpt-fit.png)
+*Measured RBS data (grey) vs. a pyRUMP fit (red) of a Si / SiO<sub>2</sub> / Ru / Mn<sub>2.76</sub>Pt<sub>1</sub> / Ru stack, with the elements' surface edges marked.*
 
 ![The PIXE spectrum measured with the same beam compared against pyRUMP's PIXE simulation of the same stack, with the Si, Ru, Mn and Pt X-ray lines marked](assets/mnpt-pixe.png)
 *The PIXE spectrum taken with the same beam (grey) vs. pyRUMP's PIXE simulation (red) of the sample fitted to the RBS above, with the X-ray lines marked.*

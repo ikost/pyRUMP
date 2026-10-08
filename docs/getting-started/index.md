@@ -134,18 +134,19 @@ more.
 ### Simulating with SIM
 
 `SIM` edits the sample description that `COMPARE` and `PERT` fit against.
-`examples/MnPt.lcm` is a real 4-layer description for the spectrum loaded
+`examples/MnPt.lcm` is a real 5-layer description for the spectrum loaded
 above — `SIM GET`/`SIM SHOW` work as one-shots, with no need to enter the
 `SIM` sub-level for a quick look:
 
 ```
 Your wish? sim get MnPt.lcm
-read MnPt.lcm: 4 layers
+read MnPt.lcm: 5 layers
 Your wish? sim show
  >  1            40 A        Ru 1           [29 /CM2  Ru 29.04]
     2           291 A        Mn 2.83 Pt 1   [224 /CM2  Mn 165.41 Pt 58.46]
     3            38 A        Ru 1           [28 /CM2  Ru 27.88]
-    4             5 um       Si 1           [24888 /CM2  Si 24888.43]
+    4           300 A        Si 1 O 2       [135 /CM2  Si 45.06 O 90.12]
+    5             5 um       Si 1           [24888 /CM2  Si 24888.43]
   maxpth 1000   straggle 0   multiple 0   absorber 0
 Your wish? compare              /* data vs. simulation, with residuals */
 ```
@@ -168,18 +169,23 @@ fit in one line:
 ```
 Your wish? pert get MnPt.pert go
   ...
-  Fitting MnPt: Si [1000nm] - SiO2 [330A] - Ru [40A] - Mn2.73Pt [331A] - Ru [40A]
+  Fitting MA8408: Si [5um] - SiO2 [300A] - Ru [38A] - Mn2.83Pt [291A] - Ru [40A]
 
-  fit took 0.18 s
+  fit took 0.60 s
 
-  reduced chi-square 12.3538 on 397 dof   (was 61.8545)
-  35 evaluations, converged
-  kev(0)                            48.4324  +/- 0.04736   (was 48)
-  layer 2 thickness                     250  +/- 0.5042   (was 254)
-  layer 2 composition Mn             2.8231  +/- 0.01217   (was 2.73495)
-  fwhm                              24.9921  +/- 0.03427   (was 15)
+  reduced chi-square 4.4259 on 792 dof   (was 165.1066)
+  87 evaluations, converged
+  fwhm                              19.8701  +/- 0.1221   (was 15)
+  correction                       0.859777  +/- 0.001692   (was 1)
+  kev(0)                            42.5962  +/- 0.1588   (was 48)
+  layer 1 thickness                    40 A  +/- 0.3466 A   (was 40 A)   [29 /CM2]
+  layer 2 thickness                   317 A  +/- 0.7872 A   (was 291 A)   [244 /CM2]
+  layer 3 thickness                    41 A  +/- 0.3302 A   (was 38 A)   [30 /CM2]
+  layer 2 composition Mn             2.7605  +/- 0.01587   (was 2.82931)
+  kev/ch                            1.60215  +/- 0.0001141   (was 1.59)
+  layer 4 thickness                   532 A  +/- 10.05 A   (was 300 A)   [240 /CM2]
 
-  MnPt: Si [1000nm] - SiO2 [330A] - Ru [40A] - Mn2.82Pt [326A] - Ru [40A]
+  MA8408: Si [5um] - SiO2 [532A] - Ru [41A] - Mn2.76Pt [317A] - Ru [40A]
 ```
 
 Fitted values are written back into the sample description (`SIM SHOW`
@@ -187,7 +193,9 @@ reflects them), and `COMPARE` shows how the result actually matches the data:
 
 ```
 Your wish? region 300 1130      /* zoom to the fitted window            */
+Your wish? pert highlight off   /* no fit-window shading, for a figure  */
 Your wish? compare              /* data vs. simulation, with residuals  */
+Your wish? element Pt Ru Mn Si O  /* mark the surface edges            */
 Your wish? figsave fit         /* fit_rbs.png                         */
 ```
 
