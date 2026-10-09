@@ -61,16 +61,18 @@ in the sample and the detector's filters, and the detector's resolution and
 escape peaks, in a [PIXE](manual/pixe.md) window beside the RBS one. PERT
 fits both spectra from the same sample, each element to the spectrum that
 sees it best, so alloys that overlap in RBS, such as Fe–Ni or W–Ta, take
-their composition from their X-ray lines and their thickness from RBS. The
-[FeNi worked example](getting-started/feni-rbs-pixe.md) goes through one
-measurement from start to finish.
+their composition from their X-ray lines and their thickness from RBS.
+Two worked examples go through a measurement from start to finish: the
+[FeNi film](getting-started/feni-rbs-pixe.md), fitted with RBS and PIXE
+together, and the [MnPt film](getting-started/mnpt-rbs-pixe-check.md) shown
+below, fitted with RBS and checked against its PIXE spectrum.
 
 The original RUMP ecosystem included **RUMPX**, an X-Window GUI popular among Windows
 users two decades ago. pyRUMP doesn't have a GUI counterpart yet — the author prefers
 CLI tools — but a Python equivalent could be added later if there's real demand for it.
 
-![Measured RBS spectrum compared against a pyRUMP fit of a Si / SiO2 / Ru / Mn2.76Pt1 / Ru stack, with the Pt, Ru, Mn, Si and O surface edges marked](assets/mnpt-fit.png)
-*Measured RBS data (grey) vs. a pyRUMP fit (red) of a Si / SiO<sub>2</sub> / Ru / Mn<sub>2.76</sub>Pt<sub>1</sub> / Ru stack, with the elements' surface edges marked.*
+![Measured RBS spectrum compared against a pyRUMP fit of a Si / SiO2 / Ru / Mn2.74Pt1 / Ru stack, with the Pt, Ru, Mn, Si and O surface edges marked](assets/mnpt-fit.png)
+*Measured RBS data (grey) vs. a pyRUMP fit (red) of a Si / SiO<sub>2</sub> / Ru / Mn<sub>2.74</sub>Pt<sub>1</sub> / Ru stack, with the elements' surface edges marked.*
 
 ![The PIXE spectrum measured with the same beam compared against pyRUMP's PIXE simulation of the same stack, with the Si, Ru, Mn and Pt X-ray lines marked](assets/mnpt-pixe.png)
 *The PIXE spectrum taken with the same beam (grey) vs. pyRUMP's PIXE simulation (red) of the sample fitted to the RBS above, with the X-ray lines marked.*

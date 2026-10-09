@@ -142,11 +142,11 @@ above — `SIM GET`/`SIM SHOW` work as one-shots, with no need to enter the
 Your wish? sim get MnPt.lcm
 read MnPt.lcm: 5 layers
 Your wish? sim show
- >  1            40 A        Ru 1           [29 /CM2  Ru 29.04]
-    2           291 A        Mn 2.83 Pt 1   [224 /CM2  Mn 165.41 Pt 58.46]
-    3            38 A        Ru 1           [28 /CM2  Ru 27.88]
-    4           300 A        Si 1 O 2       [135 /CM2  Si 45.06 O 90.12]
-    5             5 um       Si 1           [24888 /CM2  Si 24888.43]
+ >  1            40 A        Ru 1        [29 /CM2  Ru 29.03]
+    2           300 A        Mn 3 Pt 1   [231 /CM2  Mn 173.35 Pt 57.78]
+    3            40 A        Ru 1        [29 /CM2  Ru 29.03]
+    4           300 SIO2     Si 1 O 2    [198 /CM2  Si 66 O 132]
+    5             5 um       Si 1        [24888 /CM2  Si 24888.43]
   maxpth 1000   straggle 0   multiple 0   absorber 0
 Your wish? compare              /* data vs. simulation, with residuals */
 ```
@@ -169,27 +169,29 @@ fit in one line:
 ```
 Your wish? pert get MnPt.pert go
   ...
-  Fitting MA8408: Si [5um] - SiO2 [300A] - Ru [38A] - Mn2.83Pt [291A] - Ru [40A]
+  Fitting MA8408: Si [5um] - SiO2 [300SIO2] - Ru [40A] - Mn3Pt [300A] - Ru [40A]
 
-  fit took 0.60 s
+  fit took 0.45 s
 
-  reduced chi-square 4.4259 on 792 dof   (was 165.1066)
-  87 evaluations, converged
-  fwhm                              19.8701  +/- 0.1221   (was 15)
-  correction                       0.859777  +/- 0.001692   (was 1)
-  kev(0)                            42.5962  +/- 0.1588   (was 48)
-  layer 1 thickness                    40 A  +/- 0.3466 A   (was 40 A)   [29 /CM2]
-  layer 2 thickness                   317 A  +/- 0.7872 A   (was 291 A)   [244 /CM2]
-  layer 3 thickness                    41 A  +/- 0.3302 A   (was 38 A)   [30 /CM2]
-  layer 2 composition Mn             2.7605  +/- 0.01587   (was 2.82931)
-  kev/ch                            1.60215  +/- 0.0001141   (was 1.59)
-  layer 4 thickness                   532 A  +/- 10.05 A   (was 300 A)   [240 /CM2]
+  reduced chi-square 4.2900 on 792 dof   (was 141.5915)
+  66 evaluations, converged
+  fwhm                              19.2299  +/- 0.1166   (was 15)
+  correction                       0.855636  +/- 0.001678   (was 1)
+  kev(0)                            47.3853  +/- 0.1454   (was 48)
+  layer 1 thickness                    40 A  +/- 0.3326 A   (was 40 A)   [29 /CM2]
+  layer 2 thickness                   314 A  +/- 0.7404 A   (was 300 A)   [242 /CM2]
+  layer 3 thickness                    41 A  +/- 0.3266 A   (was 40 A)   [30 /CM2]
+  layer 2 composition Mn            2.74154  +/- 0.01577   (was 3)
+  kev/ch                            1.59761  +/- 0.0001069   (was 1.59)
+  layer 4 thickness                325 SIO2  +/- 6.634 SIO2   (was 300 SIO2)   [215 /CM2]
 
-  MA8408: Si [5um] - SiO2 [532A] - Ru [41A] - Mn2.76Pt [317A] - Ru [40A]
+  MA8408: Si [5um] - SiO2 [325SIO2] - Ru [41A] - Mn2.74Pt [314A] - Ru [40A]
 ```
 
 Fitted values are written back into the sample description (`SIM SHOW`
-reflects them), and `COMPARE` shows how the result actually matches the data:
+reflects them). Type `GO` again until nothing moves — here four times in
+all, as the [MnPt worked example](mnpt-rbs-pixe-check.md#4-fit-rbs-in-pert)
+shows. `COMPARE` then shows how the result actually matches the data:
 
 ```
 Your wish? region 300 1130      /* zoom to the fitted window            */
@@ -206,8 +208,10 @@ command set — bounded fits, `WINDOW`/`NORMALIZE`, `AUTOSNAP`, and the
 composition-degeneracy caveat worth reading before your first real fit.
 
 For a complete analysis of a measurement with both RBS and PIXE, from
-loading the data through SIM, PERT and the saved results, see the
-[FeNi worked example](feni-rbs-pixe.md).
+loading the data through SIM, PERT and the saved results, see the two
+worked examples: [MnPt](mnpt-rbs-pixe-check.md), this sample fitted with
+RBS and checked against its PIXE spectrum, and [FeNi](feni-rbs-pixe.md),
+where RBS and PIXE are fitted together.
 
 ### Picking up later
 

@@ -46,6 +46,7 @@ nav:
   - Home: index.md
   - Getting started:
       - getting-started/index.md
+      - "Worked example: MnPt, RBS checked with PIXE": getting-started/mnpt-rbs-pixe-check.md
       - "Worked example: FeNi, RBS + PIXE": getting-started/feni-rbs-pixe.md
   - Manual:
       - Physics and simulation: manual/physics.md
